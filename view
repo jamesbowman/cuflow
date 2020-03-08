@@ -1,0 +1,5 @@
+gerbv \
+-f '#FFFFFF' $1.GTO \
+-f '#a0a000' $1.GTL \
+-f '#202020' $1.GML \
+
