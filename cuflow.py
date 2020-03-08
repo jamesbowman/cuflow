@@ -116,10 +116,12 @@ class Draw:
         g = sg.Point(self.xy).buffer(self.board.via / 2)
         for n in {'GTL', 'GL2', 'GL3', 'GBL'} - {connect}:
             self.board.layers[n].add(g)
+        self.newpath()
 
     def wire(self, layer = 'GTL'):
         g = sg.LineString(self.path).buffer(self.board.trace / 2)
         self.board.layers[layer].add(g)
+        self.newpath()
 
 class Board:
     def __init__(self, size,
@@ -183,13 +185,14 @@ class Part:
 
     def notched(self, dc, w, h):
         # Notched outline in top silk
+        nt = 0.4
         dc.push()
         dc.forward(h / 2)
         dc.left(90)
-        dc.forward(w / 2 - 1)
+        dc.forward(w / 2 - nt)
         dc.right(180)
         dc.newpath()
-        for e in (w - 1, h, w, h - 1):
+        for e in (w - nt, h, w, h - nt):
             dc.forward(e)
             dc.right(90)
         dc.silko()
@@ -255,6 +258,7 @@ class QFN64(Part):
 
         # Silk outline of the package
         self.notched(dc, 9, 9)
+        self.notched(dc, 7.15, 7.15)
 
         dc.push()
         dc.forward(4.5)

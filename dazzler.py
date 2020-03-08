@@ -88,19 +88,33 @@ def bt815_escape(u1):
     dc.forward(1)
     dc.wire()
 
+    def backside(dc, d):
+        dc.newpath()
+        dc.push()
+        dc.right(180)
+        dc.forward(0.35 + .2)
+        dc.right(90)
+        dc.forward(d * 0.5)
+        dc.right(90)
+        dc.forward(0.35 + .2)
+        dc.wire()
+        dc.pop()
+
     def via(dc, l):
+        dc.push()
         dc.forward(.35)
         dc.forward(brd.via_space + brd.via / 2)
         dc.wire()
         dc.via(l)
+        dc.pop()
     # VCC
-    for i in (9, 24, 27):
+    backside(u1.pads[24], 3)
+    backside(u1.pads[24], 4)
+
+    for i in (9, 17, 27):
+        print('vcc', BT815pins[i])
         dc = u1.pads[i]
         via(dc, 'GL3')
-    dc = u1.pads[28]
-    dc.right(90)
-    dc.forward(0.5)
-    dc.wire()
 
     for i,sig in enumerate(BT815pins):
         if sig == "+1V2":
@@ -124,7 +138,9 @@ if __name__ == "__main__":
         cu.C0402('C' + str(i), '15pF').place(dc)
         dc.forward(1)
     u1 = cu.QFN64('U1')
-    u1.place(brd.DC((50, 50)))
+    dc = brd.DC((50, 50))
+    dc.right(225)
+    u1.place(dc)
     bt815_escape(u1)
     brd.save("dazzler")
 
