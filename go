@@ -1,2 +1,5 @@
 python dazzler.py
-xdotool key --window $(xdotool search --onlyvisible --name Gerbv) F5
+for W in $(xdotool search --onlyvisible --name Gerbv)
+do
+  xdotool key --window $W F5
+done

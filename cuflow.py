@@ -185,6 +185,8 @@ class Part:
 
     def notched(self, dc, w, h):
         # Notched outline in top silk
+        # ID next to notch
+
         nt = 0.4
         dc.push()
         dc.forward(h / 2)
@@ -196,6 +198,14 @@ class Part:
             dc.forward(e)
             dc.right(90)
         dc.silko()
+        dc.pop()
+
+        dc.push()
+        dc.forward(h / 2 + 0.5)
+        dc.left(90)
+        dc.forward(w / 2 + 0.5)
+        (x, y) = dc.xy
+        dc.board.layers['GTO'].add(hershey.ctext(x, y, self.id))
         dc.pop()
 
     def pad(self, dc):
@@ -258,14 +268,7 @@ class QFN64(Part):
 
         # Silk outline of the package
         self.notched(dc, 9, 9)
-        self.notched(dc, 7.15, 7.15)
-
-        dc.push()
-        dc.forward(4.5)
-        dc.right(90)
-        dc.forward(5)
-        self.label(dc)
-        dc.pop()
+        # self.notched(dc, 7.15, 7.15)
 
         for i in range(4):
             dc.left(90)

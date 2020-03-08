@@ -66,13 +66,22 @@ def chars(s):
         x += glyph['right']
     return so.unary_union(o)
 
+sf = 1 / 32
+
 def text(x, y, s):
-    sf = 1 / 32
     o = chars(s)
     o = sa.scale(o, sf, -sf, origin = (0,0))
     cx = o.centroid.x
     cy = o.centroid.y
     (cx, cy) = (0, 0)
+    o = sa.translate(o, -cx + x, -cy + y)
+    return o.buffer(6 * .0254 / 2)
+
+def ctext(x, y, s):
+    o = chars(s)
+    o = sa.scale(o, sf, -sf, origin = (0,0))
+    cx = o.envelope.centroid.x
+    cy = o.envelope.centroid.y
     o = sa.translate(o, -cx + x, -cy + y)
     return o.buffer(6 * .0254 / 2)
 
