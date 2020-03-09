@@ -374,3 +374,34 @@ class QFN64(Part):
                 dc.right(90)
             dc.pop()
 
+# IPC-SM-782A section 9.1: SOIC
+
+class SOIC(Part):
+    family = "U"
+    def place(self, dc):
+
+        self.chamfered(dc, self.A, self.B)
+        for a in (90, -90):
+            dc.push()
+            dc.forward(self.D / 2)
+            dc.left(a)
+            dc.forward(self.C / 2)
+            dc.left(a)
+            for i in range(self.N // 2):
+                dc.right(90)
+                dc.rect(0.60, 2.20)
+                self.pad(dc)
+                dc.left(90)
+                dc.forward(1.27)
+            dc.pop()
+
+class SOIC8(SOIC):
+    N = 8
+
+    A = 4.0
+    B = 5.0
+    C = 5.20
+    D = 3.81
+    G = 3.0
+    Z = 7.4
+

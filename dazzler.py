@@ -160,9 +160,12 @@ if __name__ == "__main__":
         cu.C0402(dc, '15pF')
         dc.forward(1)
 
-    dc = brd.DC((42, 30))
+    dc = brd.DC((40, 24))
     dc.right(225)
     u1 = cu.QFN64(dc)
+    dc.left(225)
     bt815_escape(u1)
+    dc.forward(12)
+    u2 = cu.SOIC8(dc)
 
     brd.save("dazzler")
