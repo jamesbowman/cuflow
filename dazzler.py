@@ -132,26 +132,37 @@ def bt815_escape(u1):
 
     def bank(n):
         return [u1.pads[i] for i in ext if (i - 1) // 16 == n]
-    brd.enriver(bank(0), 45)
-    brd.enriver(bank(2), -45)
-    brd.enriver(bank(3), 45)
+    rv0 = brd.enriver(bank(0), 45)
+    rv2 = brd.enriver(bank(2), -45)
+    rv3 = brd.enriver(bank(3), 45)
+    rv0.forward(brd.c)
+    rv0.right(90)
+    rv0.forward(9)
+    rv0.wire()
+
+    rv2.forward(1)
+    rv2.shimmy(7.5)
+    rv2.wire()
 
 if __name__ == "__main__":
     brd = cu.Board(
-        (80, 80),
+        (50, 42),
         trace = cu.mil(3.5),
         space = cu.mil(3.5),
         via_hole = 0.2,
         via = 0.45,
         via_space = cu.mil(5),
         silk = cu.mil(6))
-    dc = brd.DC((30, 30))
-    for i in range(1, 32):
-        cu.C0402('C' + str(i), '15pF').place(dc)
+
+    dc = brd.DC((10, 1.0))
+
+    for i in range(20):
+        cu.C0402(dc, '15pF')
         dc.forward(1)
-    u1 = cu.QFN64('U1')
-    dc = brd.DC((50, 50))
+
+    dc = brd.DC((42, 30))
     dc.right(225)
-    u1.place(dc)
+    u1 = cu.QFN64(dc)
     bt815_escape(u1)
+
     brd.save("dazzler")

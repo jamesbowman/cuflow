@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import shapely.geometry as sg
 import shapely.affinity as sa
 import shapely.ops as so
@@ -19,7 +21,8 @@ class Layer:
         self.add(sg.Point(x, y).buffer(r))
 
     def add(self, o):
-        self.polys.append(o)
+        # .buffer(0) to work around shapely bugs
+        self.polys.append(o.buffer(0))
 
     def save(self, f):
         surface = so.unary_union(self.polys)
@@ -132,6 +135,56 @@ class Draw:
             self.board.layers[layer].add(g)
             self.newpath()
 
+class River:
+    def __init__(self, board, tt):
+        self.tt = tt
+        self.board = board
+        self.c = self.board.c
+
+    def r(self):
+        return self.c * len(self.tt)
+
+    def forward(self, d):
+        [t.forward(d) for t in self.tt]
+
+    def right(self, a):
+        for (i, t) in enumerate(self.tt):
+            r = self.c * i
+            p = 2 * math.pi * r * a / 360
+            n = int(a + 1)
+            for j in range(n):
+                t.right(a / n)
+                t.forward(p / n)
+
+    def left(self, a):
+        for (i, t) in enumerate(self.tt[::-1]):
+            r = self.c * i
+            p = 2 * math.pi * r * a / 360
+            n = int(a + 1)
+            for j in range(n):
+                t.left(a / n)
+                t.forward(p / n)
+
+    def shimmy(self, d):
+        r = self.r()
+        if abs(d) > r:
+            a = 90
+            f = abs(d) - r
+        else:
+            a = 180 * math.acos(1 - abs(d) / r) / math.pi
+            f = 0
+        if d > 0:
+            self.left(a)
+            self.forward(f)
+            self.right(a)
+        else:
+            self.right(a)
+            self.forward(f)
+            self.left(a)
+
+    def wire(self):
+        [t.wire() for t in self.tt]
+
 class Board:
     def __init__(self, size,
                trace,
@@ -147,6 +200,9 @@ class Board:
         self.via = via
         self.via_space = via_space
         self.silk = silk
+        self.parts = defaultdict(list)
+
+        self.c = trace + space # track spacing, used everywhere
 
         layers = [
             # ('GML', 'Mechanical'),
@@ -164,8 +220,6 @@ class Board:
         ]
         self.layers = {id : Layer(desc) for (id, desc) in layers}
 
-        self.annotate(20, 20, "bar")
-
     def annotate(self, x, y, s):
         self.layers['GTO'].add(hershey.text(x, y, s))
 
@@ -182,9 +236,11 @@ class Board:
             with open(basename + "." + id, "wt") as f:
                 l.save(f)
 
-    def enriver(self, bank, a):
+    def enriver(self, ibank, a):
         if a > 0:
-            bank = bank[::-1]
+            bank = ibank[::-1]
+        else:
+            bank = ibank
         bank[0].right(a)
         for i,t in enumerate(bank[1:], 1):
             gap = (self.trace + self.space) * i
@@ -196,20 +252,27 @@ class Board:
         for t in bank[:]:
             t.approach(0, finish_line)
             t.wire()
+        return River(self, ibank)
+
+    def assign(self, part):
+        pl = self.parts[part.family]
+        pl.append(part)
+        return part.family + str(len(pl))
 
 class Part:
-    def __init__(self, id, val = None):
-        self.id = id
+    def __init__(self, dc, val = None):
+        self.id = dc.board.assign(self)
         self.val = val
         self.pads  = []
+        self.place(dc)
 
     def label(self, dc):
         (x, y) = dc.xy
         dc.board.annotate(x, y, self.id)
 
-    def notched(self, dc, w, h):
-        # Notched outline in top silk
-        # ID next to notch
+    def chamfered(self, dc, w, h):
+        # Outline in top silk, chamfer indicates top-left
+        # ID next to chamfer
 
         nt = 0.4
         dc.push()
@@ -237,6 +300,7 @@ class Part:
         self.pads.append(dc.copy())
 
 class C0402(Part):
+    family = "C"
     def place(self, dc):
         # Pads on either side
         for d in (-90, 90):
@@ -274,7 +338,7 @@ class C0402(Part):
 # https://www.analog.com/media/en/package-pcb-resources/package/pkg_pdf/ltc-legacy-qfn/QFN_64_05-08-1705.pdf
 
 class QFN64(Part):
-
+    family = "U"
     def place(self, dc):
         # Ground pad
         g = 7.15 / 3
@@ -291,8 +355,8 @@ class QFN64(Part):
         self.pads = self.pads[:1]
 
         # Silk outline of the package
-        self.notched(dc, 9, 9)
-        # self.notched(dc, 7.15, 7.15)
+        self.chamfered(dc, 9, 9)
+        # self.chamfered(dc, 7.15, 7.15)
 
         for i in range(4):
             dc.left(90)
