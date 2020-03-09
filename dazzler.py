@@ -1,3 +1,4 @@
+import math
 import cuflow as cu
 
 BT815pins = [
@@ -120,9 +121,20 @@ def bt815_escape(u1):
         if sig == "+1V2":
             print(i, sig)
             via(u1.pads[i], 'GBL')
-        if sig not in ('3V3', 'GND', '', '+1V2'):
-            u1.pads[i].forward(1)
-            u1.pads[i].wire()
+
+    power = {'3V3', 'GND', '', '+1V2'}
+    spim = {'M_SCK', 'M_CS', 'M_MOSI', 'M_MISO', 'M_IO2', 'M_IO3'}
+
+    ext = [i for i,sig in enumerate(BT815pins) if sig not in (power | spim)]
+    for i in ext:
+        u1.pads[i].forward(1)
+        u1.pads[i].wire()
+
+    def bank(n):
+        return [u1.pads[i] for i in ext if (i - 1) // 16 == n]
+    brd.enriver(bank(0), 45)
+    brd.enriver(bank(2), -45)
+    brd.enriver(bank(3), 45)
 
 if __name__ == "__main__":
     brd = cu.Board(
@@ -143,4 +155,3 @@ if __name__ == "__main__":
     u1.place(dc)
     bt815_escape(u1)
     brd.save("dazzler")
-

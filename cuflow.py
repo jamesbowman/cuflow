@@ -21,10 +21,6 @@ class Layer:
     def add(self, o):
         self.polys.append(o)
 
-    def wire(self, cc):
-        o = sg.LineString(cc).buffer(.05)
-        self.add(o)
-
     def save(self, f):
         surface = so.unary_union(self.polys)
         g = gerber.Gerber(f, self.desc)
@@ -83,6 +79,18 @@ class Draw:
     def right(self, d):
         self.dir = (self.dir + d) % 360
 
+    def approach(self, d, other):
+        assert ((self.dir - other.dir) % 360) in (90, 270)
+        # Go forward to be exactly d away from infinite line 'other'
+        (x0, y0) = self.xy
+        (x1, y1) = other.xy
+        o2 = other.copy()
+        o2.forward(1)
+        (x2, y2) = o2.xy
+        # print((x0, y0), (x1, y1), (x2, y2))
+
+        self.forward(abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1) - d)
+
     def rect(self, w, h):
         self.push()
         self.forward(h / 2)
@@ -119,9 +127,10 @@ class Draw:
         self.newpath()
 
     def wire(self, layer = 'GTL'):
-        g = sg.LineString(self.path).buffer(self.board.trace / 2)
-        self.board.layers[layer].add(g)
-        self.newpath()
+        if len(self.path) > 1:
+            g = sg.LineString(self.path).buffer(self.board.trace / 2)
+            self.board.layers[layer].add(g)
+            self.newpath()
 
 class Board:
     def __init__(self, size,
@@ -172,6 +181,21 @@ class Board:
         for (id, l) in self.layers.items():
             with open(basename + "." + id, "wt") as f:
                 l.save(f)
+
+    def enriver(self, bank, a):
+        if a > 0:
+            bank = bank[::-1]
+        bank[0].right(a)
+        for i,t in enumerate(bank[1:], 1):
+            gap = (self.trace + self.space) * i
+            t.left(a)
+            t.approach(gap, bank[0])
+            t.right(2 * a)
+        finish_line = bank[-1].copy()
+        finish_line.left(90)
+        for t in bank[:]:
+            t.approach(0, finish_line)
+            t.wire()
 
 class Part:
     def __init__(self, id, val = None):
@@ -285,3 +309,4 @@ class QFN64(Part):
                 dc.forward(0.50)
                 dc.right(90)
             dc.pop()
+
