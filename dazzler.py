@@ -126,15 +126,17 @@ def bt815_escape(u1):
     spim = {'M_SCK', 'M_CS', 'M_MOSI', 'M_MISO', 'M_IO2', 'M_IO3'}
 
     ext = [i for i,sig in enumerate(BT815pins) if sig not in (power | spim)]
+    spi = [i for i,sig in enumerate(BT815pins) if sig in spim]
     for i in ext:
         u1.pads[i].forward(1)
         u1.pads[i].wire()
+    [u1.pads[i].outside() for i in spi]
 
-    def bank(n):
-        return [u1.pads[i] for i in ext if (i - 1) // 16 == n]
-    rv0 = brd.enriver(bank(0), 45)
-    rv2 = brd.enriver(bank(2), -45)
-    rv3 = brd.enriver(bank(3), 45)
+    def bank(n, pool):
+        return [u1.pads[i] for i in pool if (i - 1) // 16 == n]
+    rv0 = brd.enriver(bank(0, ext), 45)
+    rv2 = brd.enriver(bank(2, ext), -45)
+    rv3 = brd.enriver(bank(3, ext), 45)
     rv0.forward(brd.c)
     rv0.right(90)
     rv0.forward(9)
@@ -143,6 +145,15 @@ def bt815_escape(u1):
     rv2.forward(1)
     rv2.shimmy(7.5)
     rv2.wire()
+
+    rv3 = brd.enriver(bank(0, spi), -45)
+    rv3.w("f 0.7 l 90 f 2.3 l 45 f 1 r 45")
+    rv4 = brd.enriver(bank(1, spi), -45)
+    rv4.forward(1)
+    rvspi = rv3.join(rv4)
+
+    rvspi.wire()
+    return (rvspi, )
 
 def u2_escape(u2):
     nms = "CS MISO IO2 GND MOSI SCK IO3 VCC".split()
@@ -167,8 +178,9 @@ def u2_escape(u2):
     )
     cu.extend(sigs['SCK'], proper)
     rv = brd.enriver(proper, 45)
-    rv.forward(1)
+    rv.right(45)
     rv.wire()
+    return rv
 
 if __name__ == "__main__":
     brd = cu.Board(
@@ -190,9 +202,12 @@ if __name__ == "__main__":
     dc.right(225)
     u1 = cu.QFN64(dc)
     dc.left(225)
-    bt815_escape(u1)
+    (bt815_qspi, ) = bt815_escape(u1)
+
     dc.forward(12)
     u2 = cu.SOIC8(dc)
-    u2_escape(u2)
+    fl1_qspi = u2_escape(u2)
+
+    bt815_qspi.meet(fl1_qspi)
 
     brd.save("dazzler")

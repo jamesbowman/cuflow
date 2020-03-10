@@ -49,7 +49,36 @@ class Layer:
             [renderpoly(g, po) for po in surface]
         g.finish()
 
-class Draw:
+class Turtle:
+    def w(self, s, layer = 'GTL'):
+        tokens = s.split()
+        cmds1 = {
+            'i' : self.inside,
+            'o' : self.outside,
+            '-' : lambda: self.wvia('GL2'),
+            '+' : lambda: self.wvia('GL3'),
+        }
+        cmds2 = {
+            'f' : self.forward,
+            'l' : self.left,
+            'r' : self.right
+        }
+
+        i = 0
+        while i < len(tokens):
+            t = tokens[i]
+            if t in cmds1:
+                cmds1[t]()
+                i += 1
+            else:
+                cmds2[t](float(tokens[i + 1]))
+                i += 2
+        # self.wire(layer)
+
+    def inside(self): pass
+    def outside(self): pass
+
+class Draw(Turtle):
     def __init__(self, board, xy, dir = 0):
         self.board = board
         self.xy = xy
@@ -95,6 +124,29 @@ class Draw:
         # print((x0, y0), (x1, y1), (x2, y2))
 
         self.forward(abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1) - d)
+
+    def seek(self, other):
+        # Return position of other in our frame as (x, y) so that
+        #     forward(y)
+        #     right(90)
+        #     forward(x)
+        # moves to the other
+
+        (dx, dy) = (other.xy[0] - self.xy[0], other.xy[1] - self.xy[1])
+        a = (self.dir / 360) * (2 * math.pi)
+        s = math.sin(a)
+        c = math.cos(a)
+        ox = dx * c - dy * s
+        oy = dy * c + dx * s
+        return (ox, oy)
+
+    def is_behind(self, other):
+        assert abs(self.dir - other.dir) < 0.0001
+        (_, y) = self.seek(other)
+        return y > 0
+
+    def distance(self, other):
+        return math.sqrt((other.xy[0] - self.xy[0]) ** 2 + (other.xy[1] - self.xy[1]) ** 2)
 
     def rect(self, w, h):
         self.push()
@@ -152,44 +204,20 @@ class Draw:
         self.wire()
         self.via(l)
 
-    def w(self, s, layer = 'GTL'):
-        tokens = s.split()
-        cmds1 = {
-            'i' : self.inside,
-            'o' : self.outside,
-            '-' : lambda: self.wvia('GL2'),
-            '+' : lambda: self.wvia('GL3'),
-        }
-        cmds2 = {
-            'f' : self.forward,
-            'l' : self.left,
-            'r' : self.right
-        }
-
-        i = 0
-        while i < len(tokens):
-            t = tokens[i]
-            if t in cmds1:
-                cmds1[t]()
-                i += 1
-            else:
-                cmds2[t](float(tokens[i + 1]))
-                i += 2
-        self.wire(layer)
-
-class River:
+class River(Turtle):
     def __init__(self, board, tt):
         self.tt = tt
         self.board = board
         self.c = self.board.c
 
     def r(self):
-        return self.c * len(self.tt)
+        return self.c * (len(self.tt) - 1)
 
     def forward(self, d):
         [t.forward(d) for t in self.tt]
 
     def right(self, a):
+        fd = (self.tt[0].dir + a) % 360
         for (i, t) in enumerate(self.tt):
             r = self.c * i
             p = 2 * math.pi * r * a / 360
@@ -197,8 +225,11 @@ class River:
             for j in range(n):
                 t.right(a / n)
                 t.forward(p / n)
+        for t in self.tt:
+            t.dir = fd
 
     def left(self, a):
+        fd = (self.tt[0].dir - a) % 360
         for (i, t) in enumerate(self.tt[::-1]):
             r = self.c * i
             p = 2 * math.pi * r * a / 360
@@ -206,6 +237,8 @@ class River:
             for j in range(n):
                 t.left(a / n)
                 t.forward(p / n)
+        for t in self.tt:
+            t.dir = fd
 
     def shimmy(self, d):
         r = self.r()
@@ -223,6 +256,41 @@ class River:
             self.right(a)
             self.forward(f)
             self.left(a)
+
+    def join(self, other):
+        st = self.tt[-1]
+        ot = other.tt[0]
+
+        (x0, y0) = ot.xy
+        (x1, y1) = st.xy
+        s2 = st.copy()
+        s2.forward(1)
+        (x2, y2) = s2.xy
+
+        d = ((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1)
+        if d < 0:
+            d += self.c
+        else:
+            d -= self.c
+        other.shimmy(d)
+
+        if st.is_behind(ot):
+            extend(ot, self.tt)
+        else:
+            extend(st, other.tt)
+        return River(self.board, self.tt + other.tt)
+
+    def meet(self, other):
+        tu = ((other.tt[0].dir + 180) - self.tt[0].dir) % 360
+        if tu < 180:
+            self.right(tu)
+        else:
+            self.left(tu)
+        (x, _) = self.tt[0].seek(other.tt[-1])
+        self.shimmy(-x)
+        d = self.tt[0].distance(other.tt[-1])
+        self.forward(d)
+        self.wire()
 
     def wire(self):
         [t.wire() for t in self.tt]
@@ -299,7 +367,7 @@ class Board:
 
 def extend(dst, traces):
     # extend parallel traces so that they are all level with dst
-    assert dst in traces, "One trace must be the target"
+    # assert dst in traces, "One trace must be the target"
     assert len({t.dir for t in traces}) == 1, "All traces must be parallel"
 
     finish_line = dst.copy()
