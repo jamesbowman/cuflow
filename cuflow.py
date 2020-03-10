@@ -67,7 +67,9 @@ class Draw:
         (self.xy, self.dir) = self.stack.pop(-1)
 
     def copy(self):
-        return Draw(self.board, self.xy, self.dir)
+        r = Draw(self.board, self.xy, self.dir)
+        r.h = self.h
+        return r
 
     def forward(self, d):
         (x, y) = self.xy
@@ -110,6 +112,14 @@ class Draw:
         self.right(90)
         self.forward(w)
         self.pop()
+        self.h = h  # used by inside, outside for pad escape
+
+    def inside(self):
+        self.right(180)
+        self.forward(self.h / 2)
+
+    def outside(self):
+        self.forward(self.h / 2)
 
     def square(self, w):
         self.rect(w, w)
@@ -134,6 +144,38 @@ class Draw:
             g = sg.LineString(self.path).buffer(self.board.trace / 2)
             self.board.layers[layer].add(g)
             self.newpath()
+
+    def wvia(self, l):
+        # enough wire then a via
+        b = self.board
+        self.forward(b.via_space + b.via / 2)
+        self.wire()
+        self.via(l)
+
+    def w(self, s, layer = 'GTL'):
+        tokens = s.split()
+        cmds1 = {
+            'i' : self.inside,
+            'o' : self.outside,
+            '-' : lambda: self.wvia('GL2'),
+            '+' : lambda: self.wvia('GL3'),
+        }
+        cmds2 = {
+            'f' : self.forward,
+            'l' : self.left,
+            'r' : self.right
+        }
+
+        i = 0
+        while i < len(tokens):
+            t = tokens[i]
+            if t in cmds1:
+                cmds1[t]()
+                i += 1
+            else:
+                cmds2[t](float(tokens[i + 1]))
+                i += 2
+        self.wire(layer)
 
 class River:
     def __init__(self, board, tt):
@@ -247,17 +289,24 @@ class Board:
             t.left(a)
             t.approach(gap, bank[0])
             t.right(2 * a)
-        finish_line = bank[-1].copy()
-        finish_line.left(90)
-        for t in bank[:]:
-            t.approach(0, finish_line)
-            t.wire()
+        extend(bank[-1], bank)
         return River(self, ibank)
 
     def assign(self, part):
         pl = self.parts[part.family]
         pl.append(part)
         return part.family + str(len(pl))
+
+def extend(dst, traces):
+    # extend parallel traces so that they are all level with dst
+    assert dst in traces, "One trace must be the target"
+    assert len({t.dir for t in traces}) == 1, "All traces must be parallel"
+
+    finish_line = dst.copy()
+    finish_line.left(90)
+    for t in traces:
+        t.approach(0, finish_line)
+        t.wire()
 
 class Part:
     def __init__(self, dc, val = None):
@@ -381,12 +430,12 @@ class SOIC(Part):
     def place(self, dc):
 
         self.chamfered(dc, self.A, self.B)
-        for a in (90, -90):
+        for _ in range(2):
             dc.push()
             dc.forward(self.D / 2)
-            dc.left(a)
+            dc.left(90)
             dc.forward(self.C / 2)
-            dc.left(a)
+            dc.left(90)
             for i in range(self.N // 2):
                 dc.right(90)
                 dc.rect(0.60, 2.20)
@@ -394,6 +443,7 @@ class SOIC(Part):
                 dc.left(90)
                 dc.forward(1.27)
             dc.pop()
+            dc.right(180)
 
 class SOIC8(SOIC):
     N = 8

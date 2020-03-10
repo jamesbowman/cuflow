@@ -144,6 +144,32 @@ def bt815_escape(u1):
     rv2.shimmy(7.5)
     rv2.wire()
 
+def u2_escape(u2):
+    nms = "CS MISO IO2 GND MOSI SCK IO3 VCC".split()
+    sigs = {nm: p for (nm, p) in zip(nms, u2.pads)}
+    
+    sigs['SCK' ].w("f 1.1 f .1")
+    sigs['CS'  ].w("i f 1.5 r 90 f 1.27 f 1.27 f .63 l 90 f .1")
+    sigs['MISO'].w("i f 1.0 r 90 f 1.27 f 1.27 f .63 l 90 f .1")
+    sigs['MOSI'].w("o f .1")
+    sigs['IO2' ].w("i f 0.5 r 90 f 1.27 f 1.27 l 90 f .1")
+    sigs['IO3' ].w("i f 0.5 r 90 f 1.27 f .63 l 90 f 5.5 l 90 f 6 l 90 f .1")
+    sigs['GND' ].w("o -")
+    sigs['VCC' ].w("o +")
+
+    proper = (
+        sigs['IO3' ],
+        sigs['IO2' ],
+        sigs['MISO'],
+        sigs['MOSI'],
+        sigs['CS'  ],
+        sigs['SCK' ],
+    )
+    cu.extend(sigs['SCK'], proper)
+    rv = brd.enriver(proper, 45)
+    rv.forward(1)
+    rv.wire()
+
 if __name__ == "__main__":
     brd = cu.Board(
         (50, 42),
@@ -167,5 +193,6 @@ if __name__ == "__main__":
     bt815_escape(u1)
     dc.forward(12)
     u2 = cu.SOIC8(dc)
+    u2_escape(u2)
 
     brd.save("dazzler")
