@@ -139,18 +139,22 @@ def bt815_escape(u1):
     rv3 = brd.enriver(bank(3, ext), 45)
     rv0.forward(brd.c)
     rv0.right(90)
-    rv0.forward(9)
+    rv0.forward(1)
     rv0.wire()
 
-    rv2.forward(1)
-    rv2.shimmy(7.5)
-    rv2.wire()
+    rv2.forward(0.6)
 
-    rv3 = brd.enriver(bank(0, spi), -45)
-    rv3.w("f 0.7 l 90 f 2.3 l 45 f 1 r 45")
-    rv4 = brd.enriver(bank(1, spi), -45)
-    rv4.forward(1)
-    rvspi = rv3.join(rv4)
+    rv23 = rv2.join(rv3, 1.0)
+    rv23.wire()
+    rv230 = rv23.join(rv0)
+    rv230.w("f 1 r 31 f 1")
+    rv230.wire()
+
+    rv4 = brd.enriver(bank(0, spi), -45)
+    rv4.w("f 0.7 l 90 f 2.3 l 45 f 1 r 45")
+    rv5 = brd.enriver(bank(1, spi), -45)
+    rv5.forward(1)
+    rvspi = rv4.join(rv5)
 
     rvspi.wire()
     return (rvspi, )
@@ -204,7 +208,7 @@ if __name__ == "__main__":
     dc.left(225)
     (bt815_qspi, ) = bt815_escape(u1)
 
-    dc.forward(12)
+    dc.w("f 11 r 90 f 0.78 l 90")
     u2 = cu.SOIC8(dc)
     fl1_qspi = u2_escape(u2)
 
