@@ -216,31 +216,56 @@ class River(Turtle):
     def forward(self, d):
         [t.forward(d) for t in self.tt]
 
-    def right(self, a):
-        fd = (self.tt[0].dir + a) % 360
+    def rpivot(self, a):
+        # rotate all points clockwise by angle a
+        s = math.sin(a)
+        c = math.cos(a)
+        (x0, y0) = self.tt[0].xy
         for (i, t) in enumerate(self.tt):
             r = self.c * i
-            p = 2 * math.pi * r * a / 360
-            n = int(a + 1)
-            for j in range(n):
-                t.right(a / n)
-                t.forward(p / n)
+            x = t.xy[0] - x0
+            y = t.xy[1] - y0
+            nx = x * c - y * s
+            ny = y * c + x * s
+            t.xy = (x0 + nx, y0 + ny)
+            t.path.append(t.xy)
+
+    def lpivot(self, a):
+        # rotate all points counter-clockwise by angle a
+        s = math.sin(a)
+        c = math.cos(a)
+        tt = self.tt[::-1]
+        (x0, y0) = tt[0].xy
+        for (i, t) in enumerate(tt):
+            r = self.c * i
+            x = t.xy[0] - x0
+            y = t.xy[1] - y0
+            nx = x * c - y * s
+            ny = y * c + x * s
+            t.xy = (x0 + nx, y0 + ny)
+            t.path.append(t.xy)
+
+    def right(self, a):
+        fd = (self.tt[0].dir + a) % 360
+        n = int(a + 1)
+        ra = 2 * math.pi * a / 360
+        for i in range(n):
+            self.rpivot(-ra / n)
         for t in self.tt:
             t.dir = fd
 
     def left(self, a):
         fd = (self.tt[0].dir - a) % 360
-        for (i, t) in enumerate(self.tt[::-1]):
-            r = self.c * i
-            p = 2 * math.pi * r * a / 360
-            n = int(a + 1)
-            for j in range(n):
-                t.left(a / n)
-                t.forward(p / n)
+        n = int(a + 1)
+        ra = 2 * math.pi * a / 360
+        for i in range(n):
+            self.lpivot(ra / n)
         for t in self.tt:
             t.dir = fd
 
     def shimmy(self, d):
+        if d == 0:
+            return
         r = self.r()
         if abs(d) > r:
             a = 90
@@ -257,7 +282,8 @@ class River(Turtle):
             self.forward(f)
             self.left(a)
 
-    def join(self, other):
+    def join(self, other, ratio = 0.0):
+        assert 0 <= ratio <= 1
         st = self.tt[-1]
         ot = other.tt[0]
 
@@ -272,7 +298,8 @@ class River(Turtle):
             d += self.c
         else:
             d -= self.c
-        other.shimmy(d)
+        self.shimmy(ratio * -d)
+        other.shimmy((1 - ratio) * d)
 
         if st.is_behind(ot):
             extend(ot, self.tt)
