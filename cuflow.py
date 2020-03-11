@@ -17,9 +17,6 @@ class Layer:
         self.polys = []
         self.desc = desc
 
-    def circle(self, x, y, r, color = None):
-        self.add(sg.Point(x, y).buffer(r))
-
     def add(self, o):
         # .buffer(0) to work around shapely bugs
         self.polys.append(o.buffer(0))
@@ -47,6 +44,20 @@ class Layer:
             renderpoly(g, surface)
         else:
             [renderpoly(g, po) for po in surface]
+        g.finish()
+
+class OutlineLayer:
+    def __init__(self, desc):
+        self.lines = []
+        self.desc = desc
+
+    def add(self, o):
+        self.lines.append(o)
+
+    def save(self, f):
+        g = gerber.Gerber(f, self.desc)
+        for ls in self.lines:
+            g.linestring(ls.coords)
         g.finish()
 
 class Turtle:
@@ -204,6 +215,15 @@ class Draw(Turtle):
         self.wire()
         self.via(l)
 
+    def platedslot(self, buf):
+        g1 = sg.LineString(self.path).buffer(buf)
+        g2 = sg.LinearRing(g1.exterior.coords)
+        self.board.layers['GML'].add(g2)
+
+        g3 = g1.buffer(.5).difference(g1.buffer(-0.05))
+        self.board.layers['GTL'].add(g3)
+        self.board.layers['GBL'].add(g3)
+
 class River(Turtle):
     def __init__(self, board, tt):
         self.tt = tt
@@ -315,8 +335,6 @@ class Board:
         self.c = trace + space # track spacing, used everywhere
 
         layers = [
-            # ('GML', 'Mechanical'),
-
             ('GTP', 'Top Paste'),
             ('GTO', 'Top Silkscreen'),
             ('GTS', 'Top Solder Mask'),
@@ -329,6 +347,13 @@ class Board:
             ('GBP', 'Bottom Paste'),
         ]
         self.layers = {id : Layer(desc) for (id, desc) in layers}
+        self.layers['GML'] = OutlineLayer('Mechanical')
+
+        self.layers['GML'].add(sg.LinearRing([
+            (0, 0),
+            (self.size[0], 0),
+            (self.size[0], self.size[1]),
+            (0, self.size[1])]))
 
     def annotate(self, x, y, s):
         self.layers['GTO'].add(hershey.text(x, y, s))
@@ -337,11 +362,6 @@ class Board:
         return Draw(self, xy, d)
 
     def save(self, basename):
-        with open(basename + ".GML", "wt") as f:
-            g = gerber.Gerber(f, "Mechanical")
-            g.rect(0, 0, *self.size)
-            g.finish()
-
         for (id, l) in self.layers.items():
             with open(basename + "." + id, "wt") as f:
                 l.save(f)
@@ -523,3 +543,19 @@ class SOIC8(SOIC):
     G = 3.0
     Z = 7.4
 
+class HDMI(Part):
+    family = "J"
+    source = {'LCSC': 'C138388'}
+    def place(self, dc):
+        self.chamfered(dc, 15, 11.1)
+
+        def mounting(dc, l):
+            dc.push()
+            dc.newpath()
+            dc.forward(l / 2)
+            dc.right(180)
+            dc.forward(l)
+            dc.platedslot(.5)
+            dc.pop()
+
+        mounting(dc, 2)

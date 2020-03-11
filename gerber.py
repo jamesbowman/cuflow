@@ -32,6 +32,10 @@ class Gerber:
         self.f.write("D10*\n")
         self.points([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)])
 
+    def linestring(self, pp):
+        self.f.write("D10*\n")
+        self.points(pp)
+
     def poly(self, pp):
         self.f.write("G36*\n")
         self.points(pp)
