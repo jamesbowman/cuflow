@@ -192,6 +192,10 @@ class Draw(Turtle):
         for n in ('GTL', 'GTS', 'GTP'):
             self.board.layers[n].add(g)
 
+    def silk(self):
+        g = sg.LineString(self.path).buffer(self.board.silk / 2)
+        self.board.layers['GTO'].add(g)
+
     def silko(self):
         g = sg.LinearRing(self.path).buffer(self.board.silk / 2)
         self.board.layers['GTO'].add(g)
@@ -220,7 +224,7 @@ class Draw(Turtle):
         g2 = sg.LinearRing(g1.exterior.coords)
         self.board.layers['GML'].add(g2)
 
-        g3 = g1.buffer(.5).difference(g1.buffer(-0.05))
+        g3 = g1.buffer(.3).difference(g1.buffer(-0.05))
         self.board.layers['GTL'].add(g3)
         self.board.layers['GBL'].add(g3)
 
@@ -463,6 +467,17 @@ class Part:
         dc.pad()
         self.pads.append(dc.copy())
 
+    def rpad(self, dc, w, h):
+        dc.right(90)
+        dc.rect(w, h)
+        self.pad(dc)
+        dc.left(90)
+
+    def train(self, dc, n, op, step):
+        for i in range(n):
+            op()
+            dc.forward(step)
+
 class C0402(Part):
     family = "C"
     def place(self, dc):
@@ -529,13 +544,8 @@ class QFN64(Part):
             dc.forward(0.70 / 2)
             dc.right(90)
             dc.forward(7.50 / 2)
-            dc.left(90)
-            for i in range(16):
-                dc.rect(0.25, 0.70)
-                self.pad(dc)
-                dc.left(90)
-                dc.forward(0.50)
-                dc.right(90)
+            dc.left(180)
+            self.train(dc, 16, lambda: self.rpad(dc, 0.25, 0.70), 0.50)
             dc.pop()
 
 # IPC-SM-782A section 9.1: SOIC
@@ -551,12 +561,7 @@ class SOIC(Part):
             dc.left(90)
             dc.forward(self.C / 2)
             dc.left(90)
-            for i in range(self.N // 2):
-                dc.right(90)
-                dc.rect(0.60, 2.20)
-                self.pad(dc)
-                dc.left(90)
-                dc.forward(1.27)
+            self.train(dc, self.N // 2, lambda: self.rpad(dc, 0.60, 2.20), 1.27)
             dc.pop()
             dc.right(180)
 
@@ -585,4 +590,36 @@ class HDMI(Part):
             dc.platedslot(.5)
             dc.pop()
 
-        mounting(dc, 2)
+        # mounting(dc, 2)
+        dc.push()
+        dc.right(90)
+        dc.forward(4.5)
+        dc.left(90)
+        dc.forward(5.35)
+        dc.left(90)
+        self.train(dc, 19, lambda: self.rpad(dc, 0.30, 2.60), 0.50)
+        dc.pop()
+
+        dc.right(90)
+        dc.forward(14.5 / 2)
+        dc.left(90)
+        dc.forward(5.35 + 1.3 - 2.06)
+        dc.right(180)
+
+        def holepair():
+            dc.push()
+            mounting(dc, 2.8 - 1)
+            dc.forward(5.96)
+            mounting(dc, 2.2 - 1)
+            dc.pop()
+        holepair()
+        dc.right(90)
+        dc.forward(14.5)
+        dc.left(90)
+        holepair()
+        dc.forward(5.96 + 3.6)
+        dc.left(90)
+
+        dc.newpath()
+        dc.forward(14.5)
+        dc.silk()
