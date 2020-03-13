@@ -147,7 +147,7 @@ def bt815_escape(u1):
     rv23 = rv2.join(rv3, 1.0)
     rv23.wire()
     rv230 = rv23.join(rv0)
-    rv230.w("f 1 r 31 f 1")
+    # rv230.w("f 1 r 31 f 1")
     rv230.wire()
 
     rv4 = brd.enriver(bank(0, spi), -45)
@@ -196,13 +196,15 @@ if __name__ == "__main__":
         via_space = cu.mil(5),
         silk = cu.mil(6))
 
+    """
     dc = brd.DC((10, 1.0))
 
     for i in range(20):
         cu.C0402(dc, '15pF')
         dc.forward(1)
+    """
 
-    dc = brd.DC((40, 24))
+    dc = brd.DC((40, 10))
     dc.right(225)
     u1 = cu.QFN64(dc)
     dc.left(225)
@@ -214,9 +216,12 @@ if __name__ == "__main__":
 
     bt815_qspi.meet(fl1_qspi)
 
-    j1 = cu.HDMI(brd.DC((5,33)).right(90))
+    j1 = cu.HDMI(brd.DC((5,10)).right(90))
 
-    ldo33 = cu.SOT223(brd.DC((40,6)))
-    ldo33.escape()
+    # ldo33 = cu.SOT223(brd.DC((40,6)))
+    # ldo33.escape()
+
+    lx9 = cu.LX9(brd.DC((22, 26)).left(0))
+    lx9.escape()
 
     brd.save("dazzler")

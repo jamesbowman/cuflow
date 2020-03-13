@@ -481,6 +481,13 @@ class Part:
         self.pad(dc)
         dc.left(90)
 
+    def roundpad(self, dc, d):
+        (dc.w, dc.h) = (d, d)
+        g = sg.Point(dc.xy).buffer(d / 2)
+        for n in ('GTL', 'GTS', 'GTP'):
+            dc.board.layers[n].add(g)
+        self.pads.append(dc.copy())
+
     def train(self, dc, n, op, step):
         for i in range(n):
             op()
@@ -654,3 +661,64 @@ class SOT223(Part):
         self.pads[2].wire(width = 0.8)
         self.pads[1].w("i - f .2 -")
         self.pads[1].wire(width = 0.8)
+
+class LX9(Part):
+    family = "U"
+    def place(self, dc):
+        self.chamfered(dc, 17, 17)
+        dc.left(90)
+        dc.forward(7.5)
+        dc.right(90)
+        dc.forward(7.5)
+        dc.right(90)
+        for j in range(16):
+            dc.push()
+            for i in range(16):
+                dc.left(90)
+                self.roundpad(dc, 0.4)
+                dc.right(90)
+                dc.forward(1)
+            dc.pop()
+            dc.right(90)
+            dc.forward(1)
+            dc.left(90)
+
+        return
+
+    def escape(self):
+        north = self.pads[0].dir
+        done = [False for _ in self.pads]
+
+        FGname = "ABCDEFGHJKLMNPRT"
+        padname = {FGname[i] + str(1 + j): self.pads[16 * i + j] for i in range(16) for j in range(16)}
+        self.signals = {}
+        for l in open("6slx9ftg256pkg.txt", "rt"):
+            (pad, _, _, signal) = l.split()
+            self.signals[pad] = signal
+
+        powernames = ('GND', 'VCCO_0', 'VCCO_1', 'VCCO_2', 'VCCO_3', 'VCCAUX', 'VCCINT')
+        def isio(id):
+            return self.signals[id].startswith("IO_")
+
+        for pn,s in self.signals.items():
+            if s in powernames:
+                p = padname[pn]
+                p.right(45)
+                p.forward(math.sqrt(2) / 2)
+                p.wire()
+                p.via({'GND' : 'GL2', 'VCCINT' : 'GBL'}.get(s, 'GL3'))
+
+        for i in range(15, 256, 16):
+            p = self.pads[i]
+            p.dir = north + 90
+            p.forward(.5)
+            p.wire()
+
+        """
+        FGname = "ABCDEFGHJKLMNPRT"
+        self.pads = {FGname[i] + str(1 + j): (i, j) for i in range(16) for j in range(16)}
+        self.signals = {}
+        for l in open("6slx9ftg256pkg.txt", "rt"):
+            (pad, _, _, signal) = l.split()
+            self.signals[pad] = signal
+        """
