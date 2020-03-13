@@ -117,12 +117,15 @@ class Draw(Turtle):
         (xd, yd) = (d * math.sin(a), d * math.cos(a))
         self.xy = (x + xd, y + yd)
         self.path.append(self.xy)
+        return self
 
     def left(self, d):
         self.dir = (self.dir - d) % 360
+        return self
 
     def right(self, d):
         self.dir = (self.dir + d) % 360
+        return self
 
     def approach(self, d, other):
         assert ((self.dir - other.dir) % 360) in (90, 270)
@@ -206,9 +209,11 @@ class Draw(Turtle):
             self.board.layers[n].add(g)
         self.newpath()
 
-    def wire(self, layer = 'GTL'):
+    def wire(self, layer = 'GTL', width = None):
+        if width is None:
+            width = self.board.trace
         if len(self.path) > 1:
-            g = sg.LineString(self.path).buffer(self.board.trace / 2)
+            g = sg.LineString(self.path).buffer(width / 2)
             self.board.layers[layer].add(g)
             self.newpath()
 
@@ -239,6 +244,7 @@ class River(Turtle):
 
     def forward(self, d):
         [t.forward(d) for t in self.tt]
+        return self
 
     def rpivot(self, a):
         # rotate all points clockwise by angle a
@@ -277,6 +283,7 @@ class River(Turtle):
             self.rpivot(-ra / n)
         for t in self.tt:
             t.dir = fd
+        return self
 
     def left(self, a):
         fd = (self.tt[0].dir - a) % 360
@@ -286,6 +293,7 @@ class River(Turtle):
             self.lpivot(ra / n)
         for t in self.tt:
             t.dir = fd
+        return self
 
     def shimmy(self, d):
         if d == 0:
@@ -623,3 +631,26 @@ class HDMI(Part):
         dc.newpath()
         dc.forward(14.5)
         dc.silk()
+
+class SOT223(Part):
+    family = "U"
+    def place(self, dc):
+        self.chamfered(dc, 6.30, 3.30)
+        dc.push()
+        dc.forward(6.2 / 2)
+        dc.rect(3.6, 2.2)
+        self.pad(dc)
+        dc.pop()
+
+        dc.left(90)
+        dc.forward(4.60 / 2)
+        dc.left(90)
+        dc.forward(6.2 / 2)
+        dc.left(90)
+        self.train(dc, 3, lambda: self.rpad(dc, 1.20, 2.20), 2.30)
+
+    def escape(self):
+        self.pads[2].w("i f 4")
+        self.pads[2].wire(width = 0.8)
+        self.pads[1].w("i - f .2 -")
+        self.pads[1].wire(width = 0.8)

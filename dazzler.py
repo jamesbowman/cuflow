@@ -214,6 +214,9 @@ if __name__ == "__main__":
 
     bt815_qspi.meet(fl1_qspi)
 
-    j1 = cu.HDMI(brd.DC((15,34)))
+    j1 = cu.HDMI(brd.DC((5,33)).right(90))
+
+    ldo33 = cu.SOT223(brd.DC((40,6)))
+    ldo33.escape()
 
     brd.save("dazzler")
