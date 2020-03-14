@@ -135,12 +135,18 @@ def bt815_escape(u1):
     def bank(n, pool):
         return [u1.pads[i] for i in pool if (i - 1) // 16 == n]
     rv0 = brd.enriver(bank(0, ext), 45)
+    rv1 = brd.enriver(bank(1, ext), -45)
     rv2 = brd.enriver(bank(2, ext), -45)
     rv3 = brd.enriver(bank(3, ext), 45)
     rv0.forward(brd.c)
     rv0.right(90)
     rv0.forward(1)
     rv0.wire()
+
+    rv1.w("f .2 l 45 f 2.5 l 45 f 3 l 45 f .53 r 45 f 3")
+    rv1.wire()
+
+    rv2 = rv1.join(rv2, 1)
 
     rv2.forward(0.6)
 
@@ -157,7 +163,7 @@ def bt815_escape(u1):
     rvspi = rv4.join(rv5)
 
     rvspi.wire()
-    return (rvspi, )
+    return (rvspi, rv230)
 
 def u2_escape(u2):
     nms = "CS MISO IO2 GND MOSI SCK IO3 VCC".split()
@@ -204,11 +210,11 @@ if __name__ == "__main__":
         dc.forward(1)
     """
 
-    dc = brd.DC((40, 10))
-    dc.right(225)
+    dc = brd.DC((35.6, 15.160))
+    dc.right(270)
     u1 = cu.QFN64(dc)
     dc.left(225)
-    (bt815_qspi, ) = bt815_escape(u1)
+    (bt815_qspi, bt815_main) = bt815_escape(u1)
 
     dc.w("f 11 r 90 f 0.78 l 90")
     u2 = cu.SOIC8(dc)
@@ -221,7 +227,8 @@ if __name__ == "__main__":
     # ldo33 = cu.SOT223(brd.DC((40,6)))
     # ldo33.escape()
 
-    lx9 = cu.LX9(brd.DC((22, 26)).left(0))
-    lx9.escape()
+    lx9 = cu.LX9(brd.DC((16, 29)).left(0))
+    fpga_se = lx9.escape()
+    fpga_se.meet(bt815_main)
 
     brd.save("dazzler")

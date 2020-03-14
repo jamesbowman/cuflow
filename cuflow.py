@@ -1,4 +1,6 @@
 from collections import defaultdict
+import re
+import math
 
 import shapely.geometry as sg
 import shapely.affinity as sa
@@ -20,6 +22,9 @@ class Layer:
     def add(self, o):
         # .buffer(0) to work around shapely bugs
         self.polys.append(o.buffer(0))
+
+    def preview(self):
+        return so.unary_union(self.polys)
 
     def save(self, f):
         surface = so.unary_union(self.polys)
@@ -208,6 +213,9 @@ class Draw(Turtle):
         for n in {'GTL', 'GL2', 'GL3', 'GBL'} - {connect}:
             self.board.layers[n].add(g)
         self.newpath()
+
+    def preview(self):
+        return sg.LineString(self.path)
 
     def wire(self, layer = 'GTL', width = None):
         if width is None:
@@ -417,6 +425,19 @@ class Board:
             t.approach(gap, bank[0])
             t.right(2 * a)
         extend(bank[-1], bank)
+        return River(self, ibank)
+
+    def enriver90(self, ibank, a):
+        if a < 0:
+            bank = ibank[::-1]
+        else:
+            bank = ibank
+        bank[0].right(a)
+        for i,t in enumerate(bank[1:], 1):
+            gap = (self.trace + self.space) * i
+            t.forward(gap)
+            t.right(a)
+        extend(bank[0], bank)
         return River(self, ibank)
 
     def assign(self, part):
@@ -685,6 +706,10 @@ class LX9(Part):
 
         return
 
+    def collect(self, pp):
+        p0 = pp[0]
+        return [p for (_,p) in sorted([(p.seek(p0)[0], p) for p in pp])]
+
     def escape(self):
         north = self.pads[0].dir
         done = [False for _ in self.pads]
@@ -708,17 +733,57 @@ class LX9(Part):
                 p.wire()
                 p.via({'GND' : 'GL2', 'VCCINT' : 'GBL'}.get(s, 'GL3'))
 
-        for i in range(15, 256, 16):
-            p = self.pads[i]
-            p.dir = north + 90
-            p.forward(.5)
-            p.wire()
+        d1 = math.sqrt(2 * (.383 ** 2))
+        d2 = math.sqrt(2 * ((1 - .383) ** 2))
 
-        """
-        FGname = "ABCDEFGHJKLMNPRT"
-        self.pads = {FGname[i] + str(1 + j): (i, j) for i in range(16) for j in range(16)}
-        self.signals = {}
-        for l in open("6slx9ftg256pkg.txt", "rt"):
-            (pad, _, _, signal) = l.split()
-            self.signals[pad] = signal
-        """
+        s1 = "f 0.500"
+        s2 = "l 45  f {0} r 45 f 1.117".format(d1)
+        s3 = "l 45  f {0} r 45 f 1.883".format(d2)
+
+        plan = (
+            (0, ".1$",  "l 90 " + s1),
+            (0, ".2$",  "l 90 " + s2),
+            (0, ".3$",  "l 90 " + s3),
+            (1, "T",    "r 180 " + s1),
+            (1, "R",    "r 180 " + s2),
+            (1, "P",    "r 180 " + s3),
+            (2, ".16$", "r 90 " + s1),
+            (2, ".15$", "r 90 " + s2),
+            (2, ".14$", "r 90 " + s3),
+            (3, "A",    s1),
+            (3, "B",    s2),
+            (3, "C",    s3),
+        )
+        keepout = self.pads[0].board.layers['GL2'].preview().union(
+                  self.pads[0].board.layers['GL3'].preview())
+        outer = {i:[] for i in range(4)}
+        for pn,sig in self.signals.items():
+            if sig.startswith("IO_"):
+                for grp,pat,act in plan:
+                    if re.match(pat, pn):
+                        p = padname[pn]
+                        p.push()
+                        p.w(act)
+                        if p.preview().intersects(keepout):
+                            p.pop()
+                        else:
+                            p.wire()
+                            outer[grp].append(p)
+                            break
+
+        board = self.pads[0].board
+        rv0 = board.enriver90(self.collect(outer[0]), -90)
+        rv1 = board.enriver90(self.collect(outer[1]), -90)
+        rem = 36 - len(rv1.tt)
+        rv2 = board.enriver90(self.collect(outer[2])[:rem], 90)
+        rv3 = board.enriver90(self.collect(outer[3]), 90)
+
+        rv1.right(45)
+        rv1.wire()
+        rv2.left(45)
+        rv2.wire()
+
+        rv12 = rv1.join(rv2)
+        print('rv12', len(rv12.tt))
+        return rv12
+        # rv0.wire()
