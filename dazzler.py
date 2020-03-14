@@ -229,6 +229,6 @@ if __name__ == "__main__":
 
     lx9 = cu.LX9(brd.DC((16, 29)).left(0))
     fpga_se = lx9.escape()
-    fpga_se.meet(bt815_main)
+    # fpga_se.meet(bt815_main)
 
     brd.save("dazzler")

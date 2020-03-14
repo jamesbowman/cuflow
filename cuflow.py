@@ -21,7 +21,7 @@ class Layer:
 
     def add(self, o):
         # .buffer(0) to work around shapely bugs
-        self.polys.append(o.buffer(0))
+        self.polys.append(o.buffer(0).simplify(0.001, preserve_topology=False))
 
     def preview(self):
         return so.unary_union(self.polys)
