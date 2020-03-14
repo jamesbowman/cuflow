@@ -26,17 +26,17 @@ if __name__ == "__main__":
     dc.left(225)
     (bt815_qspi, bt815_main) = u1.escape()
 
-    dc.w("f 11 r 90 f 0.78 l 90")
+    dc.w("f 9.7 l 90 f 3.0 r 90")
     u2 = cu.W25Q16J(dc)
     fl1_qspi = u2.escape()
 
+    bt815_qspi.left(45)
+    bt815_qspi.wire()
     bt815_qspi.meet(fl1_qspi)
     dc.pop()
-    print(dc.xy, dc.dir) # (35.6, 15.16)
     dc.w("l 90 f 19.6 r 90 f 13.84")
-    print(dc.xy)
 
-    lx9 = cu.LX9(dc)
+    lx9 = cu.XC6LX9(dc)
     fpga_se = lx9.escape()
     # fpga_se.meet(bt815_main)
 
@@ -44,5 +44,7 @@ if __name__ == "__main__":
 
     # ldo33 = cu.SOT223(brd.DC((40,6)))
     # ldo33.escape()
+    """
+    """
 
     brd.save("dazzler")

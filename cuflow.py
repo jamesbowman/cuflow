@@ -721,12 +721,12 @@ class BT815(QFN64):
 
         def bank(n, pool):
             return [self.pads[i] for i in pool if (i - 1) // 16 == n]
-        rv0 = brd.enriver(bank(0, ext), 45)
+        rv0 = brd.enriver90(bank(0, ext), 90)
         rv1 = brd.enriver(bank(1, ext), -45)
         rv2 = brd.enriver(bank(2, ext), -45)
         rv3 = brd.enriver(bank(3, ext), 45)
-        rv0.forward(brd.c)
-        rv0.right(90)
+        rv0.forward(.2)
+        rv0.right(45)
         rv0.forward(1)
         rv0.wire()
 
@@ -788,8 +788,8 @@ class W25Q16J(SOIC8):
         sigs['CS'  ].w("i f 1.5 r 90 f 1.27 f 1.27 f .63 l 90 f .1")
         sigs['MISO'].w("i f 1.0 r 90 f 1.27 f 1.27 f .63 l 90 f .1")
         sigs['MOSI'].w("o f .1")
-        sigs['IO2' ].w("i f 0.5 r 90 f 1.27 f 1.27 l 90 f .1")
-        sigs['IO3' ].w("i f 0.5 r 90 f 1.27 f .63 l 90 f 5.5 l 90 f 6 l 90 f .1")
+        sigs['IO2' ].w("i f 0.5 r 90 f 2.20 l 90 f .1")
+        sigs['IO3' ].w("i f 0.5 r 90 f 1.27 f .63 l 90 f 5.5 l 90 f 5.65 l 90 f .1")
         sigs['GND' ].w("o -")
         sigs['VCC' ].w("o +")
 
@@ -803,8 +803,6 @@ class W25Q16J(SOIC8):
         )
         extend(sigs['SCK'], proper)
         rv = self.board.enriver(proper, 45)
-        rv.right(45)
-        rv.wire()
         return rv
 
 class HDMI(Part):
@@ -879,7 +877,7 @@ class SOT223(Part):
         self.pads[1].w("i - f .2 -")
         self.pads[1].wire(width = 0.8)
 
-class LX9(Part):
+class FTG256(Part):
     family = "U"
     def place(self, dc):
         self.chamfered(dc, 17, 17)
@@ -902,6 +900,7 @@ class LX9(Part):
 
         return
 
+class XC6LX9(FTG256):
     def collect(self, pp):
         p0 = pp[0]
         return [p for (_,p) in sorted([(p.seek(p0)[0], p) for p in pp])]
