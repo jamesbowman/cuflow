@@ -927,6 +927,9 @@ class XC6LX9(FTG256):
             (pad, _, _, signal) = l.split()
             self.signals[pad] = signal
 
+        for (pn, s) in self.signals.items():
+            padname[pn].name = s
+
         powernames = (
             'GND', 'VCCO_0', 'VCCO_1', 'VCCO_2', 'VCCO_3', 'VCCAUX', 'VCCINT',
             'IO_L1P_CCLK_2',
@@ -986,6 +989,7 @@ class XC6LX9(FTG256):
         s1 = "f 0.500"
         s2 = "l 45  f {0} r 45 f 1.117".format(d1)
         s3 = "l 45  f {0} r 45 f 1.883".format(d2)
+        s3 = "l 45  f {0} r 45 f 1.883".format(d2)
 
         plan = (
             (0, ".1$",  "l 90 " + s1),
@@ -1019,18 +1023,26 @@ class XC6LX9(FTG256):
                             break
 
         board = self.pads[0].board
-        rv0 = board.enriver90(self.collect(outer[0]), -90)
-        rv1 = board.enriver90(self.collect(outer[1]), -90)
+        oc = [self.collect(outer[i]) for i in range(4)]
+        x = 3
+        oc = oc[x:] + oc[:x]
+        rv0 = board.enriver90(oc[0], -90)
+        rv1 = board.enriver90(oc[1], -90)
         rem = 36 - len(rv1.tt)
-        rv2 = board.enriver90(self.collect(outer[2])[:rem], 90)
-        rv3 = board.enriver90(self.collect(outer[3]), 90)
+        rv2 = board.enriver90(oc[2][:rem], 90)
+        rv3 = board.enriver90(oc[3], 90)
 
+        # BT815 bus
         rv1.right(45)
         rv1.wire()
         rv2.left(45)
         rv2.wire()
-
         rv12 = rv1.join(rv2)
+
+        # RH
+        rh = oc[2][rem:]
+        [print(n) for n in sorted([d.name for d in rh])]
+
         return rv12
         # rv0.wire()
 
