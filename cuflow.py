@@ -20,8 +20,7 @@ class Layer:
         self.desc = desc
 
     def add(self, o):
-        # .buffer(0) to work around shapely bugs
-        self.polys.append(o.buffer(0).simplify(0.001, preserve_topology=False))
+        self.polys.append(o.simplify(0.001, preserve_topology=False))
 
     def preview(self):
         return so.unary_union(self.polys)
@@ -198,6 +197,11 @@ class Draw(Turtle):
     def pad(self):
         g = sg.Polygon(self.path)
         for n in ('GTL', 'GTS', 'GTP'):
+            self.board.layers[n].add(g)
+
+    def contact(self):
+        g = sg.Polygon(self.path)
+        for n in ('GTL', 'GTS', 'GBL', 'GBS'):
             self.board.layers[n].add(g)
 
     def silk(self):
@@ -389,8 +393,8 @@ class Board:
             ('GL2', 'Inner Layer 2'),
             ('GL3', 'Inner Layer 3'),
             ('GBL', 'Bottom Copper'),
-            ('GBO', 'Bottom Silkscreen'),
             ('GBS', 'Bottom Solder Mask'),
+            ('GBO', 'Bottom Silkscreen'),
             ('GBP', 'Bottom Paste'),
         ]
         self.layers = {id : Layer(desc) for (id, desc) in layers}
@@ -982,3 +986,14 @@ class XC6LX9(FTG256):
         print('rv12', len(rv12.tt))
         return rv12
         # rv0.wire()
+
+class Castellation(Part):
+    family = "J"
+    def place(self, dc):
+        dc.w("l 90 f 0.4 r 90")
+        def cp():
+            dc.right(90)
+            dc.rect(1, 1)
+            dc.contact()
+            dc.left(90)
+        self.train(dc, self.val, cp, 2.0)

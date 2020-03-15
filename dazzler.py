@@ -11,15 +11,7 @@ if __name__ == "__main__":
         via_space = cu.mil(5),
         silk = cu.mil(6))
 
-    """
-    dc = brd.DC((10, 1.0))
-
-    for i in range(20):
-        cu.C0402(dc, '15pF')
-        dc.forward(1)
-    """
-
-    dc = brd.DC((35.6, 10))
+    dc = brd.DC((40, 10))
     dc.push()
     dc.right(270)
     u1 = cu.BT815(dc)
@@ -42,9 +34,21 @@ if __name__ == "__main__":
 
     j1 = cu.HDMI(brd.DC((45,34)).right(270))
 
-    # ldo33 = cu.SOT223(brd.DC((40,6)))
-    # ldo33.escape()
-    """
-    """
+    cu.Castellation(brd.DC((34, 42)).left(90), 15)
+    cu.Castellation(brd.DC((0, 36)).left(180), 16)
+    cu.Castellation(brd.DC((6, 0)).right(90), 3)
+
+    # unplaced
+
+    p_fl_f = cu.W25Q16J(brd.DC((60,30)))
+    ldo12 = cu.SOT223(brd.DC((60,16)))
+    ldo12.escape()
+    ldo33 = cu.SOT223(brd.DC((60,4)))
+    ldo33.escape()
+
+    dc = brd.DC((-6, 0))
+    for i in range(20):
+        cu.C0402(dc, '0.1 uF')
+        dc.forward(1)
 
     brd.save("dazzler")
