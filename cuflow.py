@@ -471,6 +471,15 @@ class Part:
         (x, y) = dc.xy
         dc.board.annotate(x, y, self.id)
 
+    def minilabel(self, dc, s):
+        dc.push()
+        dc.rect(.7, .7)
+        dc.silko()
+        dc.w("r 180 f 1.5")
+        (x, y) = dc.xy
+        dc.board.layers['GTO'].add(hershey.ctext(x, y, s))
+        dc.pop()
+
     def chamfered(self, dc, w, h):
         # Outline in top silk, chamfer indicates top-left
         # ID next to chamfer
@@ -940,6 +949,18 @@ class XC6LX9(FTG256):
         assert (set(self.signals.values()) - ios - set(powernames)) == unconnected
 
         byname = {s : padname[pn] for (pn, s) in self.signals.items()}
+
+        specials = [
+            ( 'IO_L1P_CCLK_2', 'SCK'),
+            ( 'IO_L3P_D0_DIN_MISO_MISO1_2', 'MISO'),
+            ( 'IO_L3N_MOSI_CSI_B_MISO0_2', 'MOSI'),
+            ( 'IO_L65N_CSO_B_2', 'CS'),
+            ( 'TCK', 'TCK'),
+            ( 'TDI', 'TDI'),
+            ( 'TMS', 'TMS'),
+            ( 'TDO', 'TDO')]
+        for (nm, lbl) in specials:
+            self.minilabel(byname[nm], lbl)
 
         for pn,s in self.signals.items():
             if s in powernames:
