@@ -479,6 +479,7 @@ class Part:
         (x, y) = dc.xy
         dc.board.layers['GTO'].add(hershey.ctext(x, y, s))
         dc.pop()
+        dc.newpath()
 
     def chamfered(self, dc, w, h):
         # Outline in top silk, chamfer indicates top-left
