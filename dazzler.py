@@ -35,7 +35,7 @@ if __name__ == "__main__":
     j1 = cu.HDMI(brd.DC((45,34)).right(270))
 
     cu.Castellation(brd.DC((34, 42)).left(90), 15).escape()
-    cu.Castellation(brd.DC((0, 36)).left(180), 16)
+    cu.Castellation(brd.DC((0, 36)).left(180), 16).escape()
     cu.Castellation(brd.DC((6, 0)).right(90), 3)
 
     # unplaced
