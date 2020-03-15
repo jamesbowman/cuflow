@@ -139,7 +139,6 @@ class Draw(Turtle):
         o2 = other.copy()
         o2.forward(1)
         (x2, y2) = o2.xy
-        # print((x0, y0), (x1, y1), (x2, y2))
 
         self.forward(abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1) - d)
 
@@ -704,13 +703,11 @@ class BT815(QFN64):
         backside(self.pads[24], 4)
 
         for i in (9, 17, 27):
-            print('vcc', BT815pins[i])
             dc = self.pads[i]
             via(dc, 'GL3')
 
         for i,sig in enumerate(BT815pins):
             if sig == "+1V2":
-                print(i, sig)
                 via(self.pads[i], 'GBL')
 
         power = {'3V3', 'GND', '', '+1V2'}
@@ -920,9 +917,29 @@ class XC6LX9(FTG256):
             (pad, _, _, signal) = l.split()
             self.signals[pad] = signal
 
-        powernames = ('GND', 'VCCO_0', 'VCCO_1', 'VCCO_2', 'VCCO_3', 'VCCAUX', 'VCCINT')
-        def isio(id):
-            return self.signals[id].startswith("IO_")
+        powernames = (
+            'GND', 'VCCO_0', 'VCCO_1', 'VCCO_2', 'VCCO_3', 'VCCAUX', 'VCCINT',
+            'IO_L1P_CCLK_2',
+            'IO_L3P_D0_DIN_MISO_MISO1_2',
+            'IO_L3N_MOSI_CSI_B_MISO0_2',
+            'IO_L65N_CSO_B_2',
+            'TCK',
+            'TDI',
+            'TMS',
+            'TDO',
+            'PROGRAM_B_2',
+            'SUSPEND',
+            'IO_L1N_M0_CMPMISO_2',  # M0 to VCC
+            'IO_L13P_M1_2',         # M1 to GND
+        )
+        def isio(s):
+            return s.startswith("IO_") and s not in powernames
+
+        ios = {s for (pn, s) in self.signals.items() if isio(s)}
+        unconnected = {'CMPCS_B_2', 'DONE_2'}
+        assert (set(self.signals.values()) - ios - set(powernames)) == unconnected
+
+        byname = {s : padname[pn] for (pn, s) in self.signals.items()}
 
         for pn,s in self.signals.items():
             if s in powernames:
@@ -930,7 +947,16 @@ class XC6LX9(FTG256):
                 p.right(45)
                 p.forward(math.sqrt(2) / 2)
                 p.wire()
-                p.via({'GND' : 'GL2', 'VCCINT' : 'GBL'}.get(s, 'GL3'))
+                p.via({
+                    'GND' : 'GL2',
+                    'IO_L13P_M1_2' : 'GL2',
+                    'SUSPEND' : 'GL2',
+
+                    'IO_L1N_M0_CMPMISO_2' : 'GL3',
+                    'PROGRAM_B_2' : 'GL3',
+
+                    'VCCINT' : 'GBL',
+                }.get(s, 'GL3'))
 
         d1 = math.sqrt(2 * (.383 ** 2))
         d2 = math.sqrt(2 * ((1 - .383) ** 2))
@@ -957,7 +983,7 @@ class XC6LX9(FTG256):
                   self.pads[0].board.layers['GL3'].preview())
         outer = {i:[] for i in range(4)}
         for pn,sig in self.signals.items():
-            if sig.startswith("IO_"):
+            if isio(sig):
                 for grp,pat,act in plan:
                     if re.match(pat, pn):
                         p = padname[pn]
@@ -983,7 +1009,6 @@ class XC6LX9(FTG256):
         rv2.wire()
 
         rv12 = rv1.join(rv2)
-        print('rv12', len(rv12.tt))
         return rv12
         # rv0.wire()
 
