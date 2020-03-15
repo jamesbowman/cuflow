@@ -8,6 +8,7 @@ import shapely.ops as so
 import math
 
 import gerber
+from excellon import excellon
 import hershey
 
 def inches(x):  return x * 25.4
@@ -211,10 +212,14 @@ class Draw(Turtle):
         g = sg.LinearRing(self.path).buffer(self.board.silk / 2)
         self.board.layers['GTO'].add(g)
 
+    def drill(self, d):
+        self.board.drill(self.xy, d)
+
     def via(self, connect = None):
         g = sg.Point(self.xy).buffer(self.board.via / 2)
         for n in {'GTL', 'GL2', 'GL3', 'GBL'} - {connect}:
             self.board.layers[n].add(g)
+        self.board.drill(self.xy, self.board.via_hole)
         self.newpath()
 
     def preview(self):
@@ -381,6 +386,7 @@ class Board:
         self.via_space = via_space
         self.silk = silk
         self.parts = defaultdict(list)
+        self.holes = defaultdict(list)
 
         self.c = trace + space # track spacing, used everywhere
 
@@ -405,6 +411,9 @@ class Board:
             (self.size[0], self.size[1]),
             (0, self.size[1])]))
 
+    def drill(self, xy, diam):
+        self.holes[diam].append(xy)
+
     def annotate(self, x, y, s):
         self.layers['GTO'].add(hershey.text(x, y, s))
 
@@ -415,6 +424,8 @@ class Board:
         for (id, l) in self.layers.items():
             with open(basename + "." + id, "wt") as f:
                 l.save(f)
+        with open(basename + ".TXT", "wt") as f:
+            excellon(f, self.holes)
 
     def enriver(self, ibank, a):
         if a > 0:
@@ -1053,6 +1064,41 @@ class Castellation(Part):
         def cp():
             dc.right(90)
             dc.rect(1, 1)
+            self.pads.append(dc.copy())
             dc.contact()
+            dc.push()
+            dc.forward(0.375)
+            # dc.drill(0.7)
+            dc.pop()
             dc.left(90)
         self.train(dc, self.val, cp, 2.0)
+
+    def escape(self):
+        c = self.board.c
+        def label(p, s):
+            dc = p.copy()
+            dc.w("i f 0.5")
+            (x, y) = dc.xy
+            dc.board.layers['GTO'].add(hershey.ctext(x, y, s))
+        def group(pp):
+            for i,p in enumerate(pp):
+                label(p, str(30 + i))
+            for i,p in enumerate(pp):
+                p.w("l 90 f .450 l 90 f .450 r 45" + (" f .12 l 9" * 10) + " r 45")
+                p.forward((1 + i) * c)
+                p.left(90)
+                p.wire()
+            extend(pp[0], pp)
+            rv = River(self.board, pp[::-1])
+            rv.right(90)
+            rv.wire()
+        gnd = len(self.pads) // 2
+        dc = self.pads[gnd]
+        label(dc, "GND")
+        dc.push()
+        dc.w("f -0.3 r 90 f 0.5 -")
+        dc.pop()
+        dc.w("f -0.3 l 90 f 0.5 -")
+
+        group(self.pads[gnd + 1:])
+        group(self.pads[:gnd])
