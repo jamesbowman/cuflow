@@ -26,7 +26,8 @@ if __name__ == "__main__":
     bt815_qspi.wire()
     bt815_qspi.meet(fl1_qspi)
     dc.pop()
-    dc.w("l 90 f 19.6 r 90 f 13.84")
+    # dc.w("l 90 f 19.3 r 90 f 13.94 l 90")
+    dc.w("l 45 f 23.3 l 90 f 2.95 r 45")
 
     lx9 = cu.XC6LX9(dc)
     fpga_se = lx9.escape()
@@ -38,19 +39,15 @@ if __name__ == "__main__":
     cu.Castellation(brd.DC((0, 36)).left(180), 16).escape()
     cu.Castellation(brd.DC((6, 0)).right(90), 3)
 
-    # unplaced
-
-    """
-    p_fl_f = cu.W25Q16J(brd.DC((60,30)))
-    ldo12 = cu.SOT223(brd.DC((60,16)))
+    p_fl_f = cu.W25Q16J(brd.DC((35, 23)).left(45))
+    ldo12 = cu.SOT223(brd.DC((12, 5)).right(90))
     ldo12.escape()
-    ldo33 = cu.SOT223(brd.DC((60,4)))
+    ldo33 = cu.SOT223(brd.DC((25, 5)).right(90))
     ldo33.escape()
 
     dc = brd.DC((-6, 0))
     for i in range(20):
         cu.C0402(dc, '0.1 uF')
         dc.forward(1)
-    """
 
     brd.save("dazzler")

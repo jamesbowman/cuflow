@@ -1046,6 +1046,7 @@ class XC6LX9(FTG256):
         # BT815 bus
         rv1.right(45)
         rv1.wire()
+        rv2.forward(2)
         rv2.left(45)
         rv2.wire()
         rv12 = rv1.join(rv2)
