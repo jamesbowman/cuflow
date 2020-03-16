@@ -492,6 +492,10 @@ class Part:
         dc.pop()
         dc.newpath()
 
+    def notate(self, dc, s):
+        (x, y) = dc.xy
+        dc.board.layers['GTO'].add(hershey.text(x, y, s, scale = 0.1))
+
     def chamfered(self, dc, w, h):
         # Outline in top silk, chamfer indicates top-left
         # ID next to chamfer
@@ -876,6 +880,17 @@ class HDMI(Part):
         dc.forward(14.5)
         dc.silk()
 
+    def escape(self):
+        board = self.board
+        gnd = (1, 4, 7, 10, 13)
+        for g in gnd:
+            self.pads[g].w("i -")
+        def pair(g):
+            z = [self.pads[c] for c in (g - 1, g + 1)]
+            [p.outside() for p in z]
+            return board.enriver(z, -45)
+        return [pair(g) for g in gnd[:4]]
+
 class SOT223(Part):
     family = "U"
     def place(self, dc):
@@ -965,6 +980,7 @@ class XC6LX9(FTG256):
 
         byname = {s : padname[pn] for (pn, s) in self.signals.items()}
 
+        """
         specials = [
             ( 'IO_L1P_CCLK_2', 'SCK'),
             ( 'IO_L3P_D0_DIN_MISO_MISO1_2', 'MISO'),
@@ -976,6 +992,7 @@ class XC6LX9(FTG256):
             ( 'TDO', 'TDO')]
         for (nm, lbl) in specials:
             self.minilabel(byname[nm], lbl)
+        """
 
         for pn,s in self.signals.items():
             if s in powernames:
@@ -999,7 +1016,6 @@ class XC6LX9(FTG256):
 
         s1 = "f 0.500"
         s2 = "l 45  f {0} r 45 f 1.117".format(d1)
-        s3 = "l 45  f {0} r 45 f 1.883".format(d2)
         s3 = "l 45  f {0} r 45 f 1.883".format(d2)
 
         plan = (
@@ -1051,11 +1067,33 @@ class XC6LX9(FTG256):
         rv2.wire()
         rv12 = rv1.join(rv2)
 
-        # RH
+        # LVDS
+        def makepair(n, p):
+            n = byname[n]
+            p = byname[p]
+            # self.notate(n, n.name[3:7])
+            # self.notate(p, p.name[3:7])
+            return board.enriver([n, p], -45)
+        lvds = [
+            makepair('IO_L51N_M1DQ13_1', 'IO_L51P_M1DQ12_1'),
+            makepair('IO_L52N_M1DQ15_1', 'IO_L52P_M1DQ14_1'),
+            makepair('IO_L23N_2', 'IO_L23P_2'),
+            makepair('IO_L32N_GCLK28_2', 'IO_L32P_GCLK29_2')
+        ]
+
         rh = oc[2][rem:]
+
+        """
         [print(n) for n in sorted([d.name for d in rh])]
 
-        return rv12
+        for t in rh:
+            t.forward(2).wire()
+            self.notate(t, t.name[3:7])
+        """
+
+        # self.minilabel(byname[nm], lbl)
+
+        return (rv12, lvds)
         # rv0.wire()
 
 class Castellation(Part):
