@@ -40,7 +40,7 @@ if __name__ == "__main__":
     cu.Castellation(brd.DC((0, 36)).left(180), 16).escape()
     cu.Castellation(brd.DC((6, 0)).right(90), 3)
 
-    # p_fl_f = cu.W25Q16J(brd.DC((35, 23)).left(45))
+    p_fl_f = cu.W25Q16J(brd.DC((35, 23)).left(45))
     ldo12 = cu.SOT223(brd.DC((12, 5)).right(90))
     ldo12.escape()
     ldo33 = cu.SOT223(brd.DC((25, 5)).right(90))
@@ -52,6 +52,8 @@ if __name__ == "__main__":
         dc.forward(1)
 
     # Connect the LVDS pairs
+    for b in (2, 3):
+        fpga_lvds[b].forward(1).left(45).forward(1).right(45).wire()
     [h.meet(f) for (h, f) in zip(hdmi_lvds, fpga_lvds)]
 
     brd.save("dazzler")
