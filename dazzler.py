@@ -5,7 +5,7 @@ if __name__ == "__main__":
     brd = cu.Board(
         (50, 42),
         trace = cu.mil(3.5),
-        space = cu.mil(3.5),
+        space = cu.mil(3.5) * 1.0,
         via_hole = 0.2,
         via = 0.45,
         via_space = cu.mil(5),
@@ -30,14 +30,14 @@ if __name__ == "__main__":
     dc.w("l 45 f 24.3 l 90 f 2.95 r 45")
 
     lx9 = cu.XC6LX9(dc)
-    (fpga_main, fpga_lvds) = lx9.escape()
+    (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_p23) = lx9.escape()
     # fpga_main.meet(bt815_main)
 
     j1 = cu.HDMI(brd.DC((45,34)).right(270))
     hdmi_lvds = j1.escape()
 
-    cu.Castellation(brd.DC((34, 42)).left(90), 15).escape()
-    cu.Castellation(brd.DC((0, 36)).left(180), 16).escape()
+    (p0, p1) = cu.Castellation(brd.DC((34, 42)).left(90), 15).escape()
+    (p2, p3) = cu.Castellation(brd.DC((0, 36)).left(180), 16).escape()
     cu.Castellation(brd.DC((6, 0)).right(90), 3)
 
     p_fl_f = cu.W25Q16J(brd.DC((35, 23)).left(45))
@@ -55,5 +55,16 @@ if __name__ == "__main__":
     for b in (2, 3):
         fpga_lvds[b].forward(1).left(45).forward(1).right(45).wire()
     [h.meet(f) for (h, f) in zip(hdmi_lvds, fpga_lvds)]
+
+    fpga_p0.meet(p0)
+    fpga_p1.meet(p1)
+
+    fpga_p23.right(90).wire()
+    (fpga_p2,fpga_p3) = fpga_p23.split(8)
+    fpga_p2.w("r 45 f 1 l 45").wire()
+    fpga_p3.w("f 2").wire()
+
+    fpga_p2.meet(p2)
+    fpga_p3.meet(p3)
 
     brd.save("dazzler")

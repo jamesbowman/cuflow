@@ -90,6 +90,7 @@ class Turtle:
                 cmds2[t](float(tokens[i + 1]))
                 i += 2
         # self.wire(layer)
+        return self
 
     def inside(self): pass
     def outside(self): pass
@@ -292,6 +293,8 @@ class River(Turtle):
             t.path.append(t.xy)
 
     def right(self, a):
+        if a < 0:
+            return self.left(-a)
         fd = (self.tt[0].dir + a) % 360
         n = int(a + 1)
         ra = 2 * math.pi * a / 360
@@ -302,6 +305,8 @@ class River(Turtle):
         return self
 
     def left(self, a):
+        if a < 0:
+            return self.right(-a)
         fd = (self.tt[0].dir - a) % 360
         n = int(a + 1)
         ra = 2 * math.pi * a / 360
@@ -367,6 +372,11 @@ class River(Turtle):
         self.forward(d)
         self.wire()
 
+    def split(self, n):
+        a = River(self.board, self.tt[:n])
+        b = River(self.board, self.tt[n:])
+        return (a, b)
+
     def wire(self):
         [t.wire() for t in self.tt]
 
@@ -389,6 +399,8 @@ class Board:
         self.holes = defaultdict(list)
 
         self.c = trace + space # track spacing, used everywhere
+
+        self.counters = {}
 
         layers = [
             ('GTP', 'Top Paste'),
@@ -453,6 +465,11 @@ class Board:
             t.right(a)
         extend(bank[0], bank)
         return River(self, ibank)
+
+    def enriverS(self, pi, a):
+        rv = self.enriver(pi, a)
+        rv.left(a).wire()
+        return rv
 
     def assign(self, part):
         pl = self.parts[part.family]
@@ -1053,11 +1070,12 @@ class XC6LX9(FTG256):
         oc = [self.collect(outer[i]) for i in range(4)]
         x = 3
         oc = oc[x:] + oc[:x]
-        rv0 = board.enriver90(oc[0], -90)
+        rv0 = board.enriver90(oc[0][-15:], -90)
         rv1 = board.enriver90(oc[1], -90)
         rem = 36 - len(rv1.tt)
         rv2 = board.enriver90(oc[2][:rem], 90)
-        rv3 = board.enriver90(oc[3], 90)
+        p0 = board.enriverS(oc[3][:7], -45)
+        p1 = board.enriverS(oc[3][-7:], 45)
 
         # BT815 bus
         rv1.right(45)
@@ -1093,7 +1111,7 @@ class XC6LX9(FTG256):
 
         # self.minilabel(byname[nm], lbl)
 
-        return (rv12, lvds)
+        return (rv12, lvds, p0, p1, rv0)
         # rv0.wire()
 
 class Castellation(Part):
@@ -1119,18 +1137,23 @@ class Castellation(Part):
             dc.w("i f 0.5")
             (x, y) = dc.xy
             dc.board.layers['GTO'].add(hershey.ctext(x, y, s))
-        def group(pp):
+        def group(pi, a):
+            if a < 0:
+                pp = pi[::-1]
+            else:
+                pp = pi
             for i,p in enumerate(pp):
                 label(p, str(30 + i))
             for i,p in enumerate(pp):
                 p.w("l 90 f .450 l 90 f .450 r 45" + (" f .12 l 9" * 10) + " r 45")
                 p.forward((1 + i) * c)
-                p.left(90)
+                p.left(a)
                 p.wire()
             extend(pp[0], pp)
-            rv = River(self.board, pp[::-1])
-            rv.right(90)
+            rv = River(self.board, pi[::-1])
+            rv.right(a)
             rv.wire()
+            return rv
         gnd = len(self.pads) // 2
         dc = self.pads[gnd]
         label(dc, "GND")
@@ -1139,5 +1162,6 @@ class Castellation(Part):
         dc.pop()
         dc.w("f -0.3 l 90 f 0.5 -")
 
-        group(self.pads[gnd + 1:])
-        group(self.pads[:gnd])
+        b = group(self.pads[gnd + 1:], 90)
+        a = group(self.pads[:gnd], -90)
+        return (a, b)
