@@ -20,14 +20,14 @@ class Layer:
         self.polys = []
         self.desc = desc
 
-    def add(self, o):
-        self.polys.append(o.simplify(0.001, preserve_topology=False))
+    def add(self, o, nm = None):
+        self.polys.append((nm, o.simplify(0.001, preserve_topology=False)))
 
     def preview(self):
-        return so.unary_union(self.polys)
+        return so.unary_union([p for (_, p) in self.polys])
 
     def save(self, f):
-        surface = so.unary_union(self.polys)
+        surface = self.preview()
         g = gerber.Gerber(f, self.desc)
         def renderpoly(g, po):
             if type(po) == sg.MultiPolygon:
@@ -96,12 +96,16 @@ class Turtle:
     def outside(self): pass
 
 class Draw(Turtle):
-    def __init__(self, board, xy, dir = 0):
+    def __init__(self, board, xy, dir = 0, name = None):
         self.board = board
         self.xy = xy
         self.dir = dir
         self.stack = []
+        self.name = None
         self.newpath()
+
+    def setname(self, nm):
+        self.name = nm
 
     def newpath(self):
         self.path = [self.xy]
@@ -198,12 +202,12 @@ class Draw(Turtle):
     def pad(self):
         g = sg.Polygon(self.path)
         for n in ('GTL', 'GTS', 'GTP'):
-            self.board.layers[n].add(g)
+            self.board.layers[n].add(g, self.name)
 
     def contact(self):
         g = sg.Polygon(self.path)
         for n in ('GTL', 'GTS', 'GBL', 'GBS'):
-            self.board.layers[n].add(g)
+            self.board.layers[n].add(g, self.name)
 
     def silk(self):
         g = sg.LineString(self.path).buffer(self.board.silk / 2)
@@ -371,6 +375,7 @@ class River(Turtle):
         d = self.tt[0].distance(other.tt[-1])
         self.forward(d)
         self.wire()
+        print([(a.name,b.name) for (a, b) in zip(self.tt, other.tt[::-1])])
 
     def split(self, n):
         a = River(self.board, self.tt[:n])
@@ -400,7 +405,7 @@ class Board:
 
         self.c = trace + space # track spacing, used everywhere
 
-        self.counters = {}
+        self.counters = defaultdict(lambda: 0)
 
         layers = [
             ('GTP', 'Top Paste'),
@@ -702,6 +707,10 @@ class BT815(QFN64):
     def escape(self):
         brd = self.board
 
+        assert len(BT815pins) == len(self.pads)
+        for p,n in zip(self.pads, BT815pins):
+            p.setname((self.id, n))
+
         dc = self.pads[23]
         dc.right(180)
         dc.forward(2)
@@ -826,6 +835,9 @@ class W25Q16J(SOIC8):
     def escape(self):
         nms = "CS MISO IO2 GND MOSI SCK IO3 VCC".split()
         sigs = {nm: p for (nm, p) in zip(nms, self.pads)}
+
+        for (nm, p) in zip(nms, self.pads):
+            p.setname((self.id, nm))
         
         sigs['SCK' ].w("f 1.1 f .1")
         sigs['CS'  ].w("i f 1.5 r 90 f 1.27 f 1.27 f .63 l 90 f .1")
@@ -900,6 +912,11 @@ class HDMI(Part):
     def escape(self):
         board = self.board
         gnd = (1, 4, 7, 10, 13)
+        for g,p in zip(gnd, ["TMDS2", "TMDS1", "TMDS0", "TMDS_CLK"]):
+            self.pads[g].setname("GND")
+            self.pads[g - 1].setname((self.id, p + "_P"))
+            self.pads[g + 1].setname((self.id, p + "_N"))
+
         for g in gnd:
             self.pads[g].w("i -")
         def pair(g):
@@ -971,7 +988,7 @@ class XC6LX9(FTG256):
             self.signals[pad] = signal
 
         for (pn, s) in self.signals.items():
-            padname[pn].name = s
+            padname[pn].setname((self.id, s))
 
         powernames = (
             'GND', 'VCCO_0', 'VCCO_1', 'VCCO_2', 'VCCO_3', 'VCCAUX', 'VCCINT',
@@ -1134,16 +1151,24 @@ class Castellation(Part):
         c = self.board.c
         def label(p, s):
             dc = p.copy()
-            dc.w("i f 0.5")
+            dc.inside()
+            (d, tf) = {90: (0.05, hershey.text), 180: (0.6, hershey.ctext)}[dc.dir]
+            dc.forward(d)
             (x, y) = dc.xy
-            dc.board.layers['GTO'].add(hershey.ctext(x, y, s))
+            dc.board.layers['GTO'].add(tf(x, y, s))
+
+        cnt = self.board.counters
+        for p in self.pads:
+            cnt['port'] += 1
+            p.setname((self.id, str(cnt['port'])))
+
         def group(pi, a):
             if a < 0:
                 pp = pi[::-1]
             else:
                 pp = pi
             for i,p in enumerate(pp):
-                label(p, str(30 + i))
+                label(p, p.name[1])
             for i,p in enumerate(pp):
                 p.w("l 90 f .450 l 90 f .450 r 45" + (" f .12 l 9" * 10) + " r 45")
                 p.forward((1 + i) * c)
@@ -1162,6 +1187,6 @@ class Castellation(Part):
         dc.pop()
         dc.w("f -0.3 l 90 f 0.5 -")
 
-        b = group(self.pads[gnd + 1:], 90)
         a = group(self.pads[:gnd], -90)
+        b = group(self.pads[gnd + 1:], 90)
         return (a, b)
