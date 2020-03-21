@@ -375,7 +375,7 @@ class River(Turtle):
         d = self.tt[0].distance(other.tt[-1])
         self.forward(d)
         self.wire()
-        print([(a.name,b.name) for (a, b) in zip(self.tt, other.tt[::-1])])
+        self.board.nets += [(a.name, b.name) for (a, b) in zip(self.tt, other.tt[::-1])]
 
     def split(self, n):
         a = River(self.board, self.tt[:n])
@@ -406,6 +406,7 @@ class Board:
         self.c = trace + space # track spacing, used everywhere
 
         self.counters = defaultdict(lambda: 0)
+        self.nets = []
 
         layers = [
             ('GTP', 'Top Paste'),
@@ -639,16 +640,16 @@ BT815pins = [
     'GND',
     'R0',
     '+1V2',
-    'E.SCK',
-    'E.MISO',
-    'E.MOSI',
-    'E.CS',
+    'E_SCK',
+    'E_MISO',
+    'E_MOSI',
+    'E_CS',
     '',
     '',
     '3V3',
     '',
-    'E.INT',
-    'E.PD',
+    'E_INT',
+    'E_PD',
     '',
     'M_SCK',
     'M_CS',
@@ -1013,20 +1014,27 @@ class XC6LX9(FTG256):
         assert (set(self.signals.values()) - ios - set(powernames)) == unconnected
 
         byname = {s : padname[pn] for (pn, s) in self.signals.items()}
+        self.padnames = padname
 
-        """
-        specials = [
-            ( 'IO_L1P_CCLK_2', 'SCK'),
-            ( 'IO_L3P_D0_DIN_MISO_MISO1_2', 'MISO'),
-            ( 'IO_L3N_MOSI_CSI_B_MISO0_2', 'MOSI'),
-            ( 'IO_L65N_CSO_B_2', 'CS'),
-            ( 'TCK', 'TCK'),
-            ( 'TDI', 'TDI'),
-            ( 'TMS', 'TMS'),
-            ( 'TDO', 'TDO')]
-        for (nm, lbl) in specials:
-            self.minilabel(byname[nm], lbl)
-        """
+
+        if 1:
+            specials = [
+                ( 'IO_L1P_CCLK_2', 'SCK'),
+                ( 'IO_L3P_D0_DIN_MISO_MISO1_2', 'MISO'),
+                ( 'IO_L3N_MOSI_CSI_B_MISO0_2', 'MOSI'),
+                ( 'IO_L65N_CSO_B_2', 'CS'),
+                ( 'TCK', 'TCK'),
+                ( 'TDI', 'TDI'),
+                ( 'TMS', 'TMS'),
+                ( 'TDO', 'TDO')]
+            for (nm, lbl) in specials:
+                self.minilabel(byname[nm], lbl)
+        if 0:
+            self.minilabel(byname['IO_L32N_M3DQ15_3'], 'PCLK')
+        if 0:
+            for nm,p in byname.items():
+                if "GCLK" in nm:
+                    self.minilabel(p, "C")
 
         for pn,s in self.signals.items():
             if s in powernames:
@@ -1131,6 +1139,25 @@ class XC6LX9(FTG256):
         return (rv12, lvds, p0, p1, rv0)
         # rv0.wire()
 
+    def dump_ucf(self, basename):
+        with open(basename + ".ucf", "wt") as ucf:
+            nets = self.board.nets
+            def netpair(d):
+                if self.id in d:
+                    mine = d[self.id]
+                    (oth, ) = tuple(set(d.values()) - {mine})
+                    return (mine, oth)
+            mynets = [r for r in [netpair(dict(n)) for n in nets] if r]
+            padname = {s : p for (p, s) in self.signals.items()}
+            for (m, o) in mynets:
+                if "TMDS" in o:
+                    io = "TMDS_33"
+                else:
+                    io = "LVTTL"
+                ucf.write('NET "{0}" LOC="{1}" | IOSTANDARD="{2}";\n'.format(o, padname[m], io))
+                if "GCLK" in m:
+                    print(m, o)
+
 class Castellation(Part):
     family = "J"
     def place(self, dc):
@@ -1160,7 +1187,7 @@ class Castellation(Part):
         cnt = self.board.counters
         for p in self.pads:
             cnt['port'] += 1
-            p.setname((self.id, str(cnt['port'])))
+            p.setname((self.id, "P" + str(cnt['port'])))
 
         def group(pi, a):
             if a < 0:
@@ -1168,7 +1195,7 @@ class Castellation(Part):
             else:
                 pp = pi
             for i,p in enumerate(pp):
-                label(p, p.name[1])
+                label(p, p.name[1][1:])
             for i,p in enumerate(pp):
                 p.w("l 90 f .450 l 90 f .450 r 45" + (" f .12 l 9" * 10) + " r 45")
                 p.forward((1 + i) * c)

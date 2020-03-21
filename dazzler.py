@@ -31,7 +31,6 @@ if __name__ == "__main__":
 
     lx9 = cu.XC6LX9(dc)
     (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_p23) = lx9.escape()
-    # fpga_main.meet(bt815_main)
 
     j1 = cu.HDMI(brd.DC((45,34)).right(270))
     hdmi_lvds = j1.escape()
@@ -67,4 +66,7 @@ if __name__ == "__main__":
     fpga_p2.meet(p2)
     fpga_p3.meet(p3)
 
+    fpga_main.meet(bt815_main)
+
     brd.save("dazzler")
+    lx9.dump_ucf("dazzler")
