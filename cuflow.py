@@ -74,6 +74,7 @@ class Turtle:
             'o' : self.outside,
             '-' : lambda: self.wvia('GL2'),
             '+' : lambda: self.wvia('GL3'),
+            '.' : lambda: self.wvia('GBL'),
         }
         cmds2 = {
             'f' : self.forward,
@@ -104,6 +105,7 @@ class Draw(Turtle):
         self.stack = []
         self.name = None
         self.newpath()
+        self.layer = 'GTL'
 
     def setname(self, nm):
         self.name = nm
@@ -120,6 +122,7 @@ class Draw(Turtle):
     def copy(self):
         r = Draw(self.board, self.xy, self.dir)
         r.h = self.h
+        r.layer = self.layer
         return r
 
     def forward(self, d):
@@ -193,9 +196,11 @@ class Draw(Turtle):
     def inside(self):
         self.right(180)
         self.forward(self.h / 2)
+        return self
 
     def outside(self):
         self.forward(self.h / 2)
+        return self
 
     def square(self, w):
         self.rect(w, w)
@@ -233,13 +238,16 @@ class Draw(Turtle):
     def preview(self):
         return sg.LineString(self.path)
 
-    def wire(self, layer = 'GTL', width = None):
+    def wire(self, layer = None, width = None):
+        if layer is not None:
+            self.layer = layer
         if width is None:
             width = self.board.trace
         if len(self.path) > 1:
             g = sg.LineString(self.path).buffer(width / 2)
-            self.board.layers[layer].add(g)
+            self.board.layers[self.layer].add(g)
             self.newpath()
+        return self
 
     def wvia(self, l):
         # enough wire then a via
@@ -385,8 +393,9 @@ class River(Turtle):
         b = River(self.board, self.tt[n:])
         return (a, b)
 
-    def wire(self):
-        [t.wire() for t in self.tt]
+    def wire(self, layer = None, width = None):
+        [t.wire(layer, width) for t in self.tt]
+        return self
 
 class Board:
     def __init__(self, size,
@@ -494,7 +503,6 @@ def extend(dst, traces):
     finish_line.left(90)
     for t in traces:
         t.approach(0, finish_line)
-        t.wire()
 
 class Part:
     def __init__(self, dc, val = None):
@@ -862,7 +870,48 @@ class W25Q16J(SOIC8):
         )
         extend(sigs['SCK'], proper)
         rv = self.board.enriver(proper, 45)
+        rv.wire()
         return rv
+
+    def escape1(self):
+        b = self.board
+
+        nms = "CS MISO IO2 GND MOSI SCK IO3 VCC".split()
+        sigs = {nm: p for (nm, p) in zip(nms, self.pads)}
+        for (nm, p) in zip(nms, self.pads):
+            p.setname((self.id, nm))
+
+        sigs['GND' ].w("o -")
+        sigs['VCC' ].w("o +")
+
+        ls = ('CS', 'MISO', 'IO2')
+        rs = ('MOSI', 'SCK', 'IO3')
+        
+        for s in ls:
+            sigs[s].w("i l 90 f 0.63 r 90").wire()
+        for s in rs:
+            sigs[s].w("i").wire()
+        dv = b.via_space + b.via / 2
+        for s in ls + rs:
+            sigs[s].forward(dv)
+        width = 3.0 - 2 * dv
+
+        print(width / 6)
+        ord = "MOSI SCK MISO IO2 IO3 CS".split()
+        gap = width / 5
+        for i,s in enumerate(ord):
+            x = i * gap
+            if s in ls:
+                x = width - x
+            sigs[s].forward(x).wire().via('GBL')
+            sigs[s].wire()
+            if s in ls:
+                sigs[s].right(180)
+            sigs[s].right(90).forward(dv).wire('GBL')
+
+        grp = [sigs[n] for n in ord]
+        extend(grp[-1], grp)
+        return self.board.enriver90(grp, -90).right(45).wire()
 
 class HDMI(Part):
     family = "J"
@@ -1000,6 +1049,8 @@ class XC6LX9(FTG256):
             'IO_L3P_D0_DIN_MISO_MISO1_2',
             'IO_L3N_MOSI_CSI_B_MISO0_2',
             'IO_L65N_CSO_B_2',
+            'IO_L49P_D3_2',
+            'IO_L63P_2',
             'TCK',
             'TDI',
             'TMS',
@@ -1025,11 +1076,13 @@ class XC6LX9(FTG256):
             ( 'IO_L3P_D0_DIN_MISO_MISO1_2', 'MISO'),
             ( 'IO_L3N_MOSI_CSI_B_MISO0_2', 'MOSI'),
             ( 'IO_L65N_CSO_B_2', 'CS'),
+            ( 'IO_L49P_D3_2', 'IO2'),
+            ( 'IO_L63P_2', 'IO3'),
             ( 'TCK', 'TCK'),
             ( 'TDI', 'TDI'),
             ( 'TMS', 'TMS'),
             ( 'TDO', 'TDO')]
-        if 1:
+        if 0:
             for (nm, lbl) in specials:
                 self.minilabel(byname[nm], lbl)
         if 0:
@@ -1038,6 +1091,10 @@ class XC6LX9(FTG256):
             for nm,p in byname.items():
                 if "GCLK" in nm:
                     self.minilabel(p, "C")
+        if 0:
+            for pn,s in self.signals.items():
+                p = padname[pn]
+                self.notate(p, pn)
 
         for pn,s in self.signals.items():
             if s in powernames:
@@ -1058,13 +1115,14 @@ class XC6LX9(FTG256):
                     'IO_L3P_D0_DIN_MISO_MISO1_2' : 'GBL',
                     'IO_L3N_MOSI_CSI_B_MISO0_2' : 'GBL',
                     'IO_L65N_CSO_B_2' : 'GBL',
+                    'IO_L49P_D3_2' : 'GBL',
+                    'IO_L63P_2' : 'GBL',
                     'TCK' : 'GBL',
                     'TDI' : 'GBL',
                     'TMS' : 'GBL',
                     'TDO' : 'GBL'
                 }.get(s, 'GL3')
                 p.via(dst)
-        auxconn = {nm: byname[sig] for (sig, nm) in specials}
 
         d1 = math.sqrt(2 * (.383 ** 2))
         d2 = math.sqrt(2 * ((1 - .383) ** 2))
@@ -1137,19 +1195,35 @@ class XC6LX9(FTG256):
             makepair('IO_L32N_GCLK28_2', 'IO_L32P_GCLK29_2')
         ]
 
-        rh = oc[2][rem:]
+        # Flash
+        # 
+        grp = []
+        for s,d in [('IO_L3P_D0_DIN_MISO_MISO1_2', 1.4),
+                    ('IO_L1P_CCLK_2', 2.2),
+                    ('IO_L3N_MOSI_CSI_B_MISO0_2', 1),
+                    ]:
+            t = byname[s]
+            t.w("l 45 f 0.5 l 90").forward(d).left(90).forward(.1).wire('GBL')
+            grp.append(t)
+        extend(grp[-1], grp)
+        frv0 = board.enriver90(grp, 90)
+        frv0.w("f 0.5 l 90").wire()
+        
+# 'IO_L49P_D3_2'      # P5
+# 'IO_L63P_2'         # P4
+# 'IO_L65N_CSO_B_2'   # T3
+        grp = [byname[s] for s in ("IO_L65N_CSO_B_2", "IO_L63P_2", "IO_L49P_D3_2")]
+        for t in grp:
+            t.w("r 45 f 0.5 r 90 f 0.2").wire('GBL')
+        extend(grp[0], grp)
+        [t.wire('GBL') for t in grp]
+        frv1 = board.enriver90(grp, -90)
+        frv1.w("r 90").wire('GBL')
 
-        """
-        [print(n) for n in sorted([d.name for d in rh])]
-
-        for t in rh:
-            t.forward(2).wire()
-            self.notate(t, t.name[3:7])
-        """
-
-        # self.minilabel(byname[nm], lbl)
-
-        return (rv12, lvds, p0, p1, rv0, auxconn)
+        frv = frv1.join(frv0, .75)
+        frv.wire('GBL')
+    
+        return (rv12, lvds, p0, p1, rv0, frv)
         # rv0.wire()
 
     def dump_ucf(self, basename):

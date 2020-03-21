@@ -30,7 +30,7 @@ if __name__ == "__main__":
     dc.w("l 45 f 24.3 l 90 f 2.95 r 45")
 
     lx9 = cu.XC6LX9(dc)
-    (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_p23, fpga_aux) = lx9.escape()
+    (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_p23, fpga_fl) = lx9.escape()
 
     j1 = cu.HDMI(brd.DC((45,34)).right(270))
     hdmi_lvds = j1.escape()
@@ -40,6 +40,8 @@ if __name__ == "__main__":
     cu.Castellation(brd.DC((6, 0)).right(90), 3)
 
     p_fl_f = cu.W25Q16J(brd.DC((35, 23)).left(45))
+    fl2_qspi = p_fl_f.escape1()
+    print('fl2_qspi', fl2_qspi)
     ldo12 = cu.SOT223(brd.DC((12, 5)).right(90))
     ldo12.escape()
     ldo33 = cu.SOT223(brd.DC((25, 5)).right(90))
@@ -53,6 +55,8 @@ if __name__ == "__main__":
     # Connect the LVDS pairs
     for b in (2, 3):
         fpga_lvds[b].forward(1).left(45).forward(1).right(45).wire()
+    fpga_lvds[0].wire()
+    fpga_lvds[1].wire()
     [h.meet(f) for (h, f) in zip(hdmi_lvds, fpga_lvds)]
 
     fpga_p0.meet(p0)
@@ -69,8 +73,8 @@ if __name__ == "__main__":
     fpga_main.meet(bt815_main)
 
     # Bottom-layer hookups
-    for (nm, dc) in fpga_aux.items():
-        dc.w("l 90 f .707 l 45 f 1").wire(layer = 'GBL')
+
+    fpga_fl.meet(fl2_qspi)
 
     brd.save("dazzler")
     lx9.dump_ucf("dazzler")
