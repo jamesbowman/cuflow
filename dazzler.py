@@ -30,7 +30,7 @@ if __name__ == "__main__":
     dc.w("l 45 f 24.3 l 90 f 2.95 r 45")
 
     lx9 = cu.XC6LX9(dc)
-    (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_p23) = lx9.escape()
+    (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_p23, fpga_aux) = lx9.escape()
 
     j1 = cu.HDMI(brd.DC((45,34)).right(270))
     hdmi_lvds = j1.escape()
@@ -67,6 +67,10 @@ if __name__ == "__main__":
     fpga_p3.meet(p3)
 
     fpga_main.meet(bt815_main)
+
+    # Bottom-layer hookups
+    for (nm, dc) in fpga_aux.items():
+        dc.w("l 90 f .707 l 45 f 1").wire(layer = 'GBL')
 
     brd.save("dazzler")
     lx9.dump_ucf("dazzler")

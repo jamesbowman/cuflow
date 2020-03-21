@@ -19,6 +19,7 @@ class Layer:
     def __init__(self, desc):
         self.polys = []
         self.desc = desc
+        self.connected = []
 
     def add(self, o, nm = None):
         self.polys.append((nm, o.simplify(0.001, preserve_topology=False)))
@@ -222,8 +223,10 @@ class Draw(Turtle):
 
     def via(self, connect = None):
         g = sg.Point(self.xy).buffer(self.board.via / 2)
-        for n in {'GTL', 'GL2', 'GL3', 'GBL'} - {connect}:
+        for n in ('GTL', 'GL2', 'GL3', 'GBL'):
             self.board.layers[n].add(g)
+        if connect is not None:
+            self.board.layers[connect].connected.append(g)
         self.board.drill(self.xy, self.board.via_hole)
         self.newpath()
 
@@ -1017,16 +1020,16 @@ class XC6LX9(FTG256):
         self.padnames = padname
 
 
+        specials = [
+            ( 'IO_L1P_CCLK_2', 'SCK'),
+            ( 'IO_L3P_D0_DIN_MISO_MISO1_2', 'MISO'),
+            ( 'IO_L3N_MOSI_CSI_B_MISO0_2', 'MOSI'),
+            ( 'IO_L65N_CSO_B_2', 'CS'),
+            ( 'TCK', 'TCK'),
+            ( 'TDI', 'TDI'),
+            ( 'TMS', 'TMS'),
+            ( 'TDO', 'TDO')]
         if 1:
-            specials = [
-                ( 'IO_L1P_CCLK_2', 'SCK'),
-                ( 'IO_L3P_D0_DIN_MISO_MISO1_2', 'MISO'),
-                ( 'IO_L3N_MOSI_CSI_B_MISO0_2', 'MOSI'),
-                ( 'IO_L65N_CSO_B_2', 'CS'),
-                ( 'TCK', 'TCK'),
-                ( 'TDI', 'TDI'),
-                ( 'TMS', 'TMS'),
-                ( 'TDO', 'TDO')]
             for (nm, lbl) in specials:
                 self.minilabel(byname[nm], lbl)
         if 0:
@@ -1042,7 +1045,7 @@ class XC6LX9(FTG256):
                 p.right(45)
                 p.forward(math.sqrt(2) / 2)
                 p.wire()
-                p.via({
+                dst = {
                     'GND' : 'GL2',
                     'IO_L13P_M1_2' : 'GL2',
                     'SUSPEND' : 'GL2',
@@ -1051,7 +1054,17 @@ class XC6LX9(FTG256):
                     'PROGRAM_B_2' : 'GL3',
 
                     'VCCINT' : 'GBL',
-                }.get(s, 'GL3'))
+                    'IO_L1P_CCLK_2' : 'GBL',
+                    'IO_L3P_D0_DIN_MISO_MISO1_2' : 'GBL',
+                    'IO_L3N_MOSI_CSI_B_MISO0_2' : 'GBL',
+                    'IO_L65N_CSO_B_2' : 'GBL',
+                    'TCK' : 'GBL',
+                    'TDI' : 'GBL',
+                    'TMS' : 'GBL',
+                    'TDO' : 'GBL'
+                }.get(s, 'GL3')
+                p.via(dst)
+        auxconn = {nm: byname[sig] for (sig, nm) in specials}
 
         d1 = math.sqrt(2 * (.383 ** 2))
         d2 = math.sqrt(2 * ((1 - .383) ** 2))
@@ -1136,7 +1149,7 @@ class XC6LX9(FTG256):
 
         # self.minilabel(byname[nm], lbl)
 
-        return (rv12, lvds, p0, p1, rv0)
+        return (rv12, lvds, p0, p1, rv0, auxconn)
         # rv0.wire()
 
     def dump_ucf(self, basename):
@@ -1155,8 +1168,6 @@ class XC6LX9(FTG256):
                 else:
                     io = "LVTTL"
                 ucf.write('NET "{0}" LOC="{1}" | IOSTANDARD="{2}";\n'.format(o, padname[m], io))
-                if "GCLK" in m:
-                    print(m, o)
 
 class Castellation(Part):
     family = "J"

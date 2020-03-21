@@ -1,4 +1,5 @@
 gerbv \
+-f '#00FF00' $1.GBL \
 -f '#FF0000' $1.TXT \
 -f '#FFFFFF' $1.GTO \
 -f '#a0a000' $1.GTL \
