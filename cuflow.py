@@ -441,6 +441,11 @@ class Board:
             (self.size[0], self.size[1]),
             (0, self.size[1])]))
 
+    def hole(self, xy, inner, outer):
+        self.drill(xy, inner)
+        g = sg.LinearRing(sg.Point(xy).buffer(outer / 2).exterior).buffer(self.silk / 2)
+        self.layers['GTO'].add(g)
+
     def drill(self, xy, diam):
         self.holes[diam].append(xy)
 

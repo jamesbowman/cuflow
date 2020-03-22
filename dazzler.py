@@ -11,6 +11,9 @@ if __name__ == "__main__":
         via_space = cu.mil(5),
         silk = cu.mil(6))
 
+    brd.hole((47.2, 2.8), 2.5, 5)
+    brd.hole((8, 35), 2.5, 5)
+
     dc = brd.DC((40, 10))
     dc.push()
     dc.right(270)
