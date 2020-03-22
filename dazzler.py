@@ -35,7 +35,7 @@ if __name__ == "__main__":
     lx9 = cu.XC6LX9(dc)
     (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_p23, fpga_fl, fpga_jtag) = lx9.escape()
 
-    j1 = cu.HDMI(brd.DC((45,34)).right(270))
+    j1 = cu.HDMI(brd.DC((45,33.5)).right(270))
     hdmi_lvds = j1.escape()
 
     (p0, p1) = cu.Castellation(brd.DC((34, 42)).left(90), 15).escape()

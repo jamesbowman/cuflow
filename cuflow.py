@@ -420,6 +420,7 @@ class Board:
         self.silk = silk
         self.parts = defaultdict(list)
         self.holes = defaultdict(list)
+        self.keepouts = []
 
         self.c = trace + space # track spacing, used everywhere
 
@@ -451,6 +452,7 @@ class Board:
         self.drill(xy, inner)
         g = sg.LinearRing(sg.Point(xy).buffer(outer / 2).exterior).buffer(self.silk / 2)
         self.layers['GTO'].add(g)
+        self.keepouts.append(sg.Point(xy).buffer(inner / 2 + 0.5))
 
     def drill(self, xy, diam):
         self.holes[diam].append(xy)
@@ -462,7 +464,8 @@ class Board:
         return Draw(self, xy, d)
 
     def save(self, basename):
-        g = sg.box(0, 0, self.size[0], self.size[1])
+        ko = so.unary_union(self.keepouts)
+        g = sg.box(0, 0, self.size[0], self.size[1]).buffer(-0.2).difference(ko)
         self.layers['GL2'].fill(g, 'GL2', self.via_space)
         self.layers['GL3'].fill(g, 'GL3', self.via_space)
         for (id, l) in self.layers.items():
