@@ -178,6 +178,14 @@ class Draw(Turtle):
         oy = dy * c + dx * s
         return (ox, oy)
 
+    def goto(self, other):
+        (x, y) = self.seek(other)
+        self.right(90)
+        self.forward(x)
+        self.left(90)
+        self.forward(y)
+        return self
+
     def is_behind(self, other):
         assert abs(self.dir - other.dir) < 0.0001
         (_, y) = self.seek(other)
@@ -624,19 +632,13 @@ class C0402(Part):
         dc.forward(2)
         self.label(dc)
         dc.pop()
-
+    def escape(self):
         # Connections to GND and VCC
-        for d,l in ((-90, 'GL2'), (90, 'GL3')):
-            dc.push()
-            dc.left(d)
-            dc.forward(1.1)
+        self.pads[0].w("o -").wire()
+        self.pads[1].w("o +").wire()
 
-            dc.newpath()
-            dc.forward(dc.board.via_space + dc.board.via / 2)
-            dc.wire()
-
-            dc.via(l)
-            dc.pop()
+class R0402(C0402):
+    family = "R"
 
 # Taken from:
 # https://www.analog.com/media/en/package-pcb-resources/package/pkg_pdf/ltc-legacy-qfn/QFN_64_05-08-1705.pdf
@@ -989,7 +991,7 @@ class HDMI(Part):
 
     def escape(self):
         board = self.board
-        gnd = (1, 4, 7, 10, 13)
+        gnd = (1, 4, 7, 10, 13, 17)
         for g,p in zip(gnd, ["TMDS2", "TMDS1", "TMDS0", "TMDS_CLK"]):
             self.pads[g].setname("GND")
             self.pads[g - 1].setname((self.id, p + "_P"))
@@ -1001,7 +1003,7 @@ class HDMI(Part):
             z = [self.pads[c] for c in (g - 1, g + 1)]
             [p.outside() for p in z]
             return board.enriver(z, -45)
-        return [pair(g) for g in gnd[:4]]
+        return ([pair(g) for g in gnd[:4]], self.pads[18])
 
 class SOT223(Part):
     family = "U"

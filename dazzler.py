@@ -36,7 +36,7 @@ if __name__ == "__main__":
     (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_p23, fpga_fl, fpga_jtag, fpga_v12) = lx9.escape()
 
     j1 = cu.HDMI(brd.DC((45,33.5)).right(270))
-    hdmi_lvds = j1.escape()
+    (hdmi_lvds, hdmi_detect) = j1.escape()
 
     (p0, p1) = cu.Castellation(brd.DC((34, 42)).left(90), 15).escape()
     (p2, p3) = cu.Castellation(brd.DC((0, 36)).left(180), 16).escape()
@@ -88,6 +88,13 @@ if __name__ == "__main__":
     t.w("f 1 r 45 f 7.0").wire(width = 0.8)
     t.via()
     t.w("l 45 f 2").wire('GTL', width = 0.8)
+
+    # HDMI detect
+    t = hdmi_detect
+    t.w("o f 1").wire()
+    r = cu.R0402(t.copy().w("f 2 r 45"), "10K")
+    t.goto(r.pads[0]).wire()
+    r.pads[1].w("o -").wire()
 
     brd.save("dazzler")
     lx9.dump_ucf("dazzler")
