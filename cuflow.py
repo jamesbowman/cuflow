@@ -27,11 +27,15 @@ class Layer:
     def preview(self):
         return so.unary_union([p for (_, p) in self.polys])
 
-    def fill(self, bg, include, d):
+    def paint(self, bg, include, r):
+        # Return the intersection of bg with the current polylist
+        # touching the included, avoiding the others by distance r
         ingrp = so.unary_union([bg] + [o for (nm, o) in self.polys if nm == include])
         exgrp = so.unary_union([o for (nm, o) in self.polys if nm != include])
-        paint = exgrp.union(so.unary_union(ingrp).difference(exgrp.buffer(d)))
-        self.polys = [('filled', paint)]
+        return exgrp.union(so.unary_union(ingrp).difference(exgrp.buffer(r)))
+
+    def fill(self, bg, include, d):
+        self.polys = [('filled', self.paint(bg, include, d))]
         
     def save(self, f):
         surface = self.preview()
@@ -112,6 +116,7 @@ class Draw(Turtle):
         self.name = None
         self.newpath()
         self.layer = 'GTL'
+        self.h = None
 
     def setname(self, nm):
         self.name = nm
@@ -211,8 +216,11 @@ class Draw(Turtle):
     def square(self, w):
         self.rect(w, w)
 
+    def poly(self):
+        return sg.Polygon(self.path)
+
     def pad(self):
-        g = sg.Polygon(self.path)
+        g = self.poly()
         for n in ('GTL', 'GTS', 'GTP'):
             self.board.layers[n].add(g, self.name)
 
@@ -527,6 +535,7 @@ class Part:
         self.val = val
         self.pads  = []
         self.board = dc.board
+        self.center = dc.copy()
         self.place(dc)
 
     def label(self, dc):
@@ -1140,6 +1149,16 @@ class XC6LX9(FTG256):
                 }.get(s, 'GL3')
                 p.via(dst)
 
+        GBL = self.board.layers['GBL']
+        dc = self.center.copy()
+        dc.w("f 0.5 l 90")
+        dc.rect(3, 21)
+        GBL.add(GBL.paint(dc.poly(), 'GBL', self.board.via_space))
+        dc.layer = 'GBL'
+
+        v12 = dc
+        v12.outside().newpath()
+
         d1 = math.sqrt(2 * (.383 ** 2))
         d2 = math.sqrt(2 * ((1 - .383) ** 2))
 
@@ -1247,7 +1266,7 @@ class XC6LX9(FTG256):
         extend(jtag[2], jtag)
         jrv = board.enriver90(self.collect(jtag), -90).wire()
 
-        return (rv12, lvds, p0, p1, rv0, frv, jrv)
+        return (rv12, lvds, p0, p1, rv0, frv, jrv, v12)
 
     def dump_ucf(self, basename):
         with open(basename + ".ucf", "wt") as ucf:

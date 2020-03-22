@@ -1,7 +1,7 @@
 - [x] JTAG port
 - [x] screw holes
-- [ ] GL2 filled
-- [ ] GL3 filled
+- [x] GL2 filled
+- [x] GL3 filled
 - [ ] PCLK to GCLK jumper
 - [ ] trial synthesis
 - [ ] LDO hookup

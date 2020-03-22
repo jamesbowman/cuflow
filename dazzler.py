@@ -33,7 +33,7 @@ if __name__ == "__main__":
     dc.w("l 45 f 24.3 l 90 f 2.95 r 45")
 
     lx9 = cu.XC6LX9(dc)
-    (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_p23, fpga_fl, fpga_jtag) = lx9.escape()
+    (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_p23, fpga_fl, fpga_jtag, fpga_v12) = lx9.escape()
 
     j1 = cu.HDMI(brd.DC((45,33.5)).right(270))
     hdmi_lvds = j1.escape()
@@ -82,5 +82,12 @@ if __name__ == "__main__":
 
     # 5V to the LDOs
     v5.w("i f 2.4 l 90 f 25").wire(width = 0.8)
+
+    # FPGA 1.2 V supply
+    t = fpga_v12
+    t.w("f 1 r 45 f 7.0").wire(width = 0.8)
+    t.via()
+    t.w("l 45 f 2").wire('GTL', width = 0.8)
+
     brd.save("dazzler")
     lx9.dump_ucf("dazzler")
