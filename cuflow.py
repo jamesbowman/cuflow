@@ -896,9 +896,8 @@ class W25Q16J(SOIC8):
             sigs[s].forward(dv)
         width = 3.0 - 2 * dv
 
-        print(width / 6)
         ord = "MOSI SCK MISO IO2 IO3 CS".split()
-        gap = width / 5
+        gap = width / (len(ord) - 1)
         for i,s in enumerate(ord):
             x = i * gap
             if s in ls:
@@ -1196,7 +1195,7 @@ class XC6LX9(FTG256):
         ]
 
         # Flash
-        # 
+
         grp = []
         for s,d in [('IO_L3P_D0_DIN_MISO_MISO1_2', 1.4),
                     ('IO_L1P_CCLK_2', 2.2),
@@ -1223,8 +1222,15 @@ class XC6LX9(FTG256):
         frv = frv1.join(frv0, .75)
         frv.wire('GBL')
     
-        return (rv12, lvds, p0, p1, rv0, frv)
-        # rv0.wire()
+        # JTAG
+        jtag = [byname[s] for s in ('TCK', 'TDI', 'TMS', 'TDO')]
+        [t.w("l 45 f 0.5").wire('GBL') for t in jtag]
+        [self.notate(t, t.name[1]) for t in jtag]
+        byname['TDO'].w("f 0.5 l 45 f 0.707 r 45").wire()
+        extend(jtag[2], jtag)
+        jrv = board.enriver90(self.collect(jtag), -90).wire()
+
+        return (rv12, lvds, p0, p1, rv0, frv, jrv)
 
     def dump_ucf(self, basename):
         with open(basename + ".ucf", "wt") as ucf:
@@ -1232,11 +1238,16 @@ class XC6LX9(FTG256):
             def netpair(d):
                 if self.id in d:
                     mine = d[self.id]
-                    (oth, ) = tuple(set(d.values()) - {mine})
+                    nms = set(d.values()) 
+                    if len(nms) > 1:
+                        nms -= {mine}
+                    (oth, ) = tuple(nms)
                     return (mine, oth)
             mynets = [r for r in [netpair(dict(n)) for n in nets] if r]
             padname = {s : p for (p, s) in self.signals.items()}
             for (m, o) in mynets:
+                if o in ("TMS", "TCK", "TDO", "TDI"):
+                    continue
                 if "TMDS" in o:
                     io = "TMDS_33"
                 else:
@@ -1294,11 +1305,42 @@ class Castellation(Part):
         gnd = len(self.pads) // 2
         dc = self.pads[gnd]
         label(dc, "GND")
-        dc.push()
-        dc.w("f -0.3 r 90 f 0.5 -")
-        dc.pop()
-        dc.w("f -0.3 l 90 f 0.5 -")
+        self.sidevia(dc, "-")
 
         a = group(self.pads[:gnd], -90)
         b = group(self.pads[gnd + 1:], 90)
         return (a, b)
+
+    def sidevia(self, dc, dst):
+        assert dst in "-+."
+        dc.push()
+        dc.w("f -0.3 r 90 f 0.5 " + dst)
+        dc.pop()
+        dc.w("f -0.3 l 90 f 0.5 " + dst)
+
+    def escape1(self):
+        pp = self.pads[::-1]
+        names = "TDI TDO TCK TMS".split()
+        [t.setname((self.id, n)) for t,n in zip(pp, names)]
+
+        for t in pp:
+            dc = t.copy().w("i f 0.6")
+            (x, y) = dc.xy
+            dc.board.layers['GTO'].add(hershey.ctext(x, y, t.name[1]))
+            t.w("i f 1").wire('GBL')
+
+        return self.board.enriver(pp, 45).left(45).wire()
+
+    def escape2(self):
+        pp = self.pads
+        def label(t, s):
+            dc = t.copy().w("i f 0.6")
+            (x, y) = dc.xy
+            dc.board.layers['GTO'].add(hershey.ctext(x, y, s))
+        label(pp[0], "3.3")
+        label(pp[1], "GND")
+        label(pp[2], "5V")
+
+        pp[0].w("f -0.3 r 90 f 0.5 + f 0.5 +")
+        self.sidevia(pp[1], "-")
+        return pp[2]
