@@ -27,6 +27,12 @@ class Layer:
     def preview(self):
         return so.unary_union([p for (_, p) in self.polys])
 
+    def fill(self, bg, include, d):
+        ingrp = so.unary_union([bg] + [o for (nm, o) in self.polys if nm == include])
+        exgrp = so.unary_union([o for (nm, o) in self.polys if nm != include])
+        paint = exgrp.union(so.unary_union(ingrp).difference(exgrp.buffer(d)))
+        self.polys = [('filled', paint)]
+        
     def save(self, f):
         surface = self.preview()
         g = gerber.Gerber(f, self.desc)
@@ -229,7 +235,7 @@ class Draw(Turtle):
     def via(self, connect = None):
         g = sg.Point(self.xy).buffer(self.board.via / 2)
         for n in ('GTL', 'GL2', 'GL3', 'GBL'):
-            self.board.layers[n].add(g)
+            self.board.layers[n].add(g, connect)
         if connect is not None:
             self.board.layers[connect].connected.append(g)
         self.board.drill(self.xy, self.board.via_hole)
@@ -456,6 +462,9 @@ class Board:
         return Draw(self, xy, d)
 
     def save(self, basename):
+        g = sg.box(0, 0, self.size[0], self.size[1])
+        self.layers['GL2'].fill(g, 'GL2', self.via_space)
+        self.layers['GL3'].fill(g, 'GL3', self.via_space)
         for (id, l) in self.layers.items():
             with open(basename + "." + id, "wt") as f:
                 l.save(f)
