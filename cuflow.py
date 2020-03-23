@@ -116,19 +116,27 @@ class Draw(Turtle):
         self.name = None
         self.newpath()
         self.layer = 'GTL'
+        self.width = board.trace
         self.h = None
 
     def setname(self, nm):
         self.name = nm
 
+    def setwidth(self, w):
+        self.width = w
+        return self
+
     def newpath(self):
         self.path = [self.xy]
+        return self
 
     def push(self):
         self.stack.append((self.xy, self.dir))
+        return self
 
     def pop(self):
         (self.xy, self.dir) = self.stack.pop(-1)
+        return self
 
     def copy(self):
         r = Draw(self.board, self.xy, self.dir)
@@ -263,10 +271,10 @@ class Draw(Turtle):
     def wire(self, layer = None, width = None):
         if layer is not None:
             self.layer = layer
-        if width is None:
-            width = self.board.trace
+        if width is not None:
+            self.width = width
         if len(self.path) > 1:
-            g = sg.LineString(self.path).buffer(width / 2)
+            g = sg.LineString(self.path).buffer(self.width / 2)
             self.board.layers[self.layer].add(g)
             self.newpath()
         return self
@@ -835,13 +843,18 @@ class BT815(QFN64):
         # rv230.w("f 1 r 31 f 1")
         rv230.wire()
 
-        rv4 = brd.enriver(bank(0, spi), -45)
-        rv4.w("f 0.7 l 90 f 2.3 l 45 f 1 r 45")
+        rv4 = brd.enriver90(bank(0, spi), -90)
+        # rv4.w("f 0.7 l 90 f 2.3 l 45 f 1 r 45")
+        rv4.w("f 1 l 45")
         rv5 = brd.enriver(bank(1, spi), -45)
-        rv5.forward(1)
-        rvspi = rv4.join(rv5)
+        rvspi = rv4.join(rv5).w("r 45 f 2 l 90 f 2 l 45 f 1 r 45")
 
-        rvspi.wire()
+        GBL = self.board.layers['GBL']
+        dc = self.center.copy()
+        dc.rect(12, 12)
+        GBL.add(GBL.paint(dc.poly(), 'GBL', self.board.via_space))
+        dc.layer = 'GBL'
+
         return (rvspi, rv230)
 
 # IPC-SM-782A section 9.1: SOIC
@@ -1025,8 +1038,10 @@ class SOT223(Part):
     def escape(self):
         self.pads[2].w("i f 4")
         self.pads[2].wire(width = 0.8)
-        self.pads[1].w("i - f .2 -")
+        self.pads[1].copy().w("i -")
+        self.pads[1].copy().w("o -")
         self.pads[1].wire(width = 0.8)
+        return self.pads[0]
 
 class FTG256(Part):
     family = "U"
@@ -1096,7 +1111,6 @@ class XC6LX9(FTG256):
 
         byname = {s : padname[pn] for (pn, s) in self.signals.items()}
         self.padnames = padname
-
 
         specials = [
             ( 'IO_L1P_CCLK_2', 'SCK'),
@@ -1352,6 +1366,7 @@ class Castellation(Part):
     def sidevia(self, dc, dst):
         assert dst in "-+."
         dc.push()
+        dc.setwidth(0.6)
         dc.w("f -0.3 r 90 f 0.5 " + dst)
         dc.pop()
         dc.w("f -0.3 l 90 f 0.5 " + dst)
@@ -1379,6 +1394,6 @@ class Castellation(Part):
         label(pp[1], "GND")
         label(pp[2], "5V")
 
-        pp[0].w("f -0.3 r 90 f 0.5 + f 0.5 +")
+        pp[0].setwidth(0.6).w("f -0.3 r 90 f 0.5 + f 0.5 +")
         self.sidevia(pp[1], "-")
         return pp[2]
