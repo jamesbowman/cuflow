@@ -48,7 +48,10 @@ if __name__ == "__main__":
     ldo12 = cu.SOT223(brd.DC((12, 6)).right(90))
     ldo12.escape()
     ldo33 = cu.SOT223(brd.DC((25, 6)).right(90))
-    ldo33.escape()
+    vcc = ldo33.escape()
+    vcc.left(45)
+    for i in range(3):
+        vcc.copy().right(45 * i).forward(1.5).wire(width = 0.8).via('GL3')
 
     dc = brd.DC((-6, 0))
     for i in range(20):

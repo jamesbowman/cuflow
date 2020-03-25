@@ -1,11 +1,11 @@
+- [x] 1.2V FPGA
 - [x] JTAG port
 - [x] screw holes
 - [x] GL2 filled
 - [x] GL3 filled
+- [x] 1.2V BT815
+- [x] caps
 - [ ] PCLK to GCLK jumper
 - [ ] trial synthesis
 - [ ] LDO hookup
-- [ ] caps
-- [ ] 1.2V FPGA
-- [ ] 1.2V BT815
 - [ ] logo
