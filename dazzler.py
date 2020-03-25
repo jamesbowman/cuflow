@@ -67,7 +67,7 @@ if __name__ == "__main__":
 
     fpga_p23.right(90).wire()
     (fpga_p2,fpga_p3) = fpga_p23.split(8)
-    fpga_p2.w("r 45 f 1 l 45").wire()
+    # fpga_p2.w("r 45 f 1 l 45").wire()
     fpga_p3.w("f 2").wire()
 
     fpga_p2.meet(p2)
