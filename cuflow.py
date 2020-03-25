@@ -118,6 +118,7 @@ class Draw(Turtle):
         self.layer = 'GTL'
         self.width = board.trace
         self.h = None
+        self.length = 0
 
     def setname(self, nm):
         self.name = nm
@@ -274,7 +275,9 @@ class Draw(Turtle):
         if width is not None:
             self.width = width
         if len(self.path) > 1:
-            g = sg.LineString(self.path).buffer(self.width / 2)
+            ls = sg.LineString(self.path)
+            self.length += ls.length
+            g = ls.buffer(self.width / 2)
             self.board.layers[self.layer].add(g)
             self.newpath()
         return self
@@ -417,6 +420,10 @@ class River(Turtle):
         self.forward(d)
         self.wire()
         self.board.nets += [(a.name, b.name) for (a, b) in zip(self.tt, other.tt[::-1])]
+        """
+        for (a, b) in zip(self.tt, other.tt[::-1]):
+            print(a.name, b.name, a.length + b.length)
+        """
 
     def split(self, n):
         a = River(self.board, self.tt[:n])
@@ -1112,6 +1119,14 @@ class XC6LX9(FTG256):
         byname = {s : padname[pn] for (pn, s) in self.signals.items()}
         self.padnames = padname
 
+        for pn,s in self.signals.items():
+            p = padname[pn]
+            if s.startswith("IO_"):
+                f = s.split("_")
+                self.notate(p, f[1] + "." + f[-1])
+            else:
+                self.notate(p, pn + "." + s)
+
         specials = [
             ( 'IO_L1P_CCLK_2', 'SCK'),
             ( 'IO_L3P_D0_DIN_MISO_MISO1_2', 'MISO'),
@@ -1140,8 +1155,12 @@ class XC6LX9(FTG256):
         for pn,s in self.signals.items():
             if s in powernames:
                 p = padname[pn]
-                p.right(45)
-                p.forward(math.sqrt(2) / 2)
+                if pn in ("R8", ):
+                    p.right(25.28)
+                    p.forward(.553)
+                else:
+                    p.right(45)
+                    p.forward(math.sqrt(2) / 2)
                 p.wire()
                 dst = {
                     'GND' : 'GL2',
