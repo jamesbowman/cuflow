@@ -62,6 +62,26 @@ class Layer:
             [renderpoly(g, po) for po in surface]
         g.finish()
 
+    def povray(self, f):
+        surface = self.preview()
+        def renderpoly(po):
+            if type(po) == sg.MultiPolygon:
+                [renderpoly(p) for p in po]
+                return
+            allc = [po.exterior.coords] + [c.coords for c in po.interiors]
+            total = sum([len(c) for c in allc])
+            f.write("polygon {\n%d\n" % total)
+            for c in allc:
+                for (x,y) in c:
+                    f.write("<%f,%f> " % (x, y))
+                f.write("\n")
+            f.write("}\n")
+
+        if isinstance(surface, sg.Polygon):
+            renderpoly(surface)
+        else:
+            [renderpoly(po) for po in surface]
+        
 class OutlineLayer:
     def __init__(self, desc):
         self.lines = []
@@ -504,6 +524,8 @@ class Board:
                 l.save(f)
         with open(basename + ".TXT", "wt") as f:
             excellon(f, self.holes)
+        with open(basename + ".gtl.pov", "wt") as f:
+            self.layers['GTL'].povray(f)
 
     def enriver(self, ibank, a):
         if a > 0:
