@@ -1265,6 +1265,9 @@ class XC6LX9(FTG256):
         p0 = board.enriverS(oc[3][:7], -45)
         p1 = board.enriverS(oc[3][-7:], 45)
 
+        cand = sorted([p.name[1] for p in oc[2][rem:]])
+        [print(c) for c in cand if c[-1] == '2']
+
         # BT815 bus
         rv1.right(45)
         rv1.wire()
