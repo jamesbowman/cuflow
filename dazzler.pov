@@ -14,24 +14,32 @@ sky_sphere {
 union {
   #include "dazzler.sub.pov"
   texture {
-  pigment { color rgbf<0.0, 0.0, 0.0, 1.0> }
-   finish {
-    ambient 0
-    diffuse 0
-    reflection 0.1
-    phong 0.2
-    phong_size 60
-  }
+    pigment { color rgbf<0.0, 0.0, 0.0, 1.0> }
+    finish {
+      reflection { 0.10 }
+      specular 0.5
+      roughness .006
+    }
+    normal { bumps 0.005 }
   }
 }
 
 union {
   #include "dazzler.gtl.pov"
   rotate <90, 0, 0>
-  translate <0 1 0>
+  translate <0 1.030 0>
   texture {
    pigment {P_Copper2}
    finish {F_MetalA }
+  }
+}
+
+union {
+  #include "dazzler.gto.pov"
+  rotate <90, 0, 0>
+  translate <0 1.031 0>
+  texture {
+   pigment {White}
   }
 }
 
@@ -43,10 +51,10 @@ camera{
   up y * (image_height / image_width)
   right x
   sky y
-  look_at <25, 0, 25>
-  angle 28
+  look_at <25, 0, 20>
+  angle 23
 
-  focal_point < 25,0,25>
-  aperture 10
+  focal_point < 25,0,20>
+  aperture 4
   blur_samples 20
 }

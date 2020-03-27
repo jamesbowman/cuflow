@@ -59,10 +59,8 @@ if __name__ == "__main__":
         dc.forward(1)
 
     # Connect the LVDS pairs
-    for b in (2, 3):
-        fpga_lvds[b].forward(1).left(45).forward(1).right(45).wire()
-    fpga_lvds[0].wire()
-    fpga_lvds[1].wire()
+    for b in range(4):
+        fpga_lvds[b].forward(b + 1).left(45).forward(3).right(45).wire()
     [h.meet(f) for (h, f) in zip(hdmi_lvds, fpga_lvds)]
 
     fpga_p0.meet(p0)

@@ -20,12 +20,15 @@ class Layer:
         self.polys = []
         self.desc = desc
         self.connected = []
+        self.p = None
 
     def add(self, o, nm = None):
         self.polys.append((nm, o.simplify(0.001, preserve_topology=False)))
 
     def preview(self):
-        return so.unary_union([p for (_, p) in self.polys])
+        if self.p is None:
+            self.p = so.unary_union([p for (_, p) in self.polys])
+        return self.p
 
     def paint(self, bg, include, r):
         # Return the intersection of bg with the current polylist
@@ -62,8 +65,10 @@ class Layer:
             [renderpoly(g, po) for po in surface]
         g.finish()
 
-    def povray(self, f, prefix = "polygon {"):
+    def povray(self, f, prefix = "polygon {", mask = None):
         surface = self.preview()
+        if mask is not None:
+            surface = surface.intersection(mask)
         def renderpoly(po):
             if type(po) == sg.MultiPolygon:
                 [renderpoly(p) for p in po]
@@ -73,9 +78,7 @@ class Layer:
             f.write(prefix)
             f.write("\n%d\n" % total)
             for c in allc:
-                for (x,y) in c:
-                    f.write("<%f,%f> " % (x, y))
-                f.write("\n")
+                f.write(" ".join(["<%f,%f>" % (x, y) for (x,y) in c]) + "\n")
             f.write("}\n")
 
         if isinstance(surface, sg.Polygon):
@@ -525,19 +528,20 @@ class Board:
                 l.save(f)
         with open(basename + ".TXT", "wt") as f:
             excellon(f, self.holes)
-                
-        with open(basename + ".gtl.pov", "wt") as f:
-            self.layers['GTL'].povray(f)
 
         substrate = Layer(None)
-        g = sg.box(0, 0, self.size[0], self.size[1])
+        mask = sg.box(0, 0, self.size[0], self.size[1])
         for d,xys in self.holes.items():
             if d > 0.2:
                 hlist = so.unary_union([sg.Point(xy).buffer(d / 2) for xy in xys])
-                g = g.difference(hlist)
-        substrate.add(g)
+                mask = mask.difference(hlist)
+        substrate.add(mask)
         with open(basename + ".sub.pov", "wt") as f:
             substrate.povray(f, "prism { linear_sweep linear_spline 0 1")
+        with open(basename + ".gto.pov", "wt") as f:
+            self.layers['GTO'].povray(f, mask = mask)
+        with open(basename + ".gtl.pov", "wt") as f:
+            self.layers['GTL'].povray(f, mask = mask)
 
     def enriver(self, ibank, a):
         if a > 0:
@@ -763,7 +767,7 @@ BT815pins = [
     'DE',
     'VSYNC',
     'HSYNC',
-    'DISP',
+    '',
     'PCLK',
     'B7',
     'B6',
@@ -1153,13 +1157,14 @@ class XC6LX9(FTG256):
         byname = {s : padname[pn] for (pn, s) in self.signals.items()}
         self.padnames = padname
 
-        for pn,s in self.signals.items():
-            p = padname[pn]
-            if s.startswith("IO_"):
-                f = s.split("_")
-                self.notate(p, f[1] + "." + f[-1])
-            else:
-                self.notate(p, pn + "." + s)
+        if 0:
+            for pn,s in self.signals.items():
+                p = padname[pn]
+                if s.startswith("IO_"):
+                    f = s.split("_")
+                    self.notate(p, f[1] + "." + f[-1])
+                else:
+                    self.notate(p, pn + "." + s)
 
         specials = [
             ( 'IO_L1P_CCLK_2', 'SCK'),
@@ -1189,8 +1194,8 @@ class XC6LX9(FTG256):
         for pn,s in self.signals.items():
             if s in powernames:
                 p = padname[pn]
-                if pn in ("R8", ):
-                    p.right(25.28)
+                if pn in ("R6", "R8"):
+                    p.right(180 - 25.28)
                     p.forward(.553)
                 else:
                     p.right(45)
@@ -1234,6 +1239,7 @@ class XC6LX9(FTG256):
         s1 = "f 0.500"
         s2 = "l 45  f {0} r 45 f 1.117".format(d1)
         s3 = "l 45  f {0} r 45 f 1.883".format(d2)
+        s3s = "l 90  f .637 r 90  f {0} f 1.883".format(1 - .383)
 
         plan = (
             (0, ".1$",  "l 90 " + s1),
@@ -1272,13 +1278,13 @@ class XC6LX9(FTG256):
         oc = oc[x:] + oc[:x]
         rv0 = board.enriver90(oc[0][-15:], -90)
         rv1 = board.enriver90(oc[1], -90)
-        rem = 36 - len(rv1.tt)
+        rem = 35 - len(rv1.tt)
         rv2 = board.enriver90(oc[2][:rem], 90)
         p0 = board.enriverS(oc[3][:7], -45)
         p1 = board.enriverS(oc[3][-7:], 45)
 
-        cand = sorted([p.name[1] for p in oc[2][rem:]])
-        [print(c) for c in cand if c[-1] == '2']
+        # cand = sorted([p.name[1] for p in oc[2][rem:]])
+        # [print(c) for c in cand if c[-1] == '2']
 
         # BT815 bus
         rv1.right(45)
@@ -1296,10 +1302,10 @@ class XC6LX9(FTG256):
             # self.notate(p, p.name[3:7])
             return board.enriver([n, p], -45)
         lvds = [
-            makepair('IO_L51N_M1DQ13_1', 'IO_L51P_M1DQ12_1'),
-            makepair('IO_L52N_M1DQ15_1', 'IO_L52P_M1DQ14_1'),
             makepair('IO_L23N_2', 'IO_L23P_2'),
-            makepair('IO_L32N_GCLK28_2', 'IO_L32P_GCLK29_2')
+            makepair('IO_L30N_GCLK0_USERCCLK_2', 'IO_L30P_GCLK1_D13_2'),
+            makepair('IO_L32N_GCLK28_2', 'IO_L32P_GCLK29_2'),
+            makepair('IO_L47N_2', 'IO_L47P_2')
         ]
 
         # Flash
@@ -1373,7 +1379,7 @@ class Castellation(Part):
             dc.contact()
             dc.push()
             dc.forward(0.375)
-            # dc.drill(0.7)
+            dc.drill(0.7)
             dc.pop()
             dc.left(90)
         self.train(dc, self.val, cp, 2.0)
