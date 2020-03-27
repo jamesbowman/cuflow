@@ -4,8 +4,8 @@
 - [x] GL2 filled
 - [x] GL3 filled
 - [x] 1.2V BT815
-- [x] caps
+- [x] trial synthesis
+- [x] LDO hookup
+- [ ] caps
 - [ ] PCLK to GCLK jumper
-- [ ] trial synthesis
-- [ ] LDO hookup
 - [ ] logo
