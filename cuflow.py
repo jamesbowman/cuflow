@@ -15,6 +15,8 @@ def inches(x):  return x * 25.4
 def mil(x):     return inches(x / 1000)
 def micron(x):  return x / 1000
 
+def DEGREES(r): return 180 * r / math.pi
+
 class Layer:
     def __init__(self, desc):
         self.polys = []
@@ -226,6 +228,11 @@ class Draw(Turtle):
 
     def distance(self, other):
         return math.sqrt((other.xy[0] - self.xy[0]) ** 2 + (other.xy[1] - self.xy[1]) ** 2)
+
+    def direction(self, other):
+        x = other.xy[0] - self.xy[0]
+        y = other.xy[1] - self.xy[1]
+        return math.atan2(x, y)
 
     def rect(self, w, h):
         self.push()
@@ -449,6 +456,31 @@ class River(Turtle):
             print(a.name, b.name, a.length + b.length)
         """
 
+    def meet0(self, other):
+        d = self.tt[0].distance(other.tt[0])
+        c = self.board.trace + self.board.space
+        r = c * (len(self.tt) - 1)
+        l = math.sqrt(d ** 2 - r ** 2)
+        dir_d = self.tt[0].direction(other.tt[0])
+        print('d', d, 'r', r, 'l', l)
+        a = math.acos(l / d)
+        self.right(180 * (dir_d + a) / math.pi)
+        self.forward(l)
+        self.wire()
+
+    def meet2(self, other):
+        src = self.tt[0]
+        dst = other.tt[-1]
+        d = src.distance(dst)
+        dir_d = DEGREES(src.direction(dst))
+
+        self.right(dir_d)
+        self.forward(d)
+        self.wire()
+
+        other.left(90 - dir_d).wire()
+        self.board.nets += [(a.name, b.name) for (a, b) in zip(self.tt, other.tt[::-1])]
+
     def split(self, n):
         a = River(self.board, self.tt[:n])
         b = River(self.board, self.tt[n:])
@@ -574,6 +606,16 @@ class Board:
         rv = self.enriver(pi, a)
         rv.left(a).wire()
         return rv
+
+    def enriverPair(self, z):
+        c = (self.trace + self.space)
+        y = 0.5 * (z[0].distance(z[1]) - c)
+        h = math.sqrt(2 * (y ** 2))
+        
+        z[0].w("o f .2 l 45 f {0} r 45 f .1".format(h))
+        z[1].w("o f .2 r 45 f {0} l 45 f .1".format(h))
+        assert (abs(c - z[0].distance(z[1]))) < 1e-3
+        return River(self, z)
 
     def assign(self, part):
         pl = self.parts[part.family]
@@ -1058,9 +1100,8 @@ class HDMI(Part):
         for g in gnd:
             self.pads[g].w("i -")
         def pair(g):
-            z = [self.pads[c] for c in (g - 1, g + 1)]
-            [p.outside() for p in z]
-            return board.enriver(z, -45)
+            p = self.pads
+            return self.board.enriverPair((p[g - 1], p[g + 1]))
         return ([pair(g) for g in gnd[:4]], self.pads[18])
 
 class SOT223(Part):
@@ -1300,7 +1341,7 @@ class XC6LX9(FTG256):
             p = byname[p]
             # self.notate(n, n.name[3:7])
             # self.notate(p, p.name[3:7])
-            return board.enriver([n, p], -45)
+            return board.enriverPair((n, p))
         lvds = [
             makepair('IO_L23N_2', 'IO_L23P_2'),
             makepair('IO_L30N_GCLK0_USERCCLK_2', 'IO_L30P_GCLK1_D13_2'),

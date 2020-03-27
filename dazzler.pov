@@ -54,7 +54,7 @@ camera{
   look_at <25, 0, 20>
   angle 23
 
-  focal_point < 25,0,20>
-  aperture 4
-  blur_samples 20
+  // focal_point < 25,0,20>
+  // aperture 4
+  // blur_samples 20
 }
