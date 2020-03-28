@@ -12,7 +12,8 @@ if __name__ == "__main__":
         silk = cu.mil(6))
 
     brd.hole((47.2, 2.8), 2.5, 5)
-    brd.hole((8, 35), 2.5, 5)
+    brd.hole((2.8, 42 - 2.8), 2.5, 5)
+    brd.hole((2.8, 2.8), 2.5, 5)
 
     dc = brd.DC((40, 10))
     dc.push()
@@ -40,18 +41,29 @@ if __name__ == "__main__":
 
     (p0, p1) = cu.Castellation(brd.DC((34, 42)).left(90), 15).escape()
     (p2, p3) = cu.Castellation(brd.DC((0, 36)).left(180), 16).escape()
-    p4 = cu.Castellation(brd.DC((6, 0)).right(90), 4).escape1()
+    p4 = cu.Castellation(brd.DC((8, 0)).right(90), 4).escape1()
     v5 = cu.Castellation(brd.DC((30, 0)).right(90), 3).escape2()
 
     p_fl_f = cu.W25Q16J(brd.DC((35, 23)).left(45))
     fl2_qspi = p_fl_f.escape1()
-    ldo12 = cu.SOT223(brd.DC((12, 6)).right(90))
-    ldo12.escape()
-    ldo33 = cu.SOT223(brd.DC((25, 6)).right(90))
-    vcc = ldo33.escape()
-    vcc.left(45)
-    for i in range(3):
-        vcc.copy().right(45 * i).forward(1.5).wire(width = 0.8).via('GL3')
+
+    def ldo(p):
+        r = cu.SOT223(p)
+        p.goxy(-2.3/2, -5.2).w("r 180")
+        cu.C0603(p)
+        p.forward(2)
+        pa = cu.C0603(p).pads
+        pa[0].w("l 90 f 3").wire(width = 0.4)
+        pa[1].w("r 90 f 3").wire(width = 0.4)
+        return r.escape()
+
+    (t, _) = ldo(brd.DC((12, 6)).right(90))
+    t.outside().fan(1.0, 'GL3')
+
+    p = brd.DC((25, 6)).right(90)
+    (_, vcc) = ldo(p)
+
+    vcc.fan(1.5, 'GL3')
 
     # Connect the LVDS pairs
     for b in range(4):
@@ -76,16 +88,17 @@ if __name__ == "__main__":
     # Bottom-layer hookups
 
     fpga_fl.meet(fl2_qspi)
+    p4.w("r 45 f 1 l 45 f 4 l 45 f 1 r 45").wire()
     fpga_jtag.meet(p4)
 
-    # 5V to the LDOs
-    v5.w("i f 2.4 l 90 f 25").wire(width = 0.8)
+    # 5V to the LDO
+    v5.w("i f 1.4 l 90 f 12 r 90 f 1").wire(width = 0.8)
 
     # FPGA 1.2 V supply
     t = fpga_v12
-    t.w("f 4 r 45 f 7.0").wire(width = 0.8)
+    t.w("f 4 r 90 f 5 l 90").wire(width = 0.8)
     t.via()
-    t.w("l 45 f 2").wire('GTL', width = 0.8)
+    t.w("f 2").wire('GTL')
 
     # HDMI detect
     t = hdmi_detect
@@ -103,14 +116,15 @@ if __name__ == "__main__":
     caps(brd.DC((27.6, 34.5)), 'GL2', 'GL3', 3)
     caps(brd.DC((11.0, 31.0)).left(90), 'GL2', 'GL3')
     caps(brd.DC((30.3, 20.0)).right(90), 'GL2', 'GL3')
-    caps(brd.DC((11.0, 14.3)), 'GL2', 'GL3', 2)
-    caps(brd.DC((18.8, 10.0)), 'GL2', 'GBL', 2)
+    caps(brd.DC((13.0, 14.7)).right(90), 'GL3', 'GL2')
+    caps(brd.DC((18.8, 11.0)), 'GL2', 'GBL')
 
     caps(brd.DC((46.6, 8.2)), 'GBL', 'GL2', 2)
-    caps(brd.DC((44.3, 2.8)).left(90), 'GL2', 'GBL', 3)
+    caps(brd.DC((43.7, 2.8)).left(90), 'GL2', 'GBL', 2)
+    caps(brd.DC((32.8, 4.3)), 'GL2', 'GBL')
 
     caps(brd.DC((37.0, 1.0)), 'GL2', 'GL3', 3)
     caps(brd.DC((47.7, 14.2)).right(90), 'GL2', 'GL3', 2)
 
     brd.save("dazzler")
-    # lx9.dump_ucf("dazzler")
+    lx9.dump_ucf("dazzler")

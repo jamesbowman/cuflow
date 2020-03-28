@@ -104,6 +104,8 @@ class OutlineLayer:
         g.finish()
 
 class Turtle:
+    def __repr__(self):
+        return "<at (%.3f, %.3f) facing %.3f>" % (self.xy + (self.dir, ))
     def w(self, s, layer = 'GTL'):
         tokens = s.split()
         cmds1 = {
@@ -215,7 +217,9 @@ class Draw(Turtle):
         return (ox, oy)
 
     def goto(self, other):
-        (x, y) = self.seek(other)
+        return self.goxy(*self.seek(other))
+
+    def goxy(self, x, y):
         self.right(90)
         self.forward(x)
         self.left(90)
@@ -320,6 +324,10 @@ class Draw(Turtle):
         self.forward(b.via_space + b.via / 2)
         self.wire()
         self.via(l)
+
+    def fan(self, l, dst):
+        for a in (-45, 0, 45):
+            self.copy().right(a).forward(l).wire(width = 0.8).via(dst)
 
     def platedslot(self, buf):
         g1 = sg.LineString(self.path).buffer(buf)
@@ -644,7 +652,7 @@ class Part:
 
     def label(self, dc):
         (x, y) = dc.xy
-        dc.board.annotate(x, y, self.id)
+        dc.board.layers['GTO'].add(hershey.ctext(x, y, self.id))
 
     def minilabel(self, dc, s):
         dc.push()
@@ -707,7 +715,14 @@ class Part:
             op()
             dc.forward(step)
 
-class C0402(Part):
+class Discrete2(Part):
+    def escape(self, l0, l1):
+        # Connections to GND and VCC
+        [p.outside() for p in self.pads]
+        self.pads[0].wvia(l0)
+        self.pads[1].wvia(l1)
+
+class C0402(Discrete2):
     family = "C"
     def place(self, dc):
         # Pads on either side
@@ -725,15 +740,31 @@ class C0402(Part):
 
         dc.push()
         dc.right(90)
-        dc.forward(2)
+        dc.forward(2.65)
         self.label(dc)
         dc.pop()
 
-    def escape(self, l0, l1):
-        # Connections to GND and VCC
-        [p.outside() for p in self.pads]
-        self.pads[0].wvia(l0)
-        self.pads[1].wvia(l1)
+class C0603(Discrete2):
+    family = "C"
+    def place(self, dc):
+        # Pads on either side
+        for d in (-90, 90):
+            dc.push()
+            dc.right(d)
+            dc.forward(1.70 / 2)
+            dc.rect(1.0, 1.1)
+            self.pad(dc)
+            dc.pop()
+
+        # Silk outline of the package
+        dc.rect(1.6, 0.8)
+        dc.silko()
+
+        dc.push()
+        dc.right(90)
+        dc.forward(2)
+        self.label(dc)
+        dc.pop()
 
 class R0402(C0402):
     family = "R"
@@ -1117,20 +1148,21 @@ class SOT223(Part):
         self.pad(dc)
         dc.pop()
 
+        dc.push()
         dc.left(90)
         dc.forward(4.60 / 2)
         dc.left(90)
         dc.forward(6.2 / 2)
         dc.left(90)
         self.train(dc, 3, lambda: self.rpad(dc, 1.20, 2.20), 2.30)
+        dc.pop()
 
     def escape(self):
-        self.pads[2].w("i f 4")
-        self.pads[2].wire(width = 0.8)
-        self.pads[1].copy().w("i -")
-        self.pads[1].copy().w("o -")
+        # Returns (input, output) pads
+        self.pads[2].w("i f 4").wire(width = 0.8)
+        self.pads[1].inside().fan(1.0, 'GL2')
         self.pads[1].wire(width = 0.8)
-        return self.pads[0]
+        return (self.pads[3], self.pads[0])
 
 class FTG256(Part):
     family = "U"
