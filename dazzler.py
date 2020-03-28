@@ -136,8 +136,9 @@ if __name__ == "__main__":
     im = Image.open("img/oshw-logo-outline.png")
     brd.logo(6.9, 13.6, im, 0.5)
 
+    x = j1.center.xy[0] + 0.5
     for i,s in enumerate(["(C) 2020", "EXCAMERA LABS", str(__VERSION__)]):
-        brd.annotate(j1.center.xy[0], 35.3 - 1.5 * i, s)
+        brd.annotate(x, 35.3 - 1.5 * i, s)
 
     brd.save("dazzler")
     lx9.dump_ucf("dazzler")
