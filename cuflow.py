@@ -2,6 +2,7 @@ from collections import defaultdict
 import re
 import math
 
+from PIL import Image
 import shapely.geometry as sg
 import shapely.affinity as sa
 import shapely.ops as so
@@ -554,7 +555,7 @@ class Board:
         self.holes[diam].append(xy)
 
     def annotate(self, x, y, s):
-        self.layers['GTO'].add(hershey.text(x, y, s))
+        self.layers['GTO'].add(hershey.ctext(x, y, s))
 
     def DC(self, xy, d = 0):
         return Draw(self, xy, d)
@@ -630,6 +631,37 @@ class Board:
         pl = self.parts[part.family]
         pl.append(part)
         return part.family + str(len(pl))
+
+    def logo(self, cx, cy, im, scale = None):
+        im = im.convert("L")
+        if scale is not None:
+            w = int(im.size[0] * scale)
+            h = int(im.size[1] * scale)
+            im = im.resize((w, h), Image.BICUBIC)
+        im = im.point(lambda p: p > 127 and 255)
+        (w, h) = im.size
+        ar = im.load()
+        g = []
+        s = 0.04
+        ov = 1
+        for y in range(h):
+            (y0, y1) = (y * s, (y + ov) * s)
+            slice = im.crop((0, (h - 1 - y), w, (h - 1 - y) + 1)).tobytes()
+            x = 0
+            while 255 in slice:
+                assert len(slice) == (w - x)
+                if slice[0] == 0:
+                    l = slice.index(255)
+                else:
+                    if 0 in slice:
+                        l = slice.index(0)
+                    else:
+                        l = len(slice)
+                    g.append(sg.box(x * s, y0, (x + l * ov) * s, y1))
+                slice = slice[l:]
+                x += l
+        g = sa.translate(so.unary_union(g), cx - 0.5 * w * s, cy - 0.5 * h * s).buffer(.001)
+        self.layers['GTO'].add(g)
 
 def extend(dst, traces):
     # extend parallel traces so that they are all level with dst

@@ -1,5 +1,8 @@
+from PIL import Image
 import math
 import cuflow as cu
+
+__VERSION__ = "0.1.0"
 
 if __name__ == "__main__":
     brd = cu.Board(
@@ -80,7 +83,7 @@ if __name__ == "__main__":
     # fpga_p2.w("r 45 f 1 l 45").wire()
     fpga_p3.w("f 2").wire()
 
-    fpga_p2.meet(p2)
+    fpga_p2.forward(1).meet(p2)
     fpga_p3.meet(p3)
 
     fpga_main.meet(bt815_main)
@@ -121,10 +124,20 @@ if __name__ == "__main__":
 
     caps(brd.DC((46.6, 8.2)), 'GBL', 'GL2', 2)
     caps(brd.DC((43.7, 2.8)).left(90), 'GL2', 'GBL', 2)
-    caps(brd.DC((32.8, 4.3)), 'GL2', 'GBL')
+    caps(brd.DC((32.9, 4.2)).left(180), 'GBL', 'GL2')
 
     caps(brd.DC((37.0, 1.0)), 'GL2', 'GL3', 3)
     caps(brd.DC((47.7, 14.2)).right(90), 'GL2', 'GL3', 2)
+
+    im = Image.open("img/dazzler-logo.png").transpose(Image.ROTATE_270)
+    brd.logo(6.9, 28.8, im)
+    im = Image.open("img/gd3x-logo.png")
+    brd.logo(9.5, 36, im, 0.8)
+    im = Image.open("img/oshw-logo-outline.png")
+    brd.logo(6.9, 13.6, im, 0.5)
+
+    for i,s in enumerate(["(C) 2020", "EXCAMERA LABS", str(__VERSION__)]):
+        brd.annotate(j1.center.xy[0], 35.3 - 1.5 * i, s)
 
     brd.save("dazzler")
     lx9.dump_ucf("dazzler")
