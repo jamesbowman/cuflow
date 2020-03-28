@@ -642,13 +642,14 @@ def extend(dst, traces):
         t.approach(0, finish_line)
 
 class Part:
-    def __init__(self, dc, val = None):
+    def __init__(self, dc, val = None, source = {}):
         self.id = dc.board.assign(self)
         self.val = val
         self.pads  = []
         self.board = dc.board
         self.center = dc.copy()
         self.place(dc)
+        self.source = source
 
     def label(self, dc):
         (x, y) = dc.xy
@@ -746,7 +747,7 @@ class C0402(Discrete2):
 
 class C0603(Discrete2):
     family = "C"
-    def place(self, dc):
+    def place(self, dc, source = None):
         # Pads on either side
         for d in (-90, 90):
             dc.push()

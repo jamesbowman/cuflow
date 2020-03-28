@@ -50,9 +50,9 @@ if __name__ == "__main__":
     def ldo(p):
         r = cu.SOT223(p)
         p.goxy(-2.3/2, -5.2).w("r 180")
-        cu.C0603(p)
+        cu.C0603(p, val = '4.7uF', source = {'LCSC' : 'C19666'})
         p.forward(2)
-        pa = cu.C0603(p).pads
+        pa = cu.C0603(p, val = '22uF', source = {'LCSC': 'C159801'}).pads
         pa[0].w("l 90 f 3").wire(width = 0.4)
         pa[1].w("r 90 f 3").wire(width = 0.4)
         return r.escape()
