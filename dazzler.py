@@ -53,11 +53,6 @@ if __name__ == "__main__":
     for i in range(3):
         vcc.copy().right(45 * i).forward(1.5).wire(width = 0.8).via('GL3')
 
-    dc = brd.DC((-6, 0))
-    for i in range(20):
-        cu.C0402(dc, '0.1 uF')
-        dc.forward(1)
-
     # Connect the LVDS pairs
     for b in range(4):
         fpga_lvds[b].w("f 0.5 l 45").forward(b + 1).w("l 45 f 3").wire()
@@ -65,8 +60,8 @@ if __name__ == "__main__":
     # [h.meet(f) for (h, f) in zip(hdmi_lvds, fpga_lvds)]
     [f.meet2(h) for (h, f) in zip(hdmi_lvds, fpga_lvds)]
 
-    fpga_p0.meet(p0)
-    fpga_p1.meet(p1)
+    fpga_p0.w("f 2.5").meet(p0)
+    fpga_p1.w("f 2.5").meet(p1)
 
     fpga_p23.right(90).wire()
     (fpga_p2,fpga_p3) = fpga_p23.split(8)
@@ -88,7 +83,7 @@ if __name__ == "__main__":
 
     # FPGA 1.2 V supply
     t = fpga_v12
-    t.w("f 1 r 45 f 7.0").wire(width = 0.8)
+    t.w("f 4 r 45 f 7.0").wire(width = 0.8)
     t.via()
     t.w("l 45 f 2").wire('GTL', width = 0.8)
 
@@ -99,5 +94,23 @@ if __name__ == "__main__":
     t.goto(r.pads[0]).wire()
     r.pads[1].w("o -").wire()
 
+    def caps(dc, l0, l1, n = 1):
+        for i in range(n):
+            cu.C0402(dc, '0.1 uF').escape(l0, l1)
+            dc.forward(1)
+
+    caps(brd.DC((18.4, 34.5)), 'GL2', 'GBL', 3)
+    caps(brd.DC((27.6, 34.5)), 'GL2', 'GL3', 3)
+    caps(brd.DC((11.0, 31.0)).left(90), 'GL2', 'GL3')
+    caps(brd.DC((30.3, 20.0)).right(90), 'GL2', 'GL3')
+    caps(brd.DC((11.0, 14.3)), 'GL2', 'GL3', 2)
+    caps(brd.DC((18.8, 10.0)), 'GL2', 'GBL', 2)
+
+    caps(brd.DC((46.6, 8.2)), 'GBL', 'GL2', 2)
+    caps(brd.DC((44.3, 2.8)).left(90), 'GL2', 'GBL', 3)
+
+    caps(brd.DC((37.0, 1.0)), 'GL2', 'GL3', 3)
+    caps(brd.DC((47.7, 14.2)).right(90), 'GL2', 'GL3', 2)
+
     brd.save("dazzler")
-    lx9.dump_ucf("dazzler")
+    # lx9.dump_ucf("dazzler")

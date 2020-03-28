@@ -26,6 +26,7 @@ class Layer:
 
     def add(self, o, nm = None):
         self.polys.append((nm, o.simplify(0.001, preserve_topology=False)))
+        self.p = None
 
     def preview(self):
         if self.p is None:
@@ -712,7 +713,7 @@ class C0402(Part):
         # Pads on either side
         for d in (-90, 90):
             dc.push()
-            dc.left(d)
+            dc.right(d)
             dc.forward(1.30 / 2)
             dc.rect(0.7, 0.9)
             self.pad(dc)
@@ -727,10 +728,12 @@ class C0402(Part):
         dc.forward(2)
         self.label(dc)
         dc.pop()
-    def escape(self):
+
+    def escape(self, l0, l1):
         # Connections to GND and VCC
-        self.pads[0].w("o -").wire()
-        self.pads[1].w("o +").wire()
+        [p.outside() for p in self.pads]
+        self.pads[0].wvia(l0)
+        self.pads[1].wvia(l1)
 
 class R0402(C0402):
     family = "R"
@@ -1267,7 +1270,7 @@ class XC6LX9(FTG256):
         GBL = self.board.layers['GBL']
         dc = self.center.copy()
         dc.w("f 0.5 l 90")
-        dc.rect(3, 21)
+        dc.rect(3, 23)
         GBL.add(GBL.paint(dc.poly(), 'GBL', self.board.via_space))
         dc.layer = 'GBL'
 
