@@ -39,7 +39,8 @@ class Layer:
         # touching the included, avoiding the others by distance r
         ingrp = so.unary_union([bg] + [o for (nm, o) in self.polys if nm == include])
         exgrp = so.unary_union([o for (nm, o) in self.polys if nm != include])
-        return exgrp.union(so.unary_union(ingrp).difference(exgrp.buffer(r)))
+        self.powered = so.unary_union(ingrp).difference(exgrp.buffer(r))
+        return exgrp.union(self.powered)
 
     def fill(self, bg, include, d):
         self.polys = [('filled', self.paint(bg, include, d))]
@@ -545,10 +546,11 @@ class Board:
             (self.size[0], self.size[1]),
             (0, self.size[1])]))
 
-    def hole(self, xy, inner, outer):
+    def hole(self, xy, inner, outer = None):
         self.drill(xy, inner)
-        g = sg.LinearRing(sg.Point(xy).buffer(outer / 2).exterior).buffer(self.silk / 2)
-        self.layers['GTO'].add(g)
+        if outer is not None:
+            g = sg.LinearRing(sg.Point(xy).buffer(outer / 2).exterior).buffer(self.silk / 2)
+            self.layers['GTO'].add(g)
         self.keepouts.append(sg.Point(xy).buffer(inner / 2 + 0.5))
 
     def drill(self, xy, diam):
@@ -560,11 +562,13 @@ class Board:
     def DC(self, xy, d = 0):
         return Draw(self, xy, d)
 
-    def save(self, basename):
+    def fill(self):
         ko = so.unary_union(self.keepouts)
         g = sg.box(0, 0, self.size[0], self.size[1]).buffer(-0.2).difference(ko)
         self.layers['GL2'].fill(g, 'GL2', self.via_space)
         self.layers['GL3'].fill(g, 'GL3', self.via_space)
+
+    def save(self, basename):
         for (id, l) in self.layers.items():
             with open(basename + "." + id, "wt") as f:
                 l.save(f)
@@ -662,6 +666,29 @@ class Board:
                 x += l
         g = sa.translate(so.unary_union(g), cx - 0.5 * w * s, cy - 0.5 * h * s).buffer(.001)
         self.layers['GTO'].add(g)
+
+    def check(self):
+        g = self.layers['GTL'].preview()
+        def clearance(g):
+            p0 = micron(0)
+            p1 = micron(256)
+            while (p1 - p0) > micron(0.25):
+                p = (p0 + p1) / 2
+                if len(g) == len(g.buffer(p)):
+                    p0 = p
+                else:
+                    p1 = p
+            return 2 * p0
+        for l in ('GTL', 'GBL'):
+            clr = clearance(self.layers[l].preview())
+            if clr < (self.space - micron(1.5)):
+                print("space violation on layer %s, actual %.3f expected %.3f mm" % (l, clr, self.space))
+
+        def h2pt(d, xys):
+            return so.unary_union([sg.Point(xy).buffer(d / 2) for xy in xys])
+        ghole = so.unary_union([h2pt(d, xys) for (d, xys) in self.holes.items()])
+        hot_vcc = ghole.intersection(self.layers['GL3'].powered)
+        self.layers['GTP'].p = hot_vcc
 
 def extend(dst, traces):
     # extend parallel traces so that they are all level with dst
@@ -1425,9 +1452,10 @@ class XC6LX9(FTG256):
                     ('IO_L3N_MOSI_CSI_B_MISO0_2', 1),
                     ]:
             t = byname[s]
-            t.w("l 45 f 0.5 l 90").forward(d).left(90).forward(.1).wire('GBL')
+            t.w("l 45 f 0.500 l 90").forward(d).left(90).forward(.1).wire('GBL')
             grp.append(t)
         extend(grp[-1], grp)
+        [t.forward(0.8).wire('GBL') for t in grp]
         frv0 = board.enriver90(grp, 90)
         frv0.w("f 0.5 l 90").wire()
         
@@ -1435,10 +1463,11 @@ class XC6LX9(FTG256):
 # 'IO_L63P_2'         # P4
 # 'IO_L65N_CSO_B_2'   # T3
         grp = [byname[s] for s in ("IO_L65N_CSO_B_2", "IO_L63P_2", "IO_L49P_D3_2")]
-        for t in grp:
-            t.w("r 45 f 0.5 r 90 f 0.2").wire('GBL')
+        grp[2].w("r 45 f 0.330 r 90 f 0.2").wire('GBL')
+        for t in grp[:2]:
+            t.w("r 45 f 0.500 r 90 f 0.2").wire('GBL')
         extend(grp[0], grp)
-        [t.wire('GBL') for t in grp]
+        [t.forward(0.3).wire('GBL') for t in grp]
         frv1 = board.enriver90(grp, -90)
         frv1.w("r 90").wire('GBL')
 
@@ -1488,7 +1517,7 @@ class Castellation(Part):
             dc.contact()
             dc.push()
             dc.forward(0.375)
-            dc.drill(0.7)
+            dc.board.hole(dc.xy, 0.7)
             dc.pop()
             dc.left(90)
         self.train(dc, self.val, cp, 2.0)

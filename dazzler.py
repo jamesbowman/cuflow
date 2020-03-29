@@ -1,3 +1,4 @@
+import sys
 from PIL import Image
 import math
 import cuflow as cu
@@ -129,16 +130,20 @@ if __name__ == "__main__":
     caps(brd.DC((37.0, 1.0)), 'GL2', 'GL3', 3)
     caps(brd.DC((47.7, 14.2)).right(90), 'GL2', 'GL3', 2)
 
-    im = Image.open("img/dazzler-logo.png").transpose(Image.ROTATE_270)
-    brd.logo(6.9, 28.8, im)
-    im = Image.open("img/gd3x-logo.png")
-    brd.logo(9.5, 36, im, 0.8)
-    im = Image.open("img/oshw-logo-outline.png")
-    brd.logo(6.9, 13.6, im, 0.5)
+    brd.fill()
+    brd.check()
 
-    x = j1.center.xy[0] + 0.5
-    for i,s in enumerate(["(C) 2020", "EXCAMERA LABS", str(__VERSION__)]):
-        brd.annotate(x, 35.3 - 1.5 * i, s)
+    if 0:
+        im = Image.open("img/dazzler-logo.png").transpose(Image.ROTATE_270)
+        brd.logo(6.9, 28.8, im)
+        im = Image.open("img/gd3x-logo.png")
+        brd.logo(9.5, 36, im, 0.8)
+        im = Image.open("img/oshw-logo-outline.png")
+        brd.logo(6.9, 13.6, im, 0.5)
+
+        x = j1.center.xy[0] + 0.5
+        for i,s in enumerate(["(C) 2020", "EXCAMERA LABS", str(__VERSION__)]):
+            brd.annotate(x, 35.3 - 1.5 * i, s)
 
     brd.save("dazzler")
-    lx9.dump_ucf("dazzler")
+    # lx9.dump_ucf("dazzler")
