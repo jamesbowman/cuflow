@@ -688,7 +688,11 @@ class Board:
             return so.unary_union([sg.Point(xy).buffer(d / 2) for xy in xys])
         ghole = so.unary_union([h2pt(d, xys) for (d, xys) in self.holes.items()])
         hot_vcc = ghole.intersection(self.layers['GL3'].powered)
-        self.layers['GTP'].p = hot_vcc
+        hot_gnd = ghole.intersection(self.layers['GL2'].powered)
+
+        show = [po for po in self.layers['GTL'].p if po.intersects(hot_vcc)]
+                
+        # self.layers['GTP'].p = so.unary_union(show)
 
 def extend(dst, traces):
     # extend parallel traces so that they are all level with dst
@@ -1185,7 +1189,7 @@ class HDMI(Part):
 
     def escape(self):
         board = self.board
-        gnd = (1, 4, 7, 10, 13, 17)
+        gnd = (1, 4, 7, 10, 13, 16)
         for g,p in zip(gnd, ["TMDS2", "TMDS1", "TMDS0", "TMDS_CLK"]):
             self.pads[g].setname("GND")
             self.pads[g - 1].setname((self.id, p + "_P"))
@@ -1477,7 +1481,7 @@ class XC6LX9(FTG256):
         # JTAG
         jtag = [byname[s] for s in ('TCK', 'TDI', 'TMS', 'TDO')]
         [t.w("l 45 f 0.5").wire('GBL') for t in jtag]
-        [self.notate(t, t.name[1]) for t in jtag]
+        # [self.notate(t, t.name[1]) for t in jtag]
         byname['TDO'].w("f 0.5 l 45 f 0.707 r 45").wire()
         extend(jtag[2], jtag)
         jrv = board.enriver90(self.collect(jtag), -90).wire()
