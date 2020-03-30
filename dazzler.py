@@ -130,10 +130,11 @@ if __name__ == "__main__":
     caps(brd.DC((37.0, 1.0)), 'GL2', 'GL3', 3)
     caps(brd.DC((47.7, 14.2)).right(90), 'GL2', 'GL3', 2)
 
+    brd.oversize(2)
     brd.fill()
     brd.check()
 
-    if 0:
+    if 1:
         im = Image.open("img/dazzler-logo.png").transpose(Image.ROTATE_270)
         brd.logo(6.9, 28.8, im)
         im = Image.open("img/gd3x-logo.png")

@@ -6,6 +6,8 @@
 - [x] 1.2V BT815
 - [x] trial synthesis
 - [x] LDO hookup
-- [ ] caps
+- [x] caps
+- [x] logo
 - [ ] PCLK to GCLK jumper
-- [ ] logo
+- [x] outline edit for LCSC
+- [x] paste and mask for HDMI legs

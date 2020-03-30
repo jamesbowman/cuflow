@@ -61,8 +61,9 @@ class Layer:
                 y0 = min([y for (x, y) in po.exterior.coords])
                 y1 = max([y for (x, y) in po.exterior.coords])
                 xm = (x0 + x1) / 2
-                renderpoly(g, po.intersection(sg.box(x0, y0, xm, y1)))
-                renderpoly(g, po.intersection(sg.box(xm, y0, x1, y1)))
+                eps = 0.005
+                renderpoly(g, po.intersection(sg.box(x0, y0, xm + eps, y1)))
+                renderpoly(g, po.intersection(sg.box(xm - eps, y0, x1, y1)))
 
         if isinstance(surface, sg.Polygon):
             renderpoly(g, surface)
@@ -332,13 +333,24 @@ class Draw(Turtle):
             self.copy().right(a).forward(l).wire(width = 0.8).via(dst)
 
     def platedslot(self, buf):
-        g1 = sg.LineString(self.path).buffer(buf)
-        g2 = sg.LinearRing(g1.exterior.coords)
-        self.board.layers['GML'].add(g2)
+        brd = self.board
 
-        g3 = g1.buffer(.3).difference(g1.buffer(-0.05))
-        self.board.layers['GTL'].add(g3)
-        self.board.layers['GBL'].add(g3)
+        g1 = sg.LineString(self.path).buffer(buf)
+
+        g2 = sg.LinearRing(g1.exterior.coords)
+        brd.layers['GML'].add(g2)
+
+        g3 = g1.buffer(.3)
+        brd.layers['GTS'].add(g3)
+
+        g4 = g3.difference(g1.buffer(-0.05))
+        for l in ('GTL', 'GL2', 'GL3', 'GBL'):
+            brd.layers[l].add(g4)
+
+        strut_x = sa.scale(g4.envelope, yfact = 0.15)
+        strut_y = sa.scale(g4.envelope, xfact = 0.15)
+        struts = strut_x.union(strut_y)
+        brd.layers['GTP'].add(g4.difference(struts))
 
 class River(Turtle):
     def __init__(self, board, tt):
@@ -540,17 +552,32 @@ class Board:
         self.layers = {id : Layer(desc) for (id, desc) in layers}
         self.layers['GML'] = OutlineLayer('Mechanical')
 
-        self.layers['GML'].add(sg.LinearRing([
-            (0, 0),
-            (self.size[0], 0),
-            (self.size[0], self.size[1]),
-            (0, self.size[1])]))
+    def boundary(self, r = 0):
+        x0,y0 = (-r, -r)
+        x1,y1 = self.size
+        x1 += r
+        y1 += r
+        return sg.LinearRing([
+            (x0, y0),
+            (x1, y0),
+            (x1, y1),
+            (x0, y1)])
+
+    def outline(self):
+        self.layers['GML'].add(self.boundary())
+
+    def oversize(self, r):
+        self.layers['GML'].add(self.boundary(r))
+        sr = self.silk / 2
+        g = self.boundary(1.1 * sr).buffer(sr)
+        self.layers['GTO'].add(g.buffer(0))
 
     def hole(self, xy, inner, outer = None):
         self.drill(xy, inner)
         if outer is not None:
             g = sg.LinearRing(sg.Point(xy).buffer(outer / 2).exterior).buffer(self.silk / 2)
             self.layers['GTO'].add(g)
+            self.layers['GTP'].add(sg.Point(xy).buffer(.2))
         self.keepouts.append(sg.Point(xy).buffer(inner / 2 + 0.5))
 
     def drill(self, xy, diam):
@@ -576,7 +603,8 @@ class Board:
             excellon(f, self.holes)
 
         substrate = Layer(None)
-        mask = sg.box(0, 0, self.size[0], self.size[1])
+        gml = self.layers['GML'].lines
+        mask = sg.Polygon(gml[-1], gml[:-1])
         for d,xys in self.holes.items():
             if d > 0.2:
                 hlist = so.unary_union([sg.Point(xy).buffer(d / 2) for xy in xys])
