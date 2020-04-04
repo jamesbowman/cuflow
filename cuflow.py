@@ -159,6 +159,10 @@ class Draw(Turtle):
         self.width = w
         return self
 
+    def setlayer(self, l):
+        self.l = l
+        return self
+
     def newpath(self):
         self.path = [self.xy]
         return self
@@ -172,7 +176,7 @@ class Draw(Turtle):
         return self
 
     def copy(self):
-        r = Draw(self.board, self.xy, self.dir)
+        r = type(self)(self.board, self.xy, self.dir)
         r.h = self.h
         r.layer = self.layer
         return r
@@ -259,6 +263,30 @@ class Draw(Turtle):
         self.forward(w)
         self.pop()
         self.h = h  # used by inside, outside for pad escape
+
+    def mark(self):
+        self.board.layers['GTO'].add(sg.Point(self.xy).buffer(.2))
+        self.push()
+        self.newpath()
+        self.forward(.3)
+        self.silk()
+        self.pop()
+
+    def n_agon(self, r, n):
+        # an n-agon approximating a circle radius r
+        ea = 360 / n
+        self.push()
+        half_angle = math.pi / n
+        half_edge = r * math.tan(half_angle)
+        self.forward(r)
+        self.right(90)
+
+        self.newpath()
+        for _ in range(n):
+            self.forward(half_edge)
+            self.right(ea)
+            self.forward(half_edge)
+        self.pop()
 
     def inside(self):
         self.right(180)
@@ -351,6 +379,14 @@ class Draw(Turtle):
         strut_y = sa.scale(g4.envelope, xfact = 0.15)
         struts = strut_x.union(strut_y)
         brd.layers['GTP'].add(g4.difference(struts))
+
+class Drawf(Draw):
+    def left(self, a):
+        return Draw.right(self, a)
+    def right(self, a):
+        return Draw.left(self, a)
+    def go_xy(self, x, y):
+        return Draw.go_xy(-x , y)
 
 class River(Turtle):
     def __init__(self, board, tt):
@@ -589,6 +625,9 @@ class Board:
     def DC(self, xy, d = 0):
         return Draw(self, xy, d)
 
+    def DCf(self, xy, d = 0):
+        return Drawf(self, xy, d)
+
     def fill(self):
         ko = so.unary_union(self.keepouts)
         g = sg.box(0, 0, self.size[0], self.size[1]).buffer(-0.2).difference(ko)
@@ -724,7 +763,6 @@ class Board:
 
 def extend(dst, traces):
     # extend parallel traces so that they are all level with dst
-    # assert dst in traces, "One trace must be the target"
     assert len({t.dir for t in traces}) == 1, "All traces must be parallel"
 
     finish_line = dst.copy()
@@ -732,6 +770,10 @@ def extend(dst, traces):
     for t in traces:
         t.approach(0, finish_line)
 
+def extend2(traces):
+    by_y = [p for (_,p) in sorted([(p.seek(traces[0])[1], p) for p in traces])]
+    extend(by_y[0], traces)
+    
 class Part:
     def __init__(self, dc, val = None, source = {}):
         self.id = dc.board.assign(self)
@@ -1096,6 +1138,57 @@ class SOIC8(SOIC):
     D = 3.81
     G = 3.0
     Z = 7.4
+
+class TSSOP(Part):
+    family = "U"
+    def place(self, dc):
+        self.chamfered(dc, 4.4, 5.0)
+        P = self.N // 2
+        e = 0.65
+        for _ in range(2):
+            dc.push()
+            dc.forward(e * (P - 1) / 2)
+            dc.left(90)
+            dc.forward((4.16 + 1.78) / 2)
+            dc.left(90)
+            self.train(dc, P, lambda: self.rpad(dc, 0.42, 1.78), e)
+            dc.pop()
+            dc.right(180)
+
+class TSSOP14(TSSOP):
+    N = 14
+
+class M74VHC125(TSSOP14):
+    def s(self, nm):
+        if " " in nm:
+            return [self.s(n) for n in nm.split()]
+        return {p.name:p for p in self.pads}[nm]
+
+    def escape(self):
+        for p,s in zip(self.pads, "A0 B0 O0 A1 B1 O1 GND  O3 B3 A3 O2 B2 A2 VCC".split()):
+            p.setname(s)
+        self.s("VCC").w("o f 1")
+        for p in self.pads:
+            if p.name in ("GND", "A0", "A1", "A2", "A3"):
+                p.w("o .")
+        self.s("O0").w("i f 0.4 . l 90 f 3").wire(layer = "GBL")
+        self.s("O1").w("i f 1.2 . l 90 f 3").wire(layer = "GBL")
+        self.s("O3").w("i f 1.2 . r 90 f 3").wire(layer = "GBL")
+        self.s("O2").w("i f 0.4 . r 90 f 3").wire(layer = "GBL")
+        outs = self.s("O2 O3 O1 O0")
+        extend2(outs)
+        rout = self.board.enriver90(outs, -90)
+
+        self.s("B0").w("o f 2.0 l 90 f 2")
+        self.s("B1").w("o f 1.0 l 90 f 2")
+        self.s("B3").w("o f 1.0 r 90 f 2")
+        self.s("B2").w("o f 2.0 r 90 f 2")
+
+        ins = self.s("B0 B1 B3 B2")
+        extend2(ins)
+        rin = self.board.enriver90(ins, -90)
+
+        [p.wire() for p in self.pads]
 
 class W25Q16J(SOIC8):
     def escape(self):

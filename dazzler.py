@@ -5,6 +5,27 @@ import cuflow as cu
 
 __VERSION__ = "0.1.0"
 
+class Dazzler(cu.Part):
+    family = "M"
+    def place(self, dc):
+        self.chamfered(dc, 50, 42)
+        def local(x, y):
+            p = dc.copy()
+            return p.goxy(x - 25, y - 21)
+        def padline(dc, n):
+            self.train(dc, n, lambda: self.rpad(dc, 1, 1), 2.00)
+
+        print('--->', dc)
+        padline(local(34, 42).left(90), 15)
+        padline(local(34, 42).left(90), 15)
+        padline(local(8, 0).right(90), 4)
+        padline(local(30, 0).right(90), 3)
+
+        # (p0, p1) = cu.Castellation(brd.DC((34, 42)).left(90), 15).escape()
+        # (p2, p3) = cu.Castellation(brd.DC((0, 36)).left(180), 16).escape()
+        # p4 = cu.Castellation(brd.DC((8, 0)).right(90), 4).escape1()
+        # v5 = cu.Castellation(brd.DC((30, 0)).right(90), 3).escape2()
+
 if __name__ == "__main__":
     brd = cu.Board(
         (50, 42),
