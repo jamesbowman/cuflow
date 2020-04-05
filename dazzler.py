@@ -8,14 +8,18 @@ __VERSION__ = "0.1.0"
 class Dazzler(cu.Part):
     family = "M"
     def place(self, dc):
-        self.chamfered(dc, 50, 42)
         def local(x, y):
             p = dc.copy()
             return p.goxy(x - 25, y - 21)
+
+        self.chamfered(dc, 50, 42)
+        hdmi = local(45, 33.5).right(270)
+        hdmi.rect(15, 11.1)
+        hdmi.silk()
+
         def padline(dc, n):
             self.train(dc, n, lambda: self.rpad(dc, 1, 1), 2.00)
 
-        print('--->', dc)
         padline(local(34, 42).left(90), 15)
         padline(local(34, 42).left(90), 15)
         padline(local(8, 0).right(90), 4)
