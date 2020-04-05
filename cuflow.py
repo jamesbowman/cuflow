@@ -147,10 +147,13 @@ class Draw(Turtle):
         self.stack = []
         self.name = None
         self.newpath()
-        self.layer = 'GTL'
         self.width = board.trace
         self.h = None
         self.length = 0
+        self.defaults()
+
+    def defaults(self):
+        self.layer = 'GTL'
 
     def setname(self, nm):
         self.name = nm
@@ -179,6 +182,7 @@ class Draw(Turtle):
         r = type(self)(self.board, self.xy, self.dir)
         r.h = self.h
         r.layer = self.layer
+        r.name = self.name
         return r
 
     def forward(self, d):
@@ -305,7 +309,13 @@ class Draw(Turtle):
 
     def pad(self):
         g = self.poly()
-        for n in ('GTL', 'GTS', 'GTP'):
+        if self.layer == 'GTL':
+            ly = ('GTL', 'GTS', 'GTP')
+        elif self.layer == 'GBL':
+            ly = ['GBL', 'GBS']
+        else:
+            assert False, "Attempt to create pad in layer " + self.layer
+        for n in ly:
             self.board.layers[n].add(g, self.name)
 
     def contact(self):
@@ -381,6 +391,9 @@ class Draw(Turtle):
         brd.layers['GTP'].add(g4.difference(struts))
 
 class Drawf(Draw):
+    def defaults(self):
+        self.layer = 'GBL'
+
     def left(self, a):
         return Draw.right(self, a)
     def right(self, a):
@@ -849,6 +862,11 @@ class Part:
             op()
             dc.forward(step)
 
+    def s(self, nm):
+        if " " in nm:
+            return [self.s(n) for n in nm.split()]
+        return {p.name:p for p in self.pads}[nm]
+
 class Discrete2(Part):
     def escape(self, l0, l1):
         # Connections to GND and VCC
@@ -1159,11 +1177,6 @@ class TSSOP14(TSSOP):
     N = 14
 
 class M74VHC125(TSSOP14):
-    def s(self, nm):
-        if " " in nm:
-            return [self.s(n) for n in nm.split()]
-        return {p.name:p for p in self.pads}[nm]
-
     def escape(self):
         for p,s in zip(self.pads, "A0 B0 O0 A1 B1 O1 GND  O3 B3 A3 O2 B2 A2 VCC".split()):
             p.setname(s)
