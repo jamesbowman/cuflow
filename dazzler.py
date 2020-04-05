@@ -2,6 +2,7 @@ import sys
 from PIL import Image
 import math
 import cuflow as cu
+import svgout
 
 __VERSION__ = "0.1.0"
 
@@ -155,7 +156,8 @@ if __name__ == "__main__":
     caps(brd.DC((37.0, 1.0)), 'GL2', 'GL3', 3)
     caps(brd.DC((47.7, 14.2)).right(90), 'GL2', 'GL3', 2)
 
-    brd.oversize(2)
+    brd.outline()
+    # brd.oversize(2)
     brd.fill()
     brd.check()
 
@@ -172,4 +174,5 @@ if __name__ == "__main__":
             brd.annotate(x, 35.3 - 1.5 * i, s)
 
     brd.save("dazzler")
+    svgout.write(brd, "dazzler.svg")
     # lx9.dump_ucf("dazzler")
