@@ -2,6 +2,7 @@ import sys
 from PIL import Image
 import math
 import cuflow as cu
+import svgout
 from dazzler import Dazzler
 
 import xml.etree.ElementTree as ET
@@ -72,3 +73,4 @@ if __name__ == "__main__":
 
     shield = ArduinoR3(brd.DCf((68.58, 0)))
     brd.save("arduino_dazzler")
+    svgout.write(brd, "arduino_dazzler.svg")
