@@ -40,7 +40,10 @@ class LibraryPart(cu.Part):
                 dc.board.hole(dc.xy, drill)
                 n = {"circle" : 60, "octagon" : 8, "square" : 4}[attr.get("shape", "circle")]
                 dc.n_agon(diameter / 2, n)
-                self.pad(dc)
+
+                self.pads.append(dc.copy())
+                dc.contact()
+
                 nm = attr["name"]
                 if nm not in ("RESERVED", ):
                     print(nm)
@@ -66,7 +69,7 @@ if __name__ == "__main__":
         via_space = cu.mil(5),
         silk = cu.mil(6))
 
-    Dazzler(brd.DCf((34, 26.5)))
+    Dazzler(brd.DCf((43.59, 26.5)).right(180))
     cu.M74VHC125(brd.DC((30, 20))).escape()
     # cu.W25Q16J(brd.DCf((50, 20))).escape()
 
