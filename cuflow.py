@@ -355,7 +355,7 @@ class Draw(Turtle):
             ls = sg.LineString(self.path)
             self.length += ls.length
             g = ls.buffer(self.width / 2)
-            self.board.layers[self.layer].add(g)
+            self.board.layers[self.layer].add(g, self.name)
             self.newpath()
         return self
 
@@ -646,6 +646,28 @@ class Board:
         g = sg.box(0, 0, self.size[0], self.size[1]).buffer(-0.2).difference(ko)
         self.layers['GL2'].fill(g, 'GL2', self.via_space)
         self.layers['GL3'].fill(g, 'GL3', self.via_space)
+
+    def fill_any(self, layer, include):
+        ko = so.unary_union(self.keepouts)
+        g = self.body().buffer(-0.2).difference(ko)
+        la = self.layers[layer]
+
+        d = max(self.space, self.via_space)
+        notouch = so.unary_union([o for (nm, o) in la.polys if nm != include])
+        self.layers[layer].add(
+            g.difference(notouch.buffer(d)), include
+        )
+
+    def body(self):
+        # Return the board outline with holes and slots removed.
+        # This is the shape of the resin subtrate.
+        gml = self.layers['GML'].lines
+        mask = sg.Polygon(gml[-1], gml[:-1])
+        for d,xys in self.holes.items():
+            if d > 0.3:
+                hlist = so.unary_union([sg.Point(xy).buffer(d / 2) for xy in xys])
+                mask = mask.difference(hlist)
+        return mask
 
     def save(self, basename):
         for (id, l) in self.layers.items():
@@ -1183,7 +1205,8 @@ class M74VHC125(TSSOP14):
         self.s("VCC").w("o f 1")
         for p in self.pads:
             if p.name in ("GND", "A0", "A1", "A2", "A3"):
-                p.w("o .")
+                p.w("o -")
+
         self.s("O0").w("i f 0.4 . l 90 f 3").wire(layer = "GBL")
         self.s("O1").w("i f 1.2 . l 90 f 3").wire(layer = "GBL")
         self.s("O3").w("i f 1.2 . r 90 f 3").wire(layer = "GBL")

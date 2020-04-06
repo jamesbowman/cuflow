@@ -96,5 +96,9 @@ if __name__ == "__main__":
     cu.M74VHC125(brd.DC((58, 43)).right(90)).escape()
 
     shield = ArduinoR3(brd.DC((0, 0)))
+
+    # brd.fill_any("GTL", "VCC")
+    brd.fill_any("GBL", "GND")
+
     brd.save("arduino_dazzler")
     svgout.write(brd, "arduino_dazzler.svg")
