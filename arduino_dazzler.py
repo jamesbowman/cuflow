@@ -47,18 +47,20 @@ class LibraryPart(cu.Part):
                 self.pad(p)
             elif c.tag == "pad":
                 (x, y, diameter, drill) = [float(attr[t]) for t in "x y diameter drill".split()]
+                nm = attr["name"]
+
                 dc.push()
                 dc.goxy(x, y)
                 dc.board.hole(dc.xy, drill)
                 n = {"circle" : 60, "octagon" : 8, "square" : 4}[attr.get("shape", "circle")]
-                dc.n_agon(diameter / 2, n)
+                p = dc.copy()
+                p.n_agon(diameter / 2, n)
 
-                self.pads.append(dc.copy())
-                dc.contact()
+                p.setname(nm)
+                self.pads.append(p)
+                p.contact()
 
-                nm = attr["name"]
                 if nm not in ("RESERVED", ):
-                    print(nm)
                     self.board.annotate(dc.xy[0], dc.xy[1], nm)
                 dc.pop()
         if ls["20"]:
@@ -72,6 +74,15 @@ class ArduinoR3(LibraryPart):
     libraryfile = "adafruit.lbr"
     partname = "ARDUINOR3"
     family = "J"
+    def escape(self):
+        spi = [self.s(n) for n in "D13 D11 D9 D8".split()]
+        for t in spi:
+            t.w("r 180 f 2").wire(layer = "GBL")
+        spio = self.board.enriver90(spi, -90)
+        [t.wire() for t in spi]
+        for nm in ("GND", "GND1", "GND2"):
+            self.s(nm).setname("GL2").w("f 1.2 r 180 f 1.2 r 90 " * 4).wire(layer = "GBL")
+        return spio
 
 class SD(LibraryPart):
     libraryfile = "x.lbrSD_TF_holder.lbr"
@@ -93,12 +104,15 @@ if __name__ == "__main__":
     Dazzler(brd.DC((68.58 - 43.59, 26.5)).right(180))
     sd = SD(brd.DC((53.6, 22)).right(0))
     sd.s("3").mark()
-    cu.M74VHC125(brd.DC((58, 43)).right(90)).escape()
+    (lvl_in, lvl_out) = cu.M74VHC125(brd.DC((58, 43)).right(180)).escape()
 
     shield = ArduinoR3(brd.DC((0, 0)))
+    a_spio = shield.escape()
+
+    a_spio.meet(lvl_in)
 
     # brd.fill_any("GTL", "VCC")
-    brd.fill_any("GBL", "GND")
+    brd.fill_any("GBL", "GL2")
 
     brd.save("arduino_dazzler")
     svgout.write(brd, "arduino_dazzler.svg")

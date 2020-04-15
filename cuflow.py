@@ -157,6 +157,7 @@ class Draw(Turtle):
 
     def setname(self, nm):
         self.name = nm
+        return self
 
     def setwidth(self, w):
         self.width = w
@@ -653,6 +654,8 @@ class Board:
         la = self.layers[layer]
 
         d = max(self.space, self.via_space)
+        for (nm, o) in la.polys:
+            print('_', nm, include)
         notouch = so.unary_union([o for (nm, o) in la.polys if nm != include])
         self.layers[layer].add(
             g.difference(notouch.buffer(d)), include
@@ -1207,24 +1210,25 @@ class M74VHC125(TSSOP14):
             if p.name in ("GND", "A0", "A1", "A2", "A3"):
                 p.w("o -")
 
-        self.s("O0").w("i f 0.4 . l 90 f 3").wire(layer = "GBL")
-        self.s("O1").w("i f 1.2 . l 90 f 3").wire(layer = "GBL")
-        self.s("O3").w("i f 1.2 . r 90 f 3").wire(layer = "GBL")
-        self.s("O2").w("i f 0.4 . r 90 f 3").wire(layer = "GBL")
+        self.s("O0").w("i f 0.4 l 90 f 3")
+        self.s("O1").w("i f 1.2 l 90 f 3")
+        self.s("O3").w("i f 1.2 r 90 f 3")
+        self.s("O2").w("i f 0.4 r 90 f 3")
         outs = self.s("O2 O3 O1 O0")
         extend2(outs)
-        rout = self.board.enriver90(outs, -90)
+        rout = self.board.enriver90(outs, 90)
 
-        self.s("B0").w("o f 2.0 l 90 f 2")
-        self.s("B1").w("o f 1.0 l 90 f 2")
-        self.s("B3").w("o f 1.0 r 90 f 2")
-        self.s("B2").w("o f 2.0 r 90 f 2")
+        self.s("B0").w("o f 1.2 . l 90 f 2").wire(layer = "GBL")
+        self.s("B1").w("o f 0.6 . l 90 f 2").wire(layer = "GBL")
+        self.s("B3").w("o f 0.6 . r 90 f 2").wire(layer = "GBL")
+        self.s("B2").w("o f 1.2 . r 90 f 2").wire(layer = "GBL")
 
         ins = self.s("B0 B1 B3 B2")
         extend2(ins)
         rin = self.board.enriver90(ins, -90)
 
         [p.wire() for p in self.pads]
+        return (rin, rout)
 
 class W25Q16J(SOIC8):
     def escape(self):

@@ -22,7 +22,7 @@ class Dazzler(cu.Part):
             self.train(dc, n, lambda: self.rpad(dc, 1, 1), 2.00)
 
         padline(local(34, 42).left(90), 15)
-        padline(local(34, 42).left(90), 15)
+        padline(local(0, 36).left(180), 16)
         padline(local(8, 0).right(90), 4)
         padline(local(30, 0).right(90), 3)
 
