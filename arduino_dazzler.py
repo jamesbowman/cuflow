@@ -112,7 +112,9 @@ if __name__ == "__main__":
     a_spio.meet(lvl_in)
 
     # brd.fill_any("GTL", "VCC")
-    brd.fill_any("GBL", "GL2")
+    # brd.fill_any("GBL", "GL2")
+
+    cu.M74LVC245(brd.DC((25, 25)).right(90)).escape()
 
     brd.save("arduino_dazzler")
     svgout.write(brd, "arduino_dazzler.svg")
