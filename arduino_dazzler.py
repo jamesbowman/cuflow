@@ -75,14 +75,16 @@ class ArduinoR3(LibraryPart):
     partname = "ARDUINOR3"
     family = "J"
     def escape(self):
-        spi = [self.s(n) for n in "D13 D11 D9 D8".split()]
-        for t in spi:
-            t.w("r 180 f 2").wire(layer = "GBL")
-        spio = self.board.enriver90(spi, -90)
-        [t.wire() for t in spi]
         for nm in ("GND", "GND1", "GND2"):
             self.s(nm).setname("GL2").thermal(1.2).wire(layer = "GBL")
-        return spio
+
+        spi = [self.s(n) for n in "D13 D11 D10 D9 D8 D7".split()]
+        for t in spi:
+            t.w("r 180 f 2").wire(layer = "GBL")
+        spio = self.board.enriver90(spi, -90).right(90).wire()
+        self.s("D0").w("r 180 f 2 r 90 f 15 l 90 f 1").wire("GBL")
+        spio1 = cu.River(self.board, [self.s("D0")])
+        return spio.join(spio1).wire()
 
 class SD(LibraryPart):
     libraryfile = "x.lbrSD_TF_holder.lbr"
@@ -102,8 +104,8 @@ if __name__ == "__main__":
         silk = cu.mil(6))
 
     daz = Dazzler(brd.DC((68.58 - 43.59, 26.5)).right(180))
-    sd = SD(brd.DC((53.6, 18)).right(0))
-    (lvl_in, lvl_out) = cu.M74VHC125(brd.DC((58, 43)).right(180)).escape()
+    sd = SD(brd.DC((53.6, 16.5)).right(0))
+    (lvl_in, lvl_out) = cu.M74LVC245(brd.DC((60, 37)).right(90)).escape()
 
     for nm in ("G1", "G2", "G3", "G4", "6"):
         sd.s(nm).w("r 90 f 1.5 -")
@@ -112,9 +114,9 @@ if __name__ == "__main__":
     for nm in ("GND", "GND1", "GND2"):
         daz.s(nm).w("i f 2 -")
 
-    daz_spibus = daz.escapes(["26", "27", "28", "29"], 90)
+    daz_spibus = daz.escapes(["23", "24", "25", "26", "27", "28", "29"], 90)
     daz_spibus.w("l 90 f 1 l 90").wire()
-    lvl_out.w("l 90").meet(daz_spibus)
+    lvl_out.w("f 1.5 l 90").meet(daz_spibus)
 
     sd.s("4").setname("VCC").w("r 90 f 2").wire()
     for i in range(7):
@@ -127,11 +129,10 @@ if __name__ == "__main__":
 
     shield = ArduinoR3(brd.DC((0, 0)))
     a_spio = shield.escape()
-    shield.s("D12").w("r 180 f 17 l 90").wire()
-
-    a_spio.meet(lvl_in)
-
-    cu.M74LVC245(brd.DC((25, 25)).right(90)).escape()
+    shield.s("D12").w("r 180 f 17 l 90").goto(daz.s("22")).wire()
+    shield.s("VIN").w("f 6 l 45 f 41 r 45").goto(daz.s("5V")).wire(width = 0.5)
+    
+    a_spio.left(90).meet(lvl_in)
 
     brd.fill_any("GTL", "VCC")
     brd.fill_any("GBL", "GL2")

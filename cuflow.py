@@ -1275,17 +1275,19 @@ class M74LVC245(SOT764):
         self.s("GND").w("o -")
         self.s("OE").w("l 90 f 0.4 -")
         self.s("VCC").w("o f 0.5").wire()
-        self.s("DIR").w("o f 0.5").wire()
+        self.s("DIR").setname("VCC").w("o f 0.5").wire()
 
-        gin = [self.s(nm) for nm in ('A7', 'A6', 'A5', 'A4', 'A3', 'A2', 'A1', 'A0')]
-        [s.forward(0.6 * i).w("l 45 f .2 .").w("l 45 f 1").wire("GBL") for (i, s) in enumerate(gin)]
+        gin = [self.s(nm) for nm in ('A6', 'A5', 'A4', 'A3', 'A2', 'A1', 'A0')]
+        [s.forward(0.2 + 0.6 * i).w("l 45 f .2 .").w("r 45 f .2").wire("GBL") for (i, s) in enumerate(gin)]
         extend2(gin)
-        ins = self.board.enriver90(gin[::-1], 90).wire()
+        ins = self.board.enriver90(gin[::-1], -90).wire()
 
-        self.s("B7").w("l 90 f 1.56").wire()
-        gout = [self.s(nm) for nm in ('B7', 'B6', 'B5', 'B4', 'B3', 'B2', 'B1', 'B0')]
+        # self.s("B7").w("l 90 f 1.56").wire()
+        gout = [self.s(nm) for nm in ('B6', 'B5', 'B4', 'B3', 'B2', 'B1', 'B0')]
         [s.forward(0.2) for s in gout]
         outs = self.board.enriver90(gout, 90).wire()
+
+        return (ins, outs)
 
 class W25Q16J(SOIC8):
     def escape(self):
