@@ -81,7 +81,7 @@ class ArduinoR3(LibraryPart):
         spio = self.board.enriver90(spi, -90)
         [t.wire() for t in spi]
         for nm in ("GND", "GND1", "GND2"):
-            self.s(nm).setname("GL2").w("f 1.2 r 180 f 1.2 r 90 " * 4).wire(layer = "GBL")
+            self.s(nm).setname("GL2").thermal(1.2).wire(layer = "GBL")
         return spio
 
 class SD(LibraryPart):
@@ -101,17 +101,37 @@ if __name__ == "__main__":
         via_space = cu.mil(5),
         silk = cu.mil(6))
 
-    Dazzler(brd.DC((68.58 - 43.59, 26.5)).right(180))
-    sd = SD(brd.DC((53.6, 22)).right(0))
-    sd.s("3").mark()
+    daz = Dazzler(brd.DC((68.58 - 43.59, 26.5)).right(180))
+    sd = SD(brd.DC((53.6, 18)).right(0))
     (lvl_in, lvl_out) = cu.M74VHC125(brd.DC((58, 43)).right(180)).escape()
+
+    for nm in ("G1", "G2", "G3", "G4", "6"):
+        sd.s(nm).w("r 90 f 1.5 -")
+
+    daz.s("VCC").thermal(1).wire()
+    for nm in ("GND", "GND1", "GND2"):
+        daz.s(nm).w("i f 2 -")
+
+    daz_spibus = daz.escapes(["26", "27", "28", "29"], 90)
+    daz_spibus.w("l 90 f 1 l 90").wire()
+    lvl_out.w("l 90").meet(daz_spibus)
+
+    sd.s("4").setname("VCC").w("r 90 f 2").wire()
+    for i in range(7):
+        src = sd.s("1235789"[i])
+        dst = daz.s(str(21 - i))
+        src.w("l 90 f 1")
+        dst.w("o f .1").wire()
+        src.path.append(dst.xy)
+        src.wire()
 
     shield = ArduinoR3(brd.DC((0, 0)))
     a_spio = shield.escape()
+    shield.s("D12").w("r 180 f 17 l 90").wire()
 
     a_spio.meet(lvl_in)
 
-    # brd.fill_any("GTL", "VCC")
+    brd.fill_any("GTL", "VCC")
     brd.fill_any("GBL", "GL2")
 
     brd.save("arduino_dazzler")

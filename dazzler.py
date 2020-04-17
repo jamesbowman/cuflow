@@ -26,10 +26,23 @@ class Dazzler(cu.Part):
         padline(local(8, 0).right(90), 4)
         padline(local(30, 0).right(90), 3)
 
+        def sr(a,b):
+            return [str(i) for i in range(a, b)]
+        names = (sr(1, 8) + ["GND1"] +
+            sr(8, 23) + ["GND2"] +
+            sr(23, 30) +
+            ["TMS", "TCK", "TDO", "TDI", "VCC", "GND", "5V"])
+        [p.setname(nm) for (p, nm) in zip(self.pads, names)]
         # (p0, p1) = cu.Castellation(brd.DC((34, 42)).left(90), 15).escape()
         # (p2, p3) = cu.Castellation(brd.DC((0, 36)).left(180), 16).escape()
         # p4 = cu.Castellation(brd.DC((8, 0)).right(90), 4).escape1()
         # v5 = cu.Castellation(brd.DC((30, 0)).right(90), 3).escape2()
+
+    def escapes(self, padnames, a):
+        board = self.board
+        g = [self.s(nm) for nm in padnames]
+        [t.outside().forward(board.c) for t in g]
+        return board.enriver90(g, a).wire()
 
 if __name__ == "__main__":
     brd = cu.Board(

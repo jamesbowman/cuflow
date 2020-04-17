@@ -293,6 +293,14 @@ class Draw(Turtle):
             self.forward(half_edge)
         self.pop()
 
+    def thermal(self, d):
+        for i in range(4):
+            self.forward(d)
+            self.right(180)
+            self.forward(d)
+            self.right(90)
+        return self
+
     def inside(self):
         self.right(180)
         self.forward(self.h / 2)
@@ -399,8 +407,8 @@ class Drawf(Draw):
         return Draw.right(self, a)
     def right(self, a):
         return Draw.left(self, a)
-    def go_xy(self, x, y):
-        return Draw.go_xy(-x , y)
+    def goxy(self, x, y):
+        return Draw.goxy(-x , y)
 
 class River(Turtle):
     def __init__(self, board, tt):
@@ -654,8 +662,6 @@ class Board:
         la = self.layers[layer]
 
         d = max(self.space, self.via_space)
-        for (nm, o) in la.polys:
-            print('_', nm, include)
         notouch = so.unary_union([o for (nm, o) in la.polys if nm != include])
         self.layers[layer].add(
             g.difference(notouch.buffer(d)), include
