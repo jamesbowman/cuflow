@@ -351,6 +351,7 @@ class Draw(Turtle):
             self.board.layers[connect].connected.append(g)
         self.board.drill(self.xy, self.board.via_hole)
         self.newpath()
+        return self
 
     def preview(self):
         return sg.LineString(self.path)
@@ -1235,6 +1236,56 @@ class M74VHC125(TSSOP14):
 
         [p.wire() for p in self.pads]
         return (rin, rout)
+
+class SOT764(Part):
+    family = "U"
+    def place(self, dc):
+        self.chamfered(dc, 2.5, 4.5)
+        # pad side is .240 x .950
+
+        def p():
+            dc.rect(.240, .950)
+            self.pad(dc)
+
+        for i in range(2):
+            dc.push()
+            dc.goxy(-0.250, (3.5 + 1.0) / 2)
+            p()
+            dc.pop()
+
+            dc.push()
+            dc.goxy(-(1.7 / 2 + 0.5), 3.5 / 2)
+            dc.right(180)
+            self.train(dc, 8, lambda: self.rpad(dc, 0.240, 0.950), 0.5)
+            dc.pop()
+
+            dc.push()
+            dc.goxy(-0.250, -(3.5 + 1.0) / 2).right(180)
+            p()
+            dc.pop()
+            dc.right(180)
+
+class M74LVC245(SOT764):
+    def escape(self):
+        names = [
+            "DIR", "A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "GND",
+            "B7", "B6", "B5", "B4", "B3", "B2", "B1", "B0", "OE", "VCC"]
+        [p.setname(nm) for (p, nm) in zip(self.pads, names)]
+        [p.outside() for p in self.pads]
+        self.s("GND").w("o -")
+        self.s("OE").w("l 90 f 0.4 -")
+        self.s("VCC").w("o f 0.5").wire()
+        self.s("DIR").w("o f 0.5").wire()
+
+        gin = [self.s(nm) for nm in ('A7', 'A6', 'A5', 'A4', 'A3', 'A2', 'A1', 'A0')]
+        [s.forward(0.6 * i).w("l 45 f .2 .").w("l 45 f 1").wire("GBL") for (i, s) in enumerate(gin)]
+        extend2(gin)
+        ins = self.board.enriver90(gin[::-1], 90).wire()
+
+        self.s("B7").w("l 90 f 1.56").wire()
+        gout = [self.s(nm) for nm in ('B7', 'B6', 'B5', 'B4', 'B3', 'B2', 'B1', 'B0')]
+        [s.forward(0.2) for s in gout]
+        outs = self.board.enriver90(gout, 90).wire()
 
 class W25Q16J(SOIC8):
     def escape(self):
