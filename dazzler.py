@@ -17,6 +17,7 @@ class Dazzler(cu.Part):
         hdmi = local(45, 33.5).right(270)
         hdmi.rect(15, 11.1)
         hdmi.silk()
+        self.hdmi_holes(hdmi)
 
         def padline(dc, n):
             self.train(dc, n, lambda: self.rpad(dc, 1, 1), 2.00)
@@ -38,10 +39,42 @@ class Dazzler(cu.Part):
         # p4 = cu.Castellation(brd.DC((8, 0)).right(90), 4).escape1()
         # v5 = cu.Castellation(brd.DC((30, 0)).right(90), 3).escape2()
 
+        brd = self.board
+        brd.hole(local(47.2, 2.8).xy, 2.5, 5)
+        brd.hole(local(2.8, 42 - 2.8).xy, 2.5, 5)
+        brd.hole(local(2.8, 2.8).xy, 2.5, 5)
+
+    def hdmi_holes(self, dc):
+
+        dc.right(90)
+        dc.forward(14.5 / 2)
+        dc.left(90)
+        dc.forward(5.35 + 1.3 - 2.06)
+        dc.right(180)
+        def holepair():
+            dc.push()
+            self.board.hole(dc.xy, 2.4)
+            dc.forward(5.96)
+            self.board.hole(dc.xy, 1.4)
+            dc.pop()
+        holepair()
+        dc.right(90)
+        dc.forward(14.5)
+        dc.left(90)
+        holepair()
+        dc.forward(5.96 + 3.6)
+        dc.left(90)
+
     def escapes(self, padnames, a):
         board = self.board
         g = [self.s(nm) for nm in padnames]
         [t.outside().forward(board.c) for t in g]
+        return board.enriver90(g, a).wire()
+
+    def escapesM(self, padnames, a):
+        board = self.board
+        g = [self.s(nm) for nm in padnames]
+        [t.inside().forward(1).wire().via('GBL').setlayer('GBL').forward(0.8) for t in g]
         return board.enriver90(g, a).wire()
 
 if __name__ == "__main__":

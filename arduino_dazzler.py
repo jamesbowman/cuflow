@@ -1,5 +1,5 @@
 import sys
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import math
 import cuflow as cu
 import svgout
@@ -14,6 +14,8 @@ import shapely.ops as so
 class LibraryPart(cu.Part):
     libraryfile = None
     partname = None
+    use_silk = True
+    use_pad_text = True
     def __init__(self, dc, val = None, source = {}):
         tree = ET.parse(self.libraryfile)
         root = tree.getroot()
@@ -60,31 +62,34 @@ class LibraryPart(cu.Part):
                 self.pads.append(p)
                 p.contact()
 
-                if nm not in ("RESERVED", ):
+                if self.use_pad_text and nm not in ("RESERVED", ):
                     self.board.annotate(dc.xy[0], dc.xy[1], nm)
                 dc.pop()
         if ls["20"]:
             g = so.linemerge(ls["20"])
             brd.layers['GML'].add(g)
-        if ls["21"]:
+        if self.use_silk and ls["21"]:
             g = so.linemerge(ls["21"]).buffer(brd.silk / 2)
             brd.layers['GTO'].add(g)
 
 class ArduinoR3(LibraryPart):
     libraryfile = "adafruit.lbr"
     partname = "ARDUINOR3"
+    use_pad_text = False
     family = "J"
     def escape(self):
         for nm in ("GND", "GND1", "GND2"):
             self.s(nm).setname("GL2").thermal(1.2).wire(layer = "GBL")
 
-        spi = [self.s(n) for n in "D13 D11 D10 D9 D8 D7".split()]
+        spi = [self.s(n) for n in "D13 D11 D10 D9 D8 D7 D1".split()]
         for t in spi:
             t.w("r 180 f 2").wire(layer = "GBL")
-        spio = self.board.enriver90(spi, -90).right(90).wire()
-        self.s("D0").w("r 180 f 2 r 90 f 15 l 90 f 1").wire("GBL")
-        spio1 = cu.River(self.board, [self.s("D0")])
-        return spio.join(spio1).wire()
+        spi0 = self.board.enriver90(spi[:4], -90).right(90).wire()
+        spi1 = self.board.enriver90(spi[4:], 90).left(90).wire()
+        return spi0.join(spi1)
+        # self.s("D1").w("r 180 f 2 r 90 f 15 l 90 f 1").wire("GBL")
+        # spio1 = cu.River(self.board, [self.s("D0")])
+        # return spio.join(spio1).wire()
 
 class SD(LibraryPart):
     libraryfile = "x.lbrSD_TF_holder.lbr"
@@ -92,6 +97,15 @@ class SD(LibraryPart):
     family = "J"
 
 __VERSION__ = "0.1.0"
+
+def gentext(s):
+    fn = "../../.fonts/Arista-Pro-Alternate-Light-trial.ttf"
+    fn = "../../.fonts/IBMPlexSans-SemiBold.otf"
+    font = ImageFont.truetype(fn, 120)
+    im = Image.new("L", (2000, 1000))
+    draw = ImageDraw.Draw(im)
+    draw.text((200, 200), s, font=font, fill = 255)
+    return im.crop(im.getbbox())
 
 if __name__ == "__main__":
     brd = cu.Board(
@@ -106,13 +120,32 @@ if __name__ == "__main__":
     daz = Dazzler(brd.DC((68.58 - 43.59, 26.5)).right(180))
     sd = SD(brd.DC((53.6, 16.5)).right(0))
     (lvl_in, lvl_out) = cu.M74LVC245(brd.DC((60, 37)).right(90)).escape()
+    shield = ArduinoR3(brd.DC((0, 0)))
+    cu.C0402(brd.DC((65, 39.0)), '0.1 uF').escape_2layer()
+    cu.C0402(brd.DC((59, 27.5)), '0.1 uF').escape_2layer()
+
+    def wii(i):
+        y = 53.3 / 2 + i * (24.0 / 2)
+        return cu.WiiPlug(brd.DC((76, y)).right(90)).escape()
+    brd.layers['GML'].union(sg.box(68, 22, 80.8, 30))
+    brd.layers['GML'].remove(sg.box(0, 4.5, 2.3, 15))
+    brd.keepouts.append(sg.box(71, 22, 80.8, 30))
+    wii1 = wii(-1)
+    wii2 = wii(1)
+    wii1.w("r 90 f 2 r 45 f 2 l 45").wire()
+    wii2.w("f 10 r 45 f 4 r 45").wire()
+    wii = wii2.join(wii1, 1.0).wire()
+    wii.w("f 3").wire()
 
     for nm in ("G1", "G2", "G3", "G4", "6"):
         sd.s(nm).w("r 90 f 1.5 -")
 
     daz.s("VCC").thermal(1).wire()
     for nm in ("GND", "GND1", "GND2"):
-        daz.s(nm).w("i f 2 -")
+        daz.s(nm).inside().forward(2).wire(width = 0.5).w("-")
+
+    daz_i2cbus = daz.escapesM(["8", "9", "10", "11", "12", "13"][::-1], 90)
+    daz_i2cbus.meet(wii)
 
     daz_spibus = daz.escapes(["23", "24", "25", "26", "27", "28", "29"], 90)
     daz_spibus.w("l 90 f 1 l 90").wire()
@@ -127,15 +160,32 @@ if __name__ == "__main__":
         src.path.append(dst.xy)
         src.wire()
 
-    shield = ArduinoR3(brd.DC((0, 0)))
     a_spio = shield.escape()
     shield.s("D12").w("r 180 f 17 l 90").goto(daz.s("22")).wire()
-    shield.s("VIN").w("f 6 l 45 f 41 r 45").goto(daz.s("5V")).wire(width = 0.5)
+    shield.s("5V").w("f 1.6 r 90 f 7.6 l 90 f 2.4 l 45 f 41 r 45").goto(daz.s("5V")).wire(width = 0.5)
     
-    a_spio.left(90).meet(lvl_in)
+    a_spio.w("f 7 l 90 f 10").meet(lvl_in)
 
-    brd.fill_any("GTL", "VCC")
-    brd.fill_any("GBL", "GL2")
+    im = Image.open("img/gameduino-mono.png")
+    brd.logo(59, 45, im)
+
+    im = Image.open("img/dazzler-logo.png")
+    brd.logo(64, 30, im)
+
+    brd.logo(75.8,  6.2, gentext("PLAYER 1"), scale = 0.4)
+    brd.logo(75.8, 46.9, gentext("PLAYER 2"), scale = 0.4)
+
+    brd.logo(76, 53.3 / 2 - 12, gentext("1").transpose(Image.ROTATE_90), scale = 1.0)
+    brd.logo(76, 53.3 / 2 + 12, gentext("2").transpose(Image.ROTATE_90), scale = 1.0)
+
+    brd.logo(75.8, 53.3 / 2, Image.open("img/oshw-logo-outline.png").transpose(Image.ROTATE_90), scale = 0.7)
+
+    for i,s in enumerate(["(C) 2020", "EXCAMERA LABS", str(__VERSION__)]):
+        brd.annotate(57.5, 8.5 - 1.5 * i, s)
+
+    if 1:
+        brd.fill_any("GTL", "VCC")
+        brd.fill_any("GBL", "GL2")
 
     brd.save("arduino_dazzler")
     svgout.write(brd, "arduino_dazzler.svg")

@@ -6,12 +6,13 @@ import svgwrite
 def write(board, filename):
     gml = board.layers['GML'].lines
     block = sg.Polygon(gml[-1], gml[:-1])
+    block = block.buffer(1).buffer(-1)
     for d,xys in board.holes.items():
         if d > 0.3:
             hlist = so.unary_union([sg.Point(xy).buffer(d / 2) for xy in xys])
             block = block.difference(hlist)
 
-    block = sa.scale(block, 1, -1)  # flip Y for svg
+    block = sa.scale(block, 1, -1, origin = (0,0))  # flip Y for svg
     (x0, y0, x1, y1) = block.bounds
     block = sa.translate(block, -x0, -y0)
     x1 -= x0
@@ -25,7 +26,7 @@ def write(board, filename):
         dwg.add(dwg.polyline(l.coords, **args))
 
     gto = board.layers['GTO'].preview()
-    gto = sa.scale(gto, 1, -1)  # flip Y for svg
+    gto = sa.scale(gto, 1, -1, origin = (0, 0))  # flip Y for svg
     gto = sa.translate(gto, -x0, -y0)
 
     args = {'fill':'black', 'fill_opacity':1.0, 'stroke_width':0}

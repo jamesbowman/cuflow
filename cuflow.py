@@ -100,6 +100,14 @@ class OutlineLayer:
     def add(self, o):
         self.lines.append(o)
 
+    def union(self, o):
+        po = sg.Polygon(self.lines[0]).union(o.buffer(0))
+        self.lines = [po.exterior]
+
+    def remove(self, o):
+        po = sg.Polygon(self.lines[0]).difference(o.buffer(0))
+        self.lines = [po.exterior]
+
     def save(self, f):
         g = gerber.Gerber(f, self.desc)
         for ls in self.lines:
@@ -164,7 +172,7 @@ class Draw(Turtle):
         return self
 
     def setlayer(self, l):
-        self.l = l
+        self.layer = l
         return self
 
     def newpath(self):
@@ -495,6 +503,7 @@ class River(Turtle):
             self.right(a)
             self.forward(f)
             self.left(a)
+        return self
 
     def join(self, other, ratio = 0.0):
         assert 0 <= ratio <= 1
@@ -928,6 +937,11 @@ class C0402(Discrete2):
         self.label(dc)
         dc.pop()
 
+    def escape_2layer(self):
+        # escape for 2-layer board (VCC on GTL, GND on GBL)
+        self.pads[0].setname("VCC").w("o f 0.5").wire()
+        self.pads[1].w("o -")
+
 class C0603(Discrete2):
     family = "C"
     def place(self, dc, source = None):
@@ -1266,6 +1280,7 @@ class SOT764(Part):
             dc.right(180)
 
 class M74LVC245(SOT764):
+    source = {'LCSC': 'C294612'}
     def escape(self):
         names = [
             "DIR", "A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "GND",
@@ -1821,3 +1836,45 @@ class Castellation(Part):
         pp[0].setwidth(0.6).w("f -0.3 r 90 f 0.5 + f 0.5 +")
         self.sidevia(pp[1], "-")
         return pp[2]
+
+class WiiPlug(Part):
+    family = "J"
+    def place(self, dc):
+        dc.rect(19, 10)
+        self.board.keepouts.append(dc.poly().buffer(0))
+
+        def finger():
+            dc.right(90)
+            dc.rect(1.6, 7)
+            g = dc.poly()
+            self.board.layers[dc.layer].add(g, dc.name)
+            mask = dc.layer.replace("L", "S")
+            self.board.layers[mask].add(g, dc.name)
+            self.pads.append(dc.copy())
+            dc.left(90)
+        dc.push()
+        dc.w("l 90 f 2 r 180")
+        dc.push()
+        dc.setlayer('GTL')
+        self.train(dc, 2, finger, 4)
+        dc.pop()
+        dc.setlayer('GBL')
+        self.train(dc, 3, finger, 2)
+        dc.pop()
+
+        dc.goxy(-9.5, 4.8)
+        dc.newpath()
+        dc.w("r 90 f 3.3 r 90 f 3.15 r 90 f 1 l 90 f 3.25 l 90 f 1 r 90 f 2 l 90 f 2.95 l 90 f 7.3 r 90 f 3.25")
+        dc.w("f 3.25 r 90 f 7.3 l 90 f 2.95 l 90 f 2 r 90 f 1 l 90 f 3.25 l 90 f 1 r 90 f 3.15 r 90 f 3.3")
+        dc.w("r 90 f 15 r 90 f 19 r 90 f 15")
+        self.board.layers['GML'].union(dc.poly())
+
+    def escape(self):
+        self.pads[0].setname("SCL").w("o f 2 .").setlayer("GBL")
+        self.pads[1].setname("GND").w("o f 3.4 l 45 f 3 -")
+        self.pads[2].setname("VCC").w("o f 0.2 r 45 f 0.6 +").setlayer("GTL").w("f 1").wire()
+        self.pads[3].setname("DET").w("o f 2").wire()
+        self.pads[4].setname("SDA").w("o f 2").wire()
+        g = [self.s(nm) for nm in ("SCL", "DET", "SDA")]
+        extend2(g)
+        return self.board.enriver90(g, -90).wire()
