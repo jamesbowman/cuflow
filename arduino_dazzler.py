@@ -79,7 +79,7 @@ class ArduinoR3(LibraryPart):
     family = "J"
     def escape(self):
         for nm in ("GND", "GND1", "GND2"):
-            self.s(nm).setname("GL2").thermal(1.2).wire(layer = "GBL")
+            self.s(nm).setname("GL2").thermal(1.3).wire(layer = "GBL")
 
         spi = [self.s(n) for n in "D13 D11 D10 D9 D8 D7 D1".split()]
         for t in spi:
@@ -132,9 +132,9 @@ if __name__ == "__main__":
     brd.keepouts.append(sg.box(71, 22, 80.8, 30))
     wii1 = wii(-1)
     wii2 = wii(1)
-    wii1.w("r 90 f 2 r 45 f 2 l 45").wire()
+    wii1.w("r 90 f 2").wire()
     wii2.w("f 10 r 45 f 4 r 45").wire()
-    wii = wii2.join(wii1, 1.0).wire()
+    wii = wii2.join(wii1, 0.5).wire()
     wii.w("f 3").wire()
 
     for nm in ("G1", "G2", "G3", "G4", "6"):
@@ -166,22 +166,23 @@ if __name__ == "__main__":
     
     a_spio.w("f 7 l 90 f 10").meet(lvl_in)
 
-    im = Image.open("img/gameduino-mono.png")
-    brd.logo(59, 45, im)
+    if 1:
+        im = Image.open("img/gameduino-mono.png")
+        brd.logo(59, 45, im)
 
-    im = Image.open("img/dazzler-logo.png")
-    brd.logo(64, 30, im)
+        im = Image.open("img/dazzler-logo.png")
+        brd.logo(64, 30, im)
 
-    brd.logo(75.8,  6.2, gentext("PLAYER 1"), scale = 0.4)
-    brd.logo(75.8, 46.9, gentext("PLAYER 2"), scale = 0.4)
+        brd.logo(75.8,  6.2, gentext("PLAYER 1"), scale = 0.4)
+        brd.logo(75.8, 46.9, gentext("PLAYER 2"), scale = 0.4)
 
-    brd.logo(76, 53.3 / 2 - 12, gentext("1").transpose(Image.ROTATE_90), scale = 1.0)
-    brd.logo(76, 53.3 / 2 + 12, gentext("2").transpose(Image.ROTATE_90), scale = 1.0)
+        brd.logo(76, 53.3 / 2 - 12, gentext("1").transpose(Image.ROTATE_90), scale = 1.0)
+        brd.logo(76, 53.3 / 2 + 12, gentext("2").transpose(Image.ROTATE_90), scale = 1.0)
 
-    brd.logo(75.8, 53.3 / 2, Image.open("img/oshw-logo-outline.png").transpose(Image.ROTATE_90), scale = 0.7)
+        brd.logo(75.8, 53.3 / 2, Image.open("img/oshw-logo-outline.png").transpose(Image.ROTATE_90), scale = 0.7)
 
-    for i,s in enumerate(["(C) 2020", "EXCAMERA LABS", str(__VERSION__)]):
-        brd.annotate(57.5, 8.5 - 1.5 * i, s)
+        for i,s in enumerate(["(C) 2020", "EXCAMERA LABS", str(__VERSION__)]):
+            brd.annotate(57.5, 8.5 - 1.5 * i, s)
 
     if 1:
         brd.fill_any("GTL", "VCC")

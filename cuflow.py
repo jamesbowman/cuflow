@@ -688,21 +688,36 @@ class Board:
                 mask = mask.difference(hlist)
         return mask
 
+    def substrate(self):
+        substrate = Layer(None)
+        gml = self.layers['GML'].lines
+        mask = sg.Polygon(gml[-1], gml[:-1])
+        for d,xys in self.holes.items():
+            if d > 0.3:
+                hlist = so.unary_union([sg.Point(xy).buffer(d / 2) for xy in xys])
+                mask = mask.difference(hlist)
+        substrate.add(mask)
+        return substrate
+
+    def drc(self):
+        mask = self.substrate().preview()
+        for l in ("GTL", "GBL"):
+            lg = self.layers[l].preview()
+            if not mask.contains(lg):
+                print("Layer", l, "boundary error")
+                # self.layers["GTO"].add(lg.difference(mask).buffer(.1))
+
     def save(self, basename):
+        self.drc()
+        self.check()
         for (id, l) in self.layers.items():
             with open(basename + "." + id, "wt") as f:
                 l.save(f)
         with open(basename + ".TXT", "wt") as f:
             excellon(f, self.holes)
 
-        substrate = Layer(None)
-        gml = self.layers['GML'].lines
-        mask = sg.Polygon(gml[-1], gml[:-1])
-        for d,xys in self.holes.items():
-            if d > 0.2:
-                hlist = so.unary_union([sg.Point(xy).buffer(d / 2) for xy in xys])
-                mask = mask.difference(hlist)
-        substrate.add(mask)
+        substrate = self.substrate()
+        mask = substrate.preview()
         with open(basename + ".sub.pov", "wt") as f:
             substrate.povray(f, "prism { linear_sweep linear_spline 0 1")
         with open(basename + ".gto.pov", "wt") as f:
@@ -789,13 +804,18 @@ class Board:
         self.layers['GTO'].add(g)
 
     def check(self):
+        def npoly(g):
+            if isinstance(g, sg.Polygon):
+                return 1
+            else:
+                return len(g)
         g = self.layers['GTL'].preview()
         def clearance(g):
             p0 = micron(0)
             p1 = micron(256)
             while (p1 - p0) > micron(0.25):
                 p = (p0 + p1) / 2
-                if len(g) == len(g.buffer(p)):
+                if npoly(g) == npoly(g.buffer(p)):
                     p0 = p
                 else:
                     p1 = p
@@ -808,6 +828,7 @@ class Board:
         def h2pt(d, xys):
             return so.unary_union([sg.Point(xy).buffer(d / 2) for xy in xys])
         ghole = so.unary_union([h2pt(d, xys) for (d, xys) in self.holes.items()])
+        return
         hot_vcc = ghole.intersection(self.layers['GL3'].powered)
         hot_gnd = ghole.intersection(self.layers['GL2'].powered)
 
@@ -1293,9 +1314,9 @@ class M74LVC245(SOT764):
         self.s("DIR").setname("VCC").w("o f 0.5").wire()
 
         gin = [self.s(nm) for nm in ('A6', 'A5', 'A4', 'A3', 'A2', 'A1', 'A0')]
-        [s.forward(0.2 + 0.6 * i).w("l 45 f .2 .").w("r 45 f .2").wire("GBL") for (i, s) in enumerate(gin)]
+        [s.forward(0.2 + 0.8 * i).w("l 45 f .2 .").w("f .2").wire("GBL") for (i, s) in enumerate(gin)]
         extend2(gin)
-        ins = self.board.enriver90(gin[::-1], -90).wire()
+        ins = self.board.enriver90(gin[::-1], -90).w("r 45").wire()
 
         # self.s("B7").w("l 90 f 1.56").wire()
         gout = [self.s(nm) for nm in ('B6', 'B5', 'B4', 'B3', 'B2', 'B1', 'B0')]
@@ -1871,7 +1892,7 @@ class WiiPlug(Part):
 
     def escape(self):
         self.pads[0].setname("SCL").w("o f 2 .").setlayer("GBL")
-        self.pads[1].setname("GND").w("o f 3.4 l 45 f 3 -")
+        self.pads[1].setname("GND").w("o f 1 l 45 f 4 r 45 -")
         self.pads[2].setname("VCC").w("o f 0.2 r 45 f 0.6 +").setlayer("GTL").w("f 1").wire()
         self.pads[3].setname("DET").w("o f 2").wire()
         self.pads[4].setname("SDA").w("o f 2").wire()
