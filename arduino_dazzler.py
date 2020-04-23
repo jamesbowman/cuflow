@@ -144,6 +144,14 @@ if __name__ == "__main__":
     for nm in ("GND", "GND1", "GND2"):
         daz.s(nm).inside().forward(2).wire(width = 0.5).w("-")
 
+    jtag = [daz.s(nm) for nm in ('TDI', 'TDO', 'TCK', 'TMS')]
+    for i,t in enumerate(jtag):
+        t.inside().forward(8 + 2.54 * i).wire().via().setlayer('GBL').right(90)
+    for t in jtag:
+        t.forward(t.xy[0] - 2.5).wire()
+        t.rect(1.27, 2.54)
+        t.pad()
+
     daz_i2cbus = daz.escapesM(["8", "9", "10", "11", "12", "13"][::-1], 90)
     daz_i2cbus.meet(wii)
 
