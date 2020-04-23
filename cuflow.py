@@ -1815,9 +1815,6 @@ class Castellation(Part):
             dc.board.layers['GTO'].add(tf(x, y, s))
 
         cnt = self.board.counters
-        for p in self.pads:
-            cnt['port'] += 1
-            p.setname((self.id, "P" + str(cnt['port'])))
 
         def group(pi, a):
             if a < 0:
@@ -1840,6 +1837,11 @@ class Castellation(Part):
         dc = self.pads[gnd]
         label(dc, "GND")
         self.sidevia(dc, "-")
+
+        for p in self.pads:
+            if p != self.pads[gnd]:
+                cnt['port'] += 1
+                p.setname((self.id, "P" + str(cnt['port'])))
 
         a = group(self.pads[:gnd], -90)
         b = group(self.pads[gnd + 1:], 90)
