@@ -99,7 +99,7 @@ if __name__ == "__main__":
     (bt815_qspi, bt815_main) = u1.escape()
 
     dc.w("f 9.7 l 90 f 3.0 r 90")
-    u2 = cu.W25Q16J(dc)
+    u2 = cu.W25Q64J(dc)
     fl1_qspi = u2.escape()
 
     bt815_qspi.left(45)
@@ -120,7 +120,7 @@ if __name__ == "__main__":
     p4 = cu.Castellation(brd.DC((8, 0)).right(90), 4).escape1()
     v5 = cu.Castellation(brd.DC((30, 0)).right(90), 3).escape2()
 
-    p_fl_f = cu.W25Q16J(brd.DC((35, 23)).left(45))
+    p_fl_f = cu.W25Q64J(brd.DC((35, 23)).left(45))
     fl2_qspi = p_fl_f.escape1()
 
     def ldo(p):
@@ -131,13 +131,17 @@ if __name__ == "__main__":
         pa = cu.C0603(p, val = '22uF', source = {'LCSC': 'C159801'}).pads
         pa[0].w("l 90 f 3").wire(width = 0.4)
         pa[1].w("r 90 f 3").wire(width = 0.4)
-        return r.escape()
+        return (r, r.escape())
 
-    (t, _) = ldo(brd.DC((12, 6)).right(90))
+    (ldo12, (t, _)) = ldo(brd.DC((12, 6)).right(90))
     t.outside().fan(1.0, 'GL3')
+    ldo12.mfr = 'LM1117S-1.2'
+    ldo12.source = {'LCSC': 'C126025'}
 
     p = brd.DC((25, 6)).right(90)
-    (_, vcc) = ldo(p)
+    (ldo33, (_, vcc)) = ldo(p)
+    ldo33.mfr = 'ZLDO1117QG33TA'
+    ldo33.source = {'LCSC': 'C326523'}
 
     vcc.fan(1.5, 'GL3')
 
@@ -222,3 +226,14 @@ if __name__ == "__main__":
     brd.save("dazzler")
     svgout.write(brd, "dazzler.svg")
     # lx9.dump_ucf("dazzler")
+
+    for f,pp in brd.parts.items():
+        print(f)
+        for p in pp:
+            if p.inBOM:
+                if len(p.source) > 0:
+                    vendor = p.source.keys()[0]
+                    vendor_c = p.source[vendor]
+                else:
+                    (vendor, vendor_c) = ('', '')
+                print("    %3s  %20s %20s %10s  %10s %20s" % (p.id, p.mfr, p.footprint, p.val, vendor, vendor_c))

@@ -708,8 +708,8 @@ class Board:
                 # self.layers["GTO"].add(lg.difference(mask).buffer(.1))
 
     def save(self, basename):
-        self.drc()
-        self.check()
+        # self.drc()
+        # self.check()
         for (id, l) in self.layers.items():
             with open(basename + "." + id, "wt") as f:
                 l.save(f)
@@ -850,6 +850,11 @@ def extend2(traces):
     extend(by_y[0], traces)
     
 class Part:
+    mfr = ''
+    footprint = ''
+    val = ''
+    inBOM = True
+    source = {}
     def __init__(self, dc, val = None, source = {}):
         self.id = dc.board.assign(self)
         self.val = val
@@ -938,6 +943,7 @@ class Discrete2(Part):
 
 class C0402(Discrete2):
     family = "C"
+    footprint = "0402"
     def place(self, dc):
         # Pads on either side
         for d in (-90, 90):
@@ -965,6 +971,7 @@ class C0402(Discrete2):
 
 class C0603(Discrete2):
     family = "C"
+    footprint = "0603"
     def place(self, dc, source = None):
         # Pads on either side
         for d in (-90, 90):
@@ -993,6 +1000,7 @@ class R0402(C0402):
 
 class QFN64(Part):
     family = "U"
+    footprint = "QFN64"
     def place(self, dc):
         # Ground pad
         g = 7.15 / 3
@@ -1092,6 +1100,8 @@ BT815pins = [
 ]
 
 class BT815(QFN64):
+    source = {'BridgeTek': 'BT815Q'}
+    mfr = 'BT815Q'
     def escape(self):
         brd = self.board
 
@@ -1201,6 +1211,7 @@ class BT815(QFN64):
 
 class SOIC(Part):
     family = "U"
+    footprint = "SOIC-8"
     def place(self, dc):
 
         self.chamfered(dc, self.A, self.B)
@@ -1302,6 +1313,7 @@ class SOT764(Part):
 
 class M74LVC245(SOT764):
     source = {'LCSC': 'C294612'}
+    mfr = 'W25Q64JVSSIQ'
     def escape(self):
         names = [
             "DIR", "A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "GND",
@@ -1325,7 +1337,9 @@ class M74LVC245(SOT764):
 
         return (ins, outs)
 
-class W25Q16J(SOIC8):
+class W25Q64J(SOIC8):
+    source = {'LCSC': 'C179171'}
+    mfr = 'W25Q64JVSSIQ'
     def escape(self):
         nms = "CS MISO IO2 GND MOSI SCK IO3 VCC".split()
         sigs = {nm: p for (nm, p) in zip(nms, self.pads)}
@@ -1396,6 +1410,7 @@ class W25Q16J(SOIC8):
 
 class HDMI(Part):
     family = "J"
+    mfr = 'HDMI-001'
     source = {'LCSC': 'C138388'}
     def place(self, dc):
         self.chamfered(dc, 15, 11.1)
@@ -1460,6 +1475,7 @@ class HDMI(Part):
 
 class SOT223(Part):
     family = "U"
+    footprint = "SOT223"
     def place(self, dc):
         self.chamfered(dc, 6.30, 3.30)
         dc.push()
@@ -1486,6 +1502,7 @@ class SOT223(Part):
 
 class FTG256(Part):
     family = "U"
+    footprint = "FTG256"
     def place(self, dc):
         self.chamfered(dc, 17, 17)
         dc.left(90)
@@ -1508,6 +1525,8 @@ class FTG256(Part):
         return
 
 class XC6LX9(FTG256):
+    mfr = 'XC6SLX9-2FTG256C'
+    source = {'WIN SOURCE': 'XC6SLX9-2FTG256C'}
     def collect(self, pp):
         p0 = pp[0]
         return [p for (_,p) in sorted([(p.seek(p0)[0], p) for p in pp])]
@@ -1768,6 +1787,7 @@ class XC6LX9(FTG256):
 
 class Castellation(Part):
     family = "J"
+    inBOM = False
     def place(self, dc):
         dc.w("l 90 f 0.4 r 90")
         def cp():
