@@ -4,7 +4,7 @@ import math
 import cuflow as cu
 import svgout
 
-__VERSION__ = "0.1.0"
+__VERSION__ = "0.2.0"
 
 class Dazzler(cu.Part):
     family = "M"
@@ -113,6 +113,8 @@ if __name__ == "__main__":
     (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_p23, fpga_fl, fpga_jtag, fpga_v12) = lx9.escape()
 
     j1 = cu.HDMI(brd.DC((45,33.5)).right(270))
+    print('j1', j1.source)
+    assert j1.source
     (hdmi_lvds, hdmi_detect) = j1.escape()
 
     (p0, p1) = cu.Castellation(brd.DC((34, 42)).left(90), 15).escape()
@@ -232,7 +234,7 @@ if __name__ == "__main__":
         for p in pp:
             if p.inBOM:
                 if len(p.source) > 0:
-                    vendor = p.source.keys()[0]
+                    vendor = list(p.source.keys())[0]
                     vendor_c = p.source[vendor]
                 else:
                     (vendor, vendor_c) = ('', '')

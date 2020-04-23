@@ -855,14 +855,16 @@ class Part:
     val = ''
     inBOM = True
     source = {}
-    def __init__(self, dc, val = None, source = {}):
+    def __init__(self, dc, val = None, source = None):
         self.id = dc.board.assign(self)
-        self.val = val
+        if val is not None:
+            self.val = val
         self.pads  = []
         self.board = dc.board
         self.center = dc.copy()
         self.place(dc)
-        self.source = source
+        if source is not None:
+            self.source = source
 
     def label(self, dc):
         (x, y) = dc.xy
