@@ -1,6 +1,7 @@
 from collections import defaultdict
 import re
 import math
+import csv
 
 from PIL import Image
 import shapely.geometry as sg
@@ -17,6 +18,20 @@ def mil(x):     return inches(x / 1000)
 def micron(x):  return x / 1000
 
 def DEGREES(r): return 180 * r / math.pi
+
+def pretty_parts(nms):
+    f = nms[0][0]
+    nn = [int(nm[1:]) for nm in nms]
+    ni = []
+    while nn:
+        seq = [i for (i,j) in zip(nn, range(nn[0], 9999)) if (i == j)]
+        if len(seq) > 2:
+            ni.append("{0}{1}-{2}".format(f, nn[0], nn[len(seq) - 1]))
+            nn = nn[len(seq):]
+        else:
+            ni.append("{0}{1}".format(f, nn[0]))
+            nn = nn[1:]
+    return ",".join(ni)
 
 class Layer:
     def __init__(self, desc):
@@ -724,6 +739,50 @@ class Board:
             self.layers['GTO'].povray(f, mask = mask)
         with open(basename + ".gtl.pov", "wt") as f:
             self.layers['GTL'].povray(f, mask = mask)
+
+        self.bom(basename)
+        self.pnp(basename)
+
+    def pnp(self, fn):
+        with open(fn + "-pnp.csv", "wt") as f:
+            cs = csv.writer(f)
+            cs.writerow(["Designator", "Center(X)", "Center(Y)", "Rotatation", "Layer", "Note"])
+            def flt(x): return "{:.3f}".format(x)
+            for f,pp in self.parts.items():
+                for p in pp:
+                    if p.inBOM:
+                        c = p.center
+                        (x, y) = c.xy
+                        note = p.footprint + "-" + p.mfr + p.val
+                        cs.writerow([p.id, flt(x), flt(y), str(int(c.dir)), "Top", note])
+
+    def bom(self, fn):
+        parts = defaultdict(list)
+        rank = "UJRC"
+        for f,pp in self.parts.items():
+            for p in pp:
+                if p.inBOM:
+                    if len(p.source) > 0:
+                        vendor = list(p.source.keys())[0]
+                        vendor_c = p.source[vendor]
+                    else:
+                        (vendor, vendor_c) = ('', '')
+                    print(f, p)
+                    attr = (rank.index(f), p.mfr + p.val, p.footprint, vendor, vendor_c)
+                    parts[attr].append(p.id)
+
+        with open(fn + "-bom.csv", "wt") as f:
+            c = csv.writer(f)
+            c.writerow(['parts', 'qty', 'device', 'package', 'vendor', 'code'])
+            for attr in sorted(parts):
+                (f, mfr, footprint, vendor, vendor_c) = attr
+                pp = parts[attr]
+                c.writerow([pretty_parts(pp),
+                    str(len(pp)),
+                    mfr,
+                    footprint,
+                    vendor,
+                    vendor_c])
 
     def enriver(self, ibank, a):
         if a > 0:

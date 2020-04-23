@@ -126,9 +126,9 @@ if __name__ == "__main__":
     def ldo(p):
         r = cu.SOT223(p)
         p.goxy(-2.3/2, -5.2).w("r 180")
-        cu.C0603(p, val = '4.7uF', source = {'LCSC' : 'C19666'})
+        cu.C0603(p, val = '4.7 uF', source = {'LCSC' : 'C19666'})
         p.forward(2)
-        pa = cu.C0603(p, val = '22uF', source = {'LCSC': 'C159801'}).pads
+        pa = cu.C0603(p, val = '22 uF', source = {'LCSC': 'C159801'}).pads
         pa[0].w("l 90 f 3").wire(width = 0.4)
         pa[1].w("r 90 f 3").wire(width = 0.4)
         return (r, r.escape())
@@ -226,14 +226,3 @@ if __name__ == "__main__":
     brd.save("dazzler")
     svgout.write(brd, "dazzler.svg")
     lx9.dump_ucf("dazzler")
-
-    for f,pp in brd.parts.items():
-        print(f)
-        for p in pp:
-            if p.inBOM:
-                if len(p.source) > 0:
-                    vendor = list(p.source.keys())[0]
-                    vendor_c = p.source[vendor]
-                else:
-                    (vendor, vendor_c) = ('', '')
-                print("    %3s  %20s %20s %10s  %10s %20s" % (p.id, p.mfr, p.footprint, p.val, vendor, vendor_c))
