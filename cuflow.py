@@ -168,6 +168,7 @@ class Draw(Turtle):
         self.xy = xy
         self.dir = dir
         self.stack = []
+        self.part = None
         self.name = None
         self.newpath()
         self.width = board.trace
@@ -207,6 +208,7 @@ class Draw(Turtle):
         r.h = self.h
         r.layer = self.layer
         r.name = self.name
+        r.part = self.part
         return r
 
     def forward(self, d):
@@ -556,7 +558,7 @@ class River(Turtle):
         d = self.tt[0].distance(other.tt[-1])
         self.forward(d)
         self.wire()
-        self.board.nets += [(a.name, b.name) for (a, b) in zip(self.tt, other.tt[::-1])]
+        self.board.nets += [((a.part, a.name), (b.part, b.name)) for (a, b) in zip(self.tt, other.tt[::-1])]
         """
         for (a, b) in zip(self.tt, other.tt[::-1]):
             print(a.name, b.name, a.length + b.length)
@@ -585,7 +587,7 @@ class River(Turtle):
         self.wire()
 
         other.left(90 - dir_d).wire()
-        self.board.nets += [(a.name, b.name) for (a, b) in zip(self.tt, other.tt[::-1])]
+        self.board.nets += [((a.part, a.name), (b.part, b.name)) for (a, b) in zip(self.tt, other.tt[::-1])]
 
     def split(self, n):
         a = River(self.board, self.tt[:n])
@@ -970,7 +972,9 @@ class Part:
 
     def pad(self, dc):
         dc.pad()
-        self.pads.append(dc.copy())
+        p = dc.copy()
+        p.part = self.id
+        self.pads.append(p)
 
     def rpad(self, dc, w, h):
         dc.right(90)
@@ -983,7 +987,9 @@ class Part:
         g = sg.Point(dc.xy).buffer(d / 2)
         for n in ('GTL', 'GTS', 'GTP'):
             dc.board.layers[n].add(g)
-        self.pads.append(dc.copy())
+        p = dc.copy()
+        p.part = self.id
+        self.pads.append(p)
 
     def train(self, dc, n, op, step):
         for i in range(n):
@@ -1122,10 +1128,10 @@ BT815pins = [
     'AUDIO',
     '3V3',
     '3V3',
-    '',
-    '',
-    '',
-    '',
+    'CTP_RST',
+    'CTP_INT',
+    'CTP_SCL',
+    'CTP_SDA',
     'GND',
     '',
     'DE',
@@ -1168,7 +1174,7 @@ class BT815(QFN64):
 
         assert len(BT815pins) == len(self.pads)
         for p,n in zip(self.pads, BT815pins):
-            p.setname((self.id, n))
+            p.setname(n)
 
         dc = self.pads[23]
         dc.right(180)
@@ -1222,12 +1228,22 @@ class BT815(QFN64):
 
         power = {'3V3', 'GND', '', '+1V2'}
         spim = {'M_SCK', 'M_CS', 'M_MOSI', 'M_MISO', 'M_IO2', 'M_IO3'}
+        ctp = ['CTP_RST', 'CTP_INT', 'CTP_SCL', 'CTP_SDA']
 
-        ext = [i for i,sig in enumerate(BT815pins) if sig not in (power | spim)]
+        sctp = [self.s(nm) for nm in ctp]
+        for i,s in enumerate(sctp):
+            s.w("o f 0.4").forward(0.5 * (i & 1)).wire()
+            s.via().setlayer('GBL').w("f 0.7")
+        extend2(sctp)
+        rctp = brd.enriver90(sctp, -90)
+        rctp.wire()
+
+        ext = [i for i,sig in enumerate(BT815pins) if sig not in (power | spim | set(ctp))]
         spi = [i for i,sig in enumerate(BT815pins) if sig in spim]
         for i in ext:
             self.pads[i].forward(1)
             self.pads[i].wire()
+        self.s("AUDIO").forward(.5)
         [self.pads[i].outside() for i in spi]
 
         def bank(n, pool):
@@ -1241,7 +1257,7 @@ class BT815(QFN64):
         rv0.forward(1)
         rv0.wire()
 
-        rv1.w("f .2 l 45 f 2.5 l 45 f 3 l 45 f .53 r 45 f 3")
+        rv1.w("f .2 l 45 f 3.5 l 45 f 3 l 45 f .53 r 45 f 3")
         rv1.wire()
 
         rv2 = rv1.join(rv2, 1)
@@ -1266,7 +1282,7 @@ class BT815(QFN64):
         GBL.add(GBL.paint(dc.poly(), 'GBL', self.board.via_space))
         dc.layer = 'GBL'
 
-        return (rvspi, rv230)
+        return (rvspi, rv230, rctp)
 
 # IPC-SM-782A section 9.1: SOIC
 
@@ -1406,7 +1422,7 @@ class W25Q64J(SOIC8):
         sigs = {nm: p for (nm, p) in zip(nms, self.pads)}
 
         for (nm, p) in zip(nms, self.pads):
-            p.setname((self.id, nm))
+            p.setname(nm)
         
         sigs['SCK' ].w("f 1.1 f .1")
         sigs['CS'  ].w("i f 1.5 r 90 f 1.27 f 1.27 f .63 l 90 f .1")
@@ -1436,7 +1452,7 @@ class W25Q64J(SOIC8):
         nms = "CS MISO IO2 GND MOSI SCK IO3 VCC".split()
         sigs = {nm: p for (nm, p) in zip(nms, self.pads)}
         for (nm, p) in zip(nms, self.pads):
-            p.setname((self.id, nm))
+            p.setname(nm)
 
         sigs['GND' ].w("o -")
         sigs['VCC' ].w("o +")
@@ -1524,8 +1540,8 @@ class HDMI(Part):
         gnd = (1, 4, 7, 10, 13, 16)
         for g,p in zip(gnd, ["TMDS2", "TMDS1", "TMDS0", "TMDS_CLK"]):
             self.pads[g].setname("GND")
-            self.pads[g - 1].setname((self.id, p + "_P"))
-            self.pads[g + 1].setname((self.id, p + "_N"))
+            self.pads[g - 1].setname(p + "_P")
+            self.pads[g + 1].setname(p + "_N")
 
         for g in gnd:
             self.pads[g].w("i -")
@@ -1604,7 +1620,7 @@ class XC6LX9(FTG256):
             self.signals[pad] = signal
 
         for (pn, s) in self.signals.items():
-            padname[pn].setname((self.id, s))
+            padname[pn].setname(s)
 
         powernames = (
             'GND', 'VCCO_0', 'VCCO_1', 'VCCO_2', 'VCCO_3', 'VCCAUX', 'VCCINT',
@@ -1827,6 +1843,7 @@ class XC6LX9(FTG256):
     def dump_ucf(self, basename):
         with open(basename + ".ucf", "wt") as ucf:
             nets = self.board.nets
+            [print(n) for n in nets]
             def netpair(d):
                 if self.id in d:
                     mine = d[self.id]
@@ -1854,7 +1871,9 @@ class Castellation(Part):
         def cp():
             dc.right(90)
             dc.rect(1, 1)
-            self.pads.append(dc.copy())
+            p = dc.copy()
+            p.part = self.id
+            self.pads.append(p)
             dc.contact()
             dc.push()
             dc.forward(0.375)
@@ -1881,7 +1900,7 @@ class Castellation(Part):
             else:
                 pp = pi
             for i,p in enumerate(pp):
-                label(p, p.name[1][1:])
+                label(p, p.name[1:])
             for i,p in enumerate(pp):
                 p.w("l 90 f .450 l 90 f .450 r 45" + (" f .12 l 9" * 10) + " r 45")
                 p.forward((1 + i) * c)
@@ -1900,7 +1919,7 @@ class Castellation(Part):
         for p in self.pads:
             if p != self.pads[gnd]:
                 cnt['port'] += 1
-                p.setname((self.id, "P" + str(cnt['port'])))
+                p.setname("P" + str(cnt['port']))
 
         a = group(self.pads[:gnd], -90)
         b = group(self.pads[gnd + 1:], 90)
@@ -1917,12 +1936,12 @@ class Castellation(Part):
     def escape1(self):
         pp = self.pads[::-1]
         names = "TDI TDO TCK TMS".split()
-        [t.setname((self.id, n)) for t,n in zip(pp, names)]
+        [t.setname(n) for t,n in zip(pp, names)]
 
         for t in pp:
             dc = t.copy().w("i f 0.6")
             (x, y) = dc.xy
-            dc.board.layers['GTO'].add(hershey.ctext(x, y, t.name[1]))
+            dc.board.layers['GTO'].add(hershey.ctext(x, y, t.name))
             t.w("i f 1").wire('GBL')
 
         return self.board.enriver(pp, 45).left(45).wire()
@@ -1940,6 +1959,19 @@ class Castellation(Part):
         pp[0].setwidth(0.6).w("f -0.3 r 90 f 0.5 + f 0.5 +")
         self.sidevia(pp[1], "-")
         return pp[2]
+
+    def escape3(self):
+        pp = self.pads[::-1]
+        names = "SDA SCL INT RST".split()
+        [t.setname(n) for t,n in zip(pp, names)]
+
+        for t in pp:
+            dc = t.copy().w("i f 0.6")
+            (x, y) = dc.xy
+            dc.board.layers['GTO'].add(hershey.ctext(x, y, t.name))
+            t.w("i f 1").wire('GBL')
+
+        return self.board.enriver(pp, 45).left(45).wire()
 
 class WiiPlug(Part):
     family = "J"

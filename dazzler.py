@@ -96,15 +96,16 @@ if __name__ == "__main__":
     dc.right(270)
     u1 = cu.BT815(dc)
     dc.left(225)
-    (bt815_qspi, bt815_main) = u1.escape()
-
-    dc.w("f 9.7 l 90 f 3.0 r 90")
+    (bt815_qspi, bt815_main, bt815_rctp) = u1.escape()
+    dc.w("f 11.0 l 90 f 4.0 r 90")
     u2 = cu.W25Q64J(dc)
     fl1_qspi = u2.escape()
 
     bt815_qspi.left(45)
     bt815_qspi.wire()
     bt815_qspi.meet(fl1_qspi)
+
+    bt815_rctp.w("f 2.7 l 90 f 14 l 45 f 9 l 45 f 3").wire()
     dc.pop()
     # dc.w("l 90 f 19.3 r 90 f 13.94 l 90")
     dc.w("l 45 f 24.3 l 90 f 2.95 r 45")
@@ -119,6 +120,9 @@ if __name__ == "__main__":
     (p2, p3) = cu.Castellation(brd.DC((0, 36)).left(180), 16).escape()
     p4 = cu.Castellation(brd.DC((8, 0)).right(90), 4).escape1()
     v5 = cu.Castellation(brd.DC((30, 0)).right(90), 3).escape2()
+    ctp = cu.Castellation(brd.DC((18, 0)).right(90), 4).escape3()
+
+    ctp.meet(bt815_rctp)
 
     p_fl_f = cu.W25Q64J(brd.DC((35, 23)).left(45))
     fl2_qspi = p_fl_f.escape1()
@@ -211,7 +215,7 @@ if __name__ == "__main__":
     brd.fill()
     brd.check()
 
-    if 1:
+    if 0:
         im = Image.open("img/dazzler-logo.png").transpose(Image.ROTATE_270)
         brd.logo(6.9, 28.8, im)
         im = Image.open("img/gd3x-logo.png")
