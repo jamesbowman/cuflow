@@ -1274,7 +1274,7 @@ class BT815(QFN64):
         # rv4.w("f 0.7 l 90 f 2.3 l 45 f 1 r 45")
         rv4.w("f 1 l 45")
         rv5 = brd.enriver(bank(1, spi), -45)
-        rvspi = rv4.join(rv5).w("r 45 f 2 l 90 f 2 l 45 f 1 r 45")
+        rvspi = rv4.join(rv5)
 
         GBL = self.board.layers['GBL']
         dc = self.center.copy()
@@ -1307,7 +1307,7 @@ class SOIC8(SOIC):
 
     A = 4.0
     B = 5.0
-    C = 5.20
+    C = 5.90
     D = 3.81
     G = 3.0
     Z = 7.4
@@ -1424,14 +1424,14 @@ class W25Q64J(SOIC8):
         for (nm, p) in zip(nms, self.pads):
             p.setname(nm)
         
-        sigs['SCK' ].w("f 1.1 f .1")
+        sigs['SCK' ].w("r 90 f 0.3 l 90 f 1.1")
         sigs['CS'  ].w("i f 1.5 r 90 f 1.27 f 1.27 f .63 l 90 f .1")
         sigs['MISO'].w("i f 1.0 r 90 f 1.27 f 1.27 f .63 l 90 f .1")
         sigs['MOSI'].w("o f .1")
         sigs['IO2' ].w("i f 0.5 r 90 f 2.20 l 90 f .1")
-        sigs['IO3' ].w("i f 0.5 r 90 f 1.27 f .63 l 90 f 5.5 l 90 f 5.65 l 90 f .1")
+        sigs['IO3' ].w("i f 0.5 r 90 f 1.27 f .63 l 90 f 6.5 l 90 f 5.65 l 90 f .1")
         sigs['GND' ].w("o -")
-        sigs['VCC' ].w("o +")
+        sigs['VCC' ].w("f -.4 l 90 f 0.5 +")
 
         proper = (
             sigs['IO3' ],
@@ -1467,7 +1467,7 @@ class W25Q64J(SOIC8):
         dv = b.via_space + b.via / 2
         for s in ls + rs:
             sigs[s].forward(dv)
-        width = 3.0 - 2 * dv
+        width = 3.7 - 2 * dv
 
         ord = "MOSI SCK MISO IO2 IO3 CS".split()
         gap = width / (len(ord) - 1)
