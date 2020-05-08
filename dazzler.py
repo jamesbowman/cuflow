@@ -101,7 +101,7 @@ if __name__ == "__main__":
     u2 = cu.W25Q64J(dc)
     fl1_qspi = u2.escape()
 
-    bt815_qspi.left(45)
+    bt815_qspi.w("r 45 f 2 l 90 f 2.5")
     bt815_qspi.wire()
     bt815_qspi.meet(fl1_qspi)
 
