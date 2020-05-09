@@ -76,7 +76,7 @@ class Layer:
                 y0 = min([y for (x, y) in po.exterior.coords])
                 y1 = max([y for (x, y) in po.exterior.coords])
                 xm = (x0 + x1) / 2
-                eps = 0.005
+                eps = 0.001
                 renderpoly(g, po.intersection(sg.box(x0, y0, xm + eps, y1)))
                 renderpoly(g, po.intersection(sg.box(xm - eps, y0, x1, y1)))
 
@@ -1735,7 +1735,10 @@ class XC6LX9(FTG256):
 
         plan = (
             (0, ".1$",  "l 90 " + s1),
+            (0, "R2",   "l 90 " + "r 45  f {0} l 45 f 1.117".format(d1)),
             (0, ".2$",  "l 90 " + s2),
+            (0, "L3$",  "l 90 " + "l 45 f {0} r 45 f 2.117".format(d1)),
+            (0, "M3$",  "l 90 " + "r 45 f {0} l 45 f 2.117".format(d1)),
             (0, ".3$",  "l 90 " + s3),
             (1, "T",    "r 180 " + s1),
             (1, "R",    "r 180 " + s2),
@@ -1770,7 +1773,7 @@ class XC6LX9(FTG256):
         oc = oc[x:] + oc[:x]
         rv0 = board.enriver90(oc[0][-15:], -90)
         rv1 = board.enriver90(oc[1], -90)
-        rem = 35 - len(rv1.tt)
+        rem = 37 - len(rv1.tt)
         rv2 = board.enriver90(oc[2][:rem], 90)
         p0 = board.enriverS(oc[3][:7], -45)
         p1 = board.enriverS(oc[3][-7:], 45)
