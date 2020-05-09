@@ -76,7 +76,7 @@ class Layer:
                 y0 = min([y for (x, y) in po.exterior.coords])
                 y1 = max([y for (x, y) in po.exterior.coords])
                 xm = (x0 + x1) / 2
-                eps = 0.001
+                eps = 0.005
                 renderpoly(g, po.intersection(sg.box(x0, y0, xm + eps, y1)))
                 renderpoly(g, po.intersection(sg.box(xm - eps, y0, x1, y1)))
 
@@ -769,7 +769,6 @@ class Board:
                         vendor_c = p.source[vendor]
                     else:
                         (vendor, vendor_c) = ('', '')
-                    print(f, p)
                     attr = (rank.index(f), p.mfr + p.val, p.footprint, vendor, vendor_c)
                     parts[attr].append(p.id)
 
@@ -1106,8 +1105,8 @@ BT815pins = [
     'E_MISO',
     'E_MOSI',
     'E_CS',
-    '',             # IO2
-    '',             # IO3
+    'IO2',
+    'IO3',
     '3V3',
     '',
     'E_INT',
@@ -1846,7 +1845,6 @@ class XC6LX9(FTG256):
     def dump_ucf(self, basename):
         with open(basename + ".ucf", "wt") as ucf:
             nets = self.board.nets
-            [print(n) for n in nets]
             def netpair(d):
                 if self.id in d:
                     mine = d[self.id]
