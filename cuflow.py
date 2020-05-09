@@ -662,7 +662,7 @@ class Board:
         if outer is not None:
             g = sg.LinearRing(sg.Point(xy).buffer(outer / 2).exterior).buffer(self.silk / 2)
             self.layers['GTO'].add(g)
-            self.layers['GTP'].add(sg.Point(xy).buffer(.2))
+            # self.layers['GTP'].add(sg.Point(xy).buffer(.2))
         self.keepouts.append(sg.Point(xy).buffer(inner / 2 + 0.5))
 
     def drill(self, xy, diam):
