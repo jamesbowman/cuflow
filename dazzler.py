@@ -200,7 +200,7 @@ if __name__ == "__main__":
     caps(brd.DC((27.6, 34.5)), 'GL2', 'GL3', 3)
     caps(brd.DC((11.0, 31.0)).left(90), 'GL2', 'GL3')
     caps(brd.DC((30.3, 20.0)).right(90), 'GL2', 'GL3')
-    caps(brd.DC((13.0, 14.7)).right(90), 'GL3', 'GL2')
+    caps(brd.DC((12.8, 14.7)).right(90), 'GL3', 'GL2')
     caps(brd.DC((18.8, 10.7)), 'GL2', 'GBL')
 
     caps(brd.DC((46.6, 8.2)), 'GBL', 'GL2', 2)
