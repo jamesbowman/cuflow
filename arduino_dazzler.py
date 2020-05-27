@@ -59,6 +59,7 @@ class LibraryPart(cu.Part):
                 p.n_agon(diameter / 2, n)
 
                 p.setname(nm)
+                p.part = self.id
                 self.pads.append(p)
                 p.contact()
 
@@ -171,7 +172,7 @@ if __name__ == "__main__":
     a_spio = shield.escape()
     shield.s("D12").w("r 180 f 17 l 90").goto(daz.s("22")).wire()
     shield.s("5V").w("f 1.6 r 90 f 7.6 l 90 f 2.4 l 45 f 41 r 45").goto(daz.s("5V")).wire(width = 0.5)
-    
+
     a_spio.w("f 7 l 90 f 10").meet(lvl_in)
 
     if 1:
@@ -197,4 +198,6 @@ if __name__ == "__main__":
         brd.fill_any("GBL", "GL2")
 
     brd.save("arduino_dazzler")
+    for n in brd.nets:
+        print(n)
     svgout.write(brd, "arduino_dazzler.svg")

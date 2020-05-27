@@ -7,3 +7,11 @@ It's a Python module that, given a description of a board, generates all the out
 The Gameduino 3X Dazzler was designed with CuFlow.
 
 ![Image of Dazzler PCB](images/dazzler-pcb.png)
+
+To generate the Dazzler board:
+
+    python dazzler.py
+
+To generate the Arduino-Dazzler interface board:
+
+    python arduino_dazzler.py
