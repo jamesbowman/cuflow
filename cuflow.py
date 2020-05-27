@@ -760,7 +760,7 @@ class Board:
 
     def bom(self, fn):
         parts = defaultdict(list)
-        rank = "UJRC"
+        rank = "UJRCM"
         for f,pp in self.parts.items():
             for p in pp:
                 if p.inBOM:
@@ -769,7 +769,6 @@ class Board:
                         vendor_c = p.source[vendor]
                     else:
                         (vendor, vendor_c) = ('', '')
-                    print(f, p)
                     attr = (rank.index(f), p.mfr + p.val, p.footprint, vendor, vendor_c)
                     parts[attr].append(p.id)
 
@@ -1986,7 +1985,9 @@ class WiiPlug(Part):
             self.board.layers[dc.layer].add(g, dc.name)
             mask = dc.layer.replace("L", "S")
             self.board.layers[mask].add(g, dc.name)
-            self.pads.append(dc.copy())
+            p = dc.copy()
+            self.pads.append(p)
+            p.part = self.id
             dc.left(90)
         dc.push()
         dc.w("l 90 f 2 r 180")
