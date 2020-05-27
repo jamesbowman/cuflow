@@ -662,7 +662,7 @@ class Board:
         if outer is not None:
             g = sg.LinearRing(sg.Point(xy).buffer(outer / 2).exterior).buffer(self.silk / 2)
             self.layers['GTO'].add(g)
-            self.layers['GTP'].add(sg.Point(xy).buffer(.2))
+            # self.layers['GTP'].add(sg.Point(xy).buffer(.2))
         self.keepouts.append(sg.Point(xy).buffer(inner / 2 + 0.5))
 
     def drill(self, xy, diam):
@@ -1105,8 +1105,8 @@ BT815pins = [
     'E_MISO',
     'E_MOSI',
     'E_CS',
-    '',             # IO2
-    '',             # IO3
+    'IO2',
+    'IO3',
     '3V3',
     '',
     'E_INT',
@@ -1734,7 +1734,10 @@ class XC6LX9(FTG256):
 
         plan = (
             (0, ".1$",  "l 90 " + s1),
+            (0, "R2",   "l 90 " + "r 45  f {0} l 45 f 1.117".format(d1)),
             (0, ".2$",  "l 90 " + s2),
+            (0, "L3$",  "l 90 " + "l 45 f {0} r 45 f 2.117".format(d1)),
+            (0, "M3$",  "l 90 " + "r 45 f {0} l 45 f 2.117".format(d1)),
             (0, ".3$",  "l 90 " + s3),
             (1, "T",    "r 180 " + s1),
             (1, "R",    "r 180 " + s2),
@@ -1769,7 +1772,7 @@ class XC6LX9(FTG256):
         oc = oc[x:] + oc[:x]
         rv0 = board.enriver90(oc[0][-15:], -90)
         rv1 = board.enriver90(oc[1], -90)
-        rem = 35 - len(rv1.tt)
+        rem = 37 - len(rv1.tt)
         rv2 = board.enriver90(oc[2][:rem], 90)
         p0 = board.enriverS(oc[3][:7], -45)
         p1 = board.enriverS(oc[3][-7:], 45)
@@ -1842,7 +1845,6 @@ class XC6LX9(FTG256):
     def dump_ucf(self, basename):
         with open(basename + ".ucf", "wt") as ucf:
             nets = self.board.nets
-            [print(n) for n in nets]
             def netpair(d):
                 if self.id in d:
                     mine = d[self.id]

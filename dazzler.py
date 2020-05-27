@@ -4,7 +4,7 @@ import math
 import cuflow as cu
 import svgout
 
-__VERSION__ = "0.2.0"
+__VERSION__ = "1.0.0"
 
 class Dazzler(cu.Part):
     family = "M"
@@ -200,14 +200,14 @@ if __name__ == "__main__":
     caps(brd.DC((27.6, 34.5)), 'GL2', 'GL3', 3)
     caps(brd.DC((11.0, 31.0)).left(90), 'GL2', 'GL3')
     caps(brd.DC((30.3, 20.0)).right(90), 'GL2', 'GL3')
-    caps(brd.DC((13.0, 14.7)).right(90), 'GL3', 'GL2')
-    caps(brd.DC((18.8, 11.0)), 'GL2', 'GBL')
+    caps(brd.DC((12.8, 14.7)).right(90), 'GL3', 'GL2')
+    caps(brd.DC((18.8, 10.7)), 'GL2', 'GBL')
 
     caps(brd.DC((46.6, 8.2)), 'GBL', 'GL2', 2)
     caps(brd.DC((43.7, 2.8)).left(90), 'GL2', 'GBL', 2)
-    caps(brd.DC((32.9, 4.2)).left(180), 'GBL', 'GL2')
+    caps(brd.DC((32.6, 3.9)).left(180), 'GBL', 'GL2')
 
-    caps(brd.DC((37.0, 1.0)), 'GL2', 'GL3', 3)
+    caps(brd.DC((37.0, 1.5)), 'GL2', 'GL3', 2)
     caps(brd.DC((47.7, 14.2)).right(90), 'GL2', 'GL3', 2)
 
     brd.outline()
@@ -215,7 +215,7 @@ if __name__ == "__main__":
     brd.fill()
     brd.check()
 
-    if 0:
+    if 1:
         im = Image.open("img/dazzler-logo.png").transpose(Image.ROTATE_270)
         brd.logo(6.9, 28.8, im)
         im = Image.open("img/gd3x-logo.png")
