@@ -30,3 +30,4 @@ Some notes on the theory and the practice:
  * [The Dazzler PCB](http://tinyletter.com/jamesbowman/letters/gameduino-dazzler-pcb-first-pictures)
  * [laser cut mockups](http://tinyletter.com/jamesbowman/letters/the-map-is-not-the-territory)
 
+![POVRay rendering of Dazzler PCB](images/dazzler-spin000.png)
