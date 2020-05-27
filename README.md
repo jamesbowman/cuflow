@@ -15,3 +15,5 @@ To generate the Dazzler board:
 To generate the Arduino-Dazzler interface board:
 
     python arduino_dazzler.py
+
+![POVRay rendering of Dazzler PCB](images/dazzler-spin000.png)
