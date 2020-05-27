@@ -31,3 +31,4 @@ Some notes on the theory and the practice:
  * [laser cut mockups](http://tinyletter.com/jamesbowman/letters/the-map-is-not-the-territory)
 
 ![POVRay rendering of Dazzler PCB](images/dazzler-spin000.png)
+![Actual Dazzler PCB](images/dazzler-proto.jpg)
