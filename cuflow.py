@@ -1762,7 +1762,6 @@ class XC6LX9(FTG256):
                         if p.preview().intersects(keepout):
                             p.pop()
                         else:
-                            p.wire()
                             outer[grp].append(p)
                             break
 
