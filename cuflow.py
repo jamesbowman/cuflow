@@ -1698,7 +1698,7 @@ class XC6LX9(FTG256):
                     'SUSPEND' : 'GL2',
 
                     'IO_L1N_M0_CMPMISO_2' : 'GL3',
-                    'PROGRAM_B_2' : 'GL3',
+                    'PROGRAM_B_2' : 'GBL',
 
                     'VCCINT' : 'GBL',
                     'IO_L1P_CCLK_2' : 'GBL',
@@ -1832,6 +1832,9 @@ class XC6LX9(FTG256):
         frv = frv1.join(frv0, .75)
         frv.wire('GBL')
     
+        program = byname['PROGRAM_B_2']
+        program.w("l 90 f 7 l 45 f 6").wire('GBL')
+
         # JTAG
         jtag = [byname[s] for s in ('TCK', 'TDI', 'TMS', 'TDO')]
         [t.w("l 45 f 0.5").wire('GBL') for t in jtag]
@@ -1840,7 +1843,7 @@ class XC6LX9(FTG256):
         extend(jtag[2], jtag)
         jrv = board.enriver90(self.collect(jtag), -90).wire()
 
-        return (rv12, lvds, p0, p1, rv0, frv, jrv, v12)
+        return (rv12, lvds, p0, p1, rv0, frv, jrv, program, v12)
 
     def dump_ucf(self, basename):
         with open(basename + ".ucf", "wt") as ucf:
@@ -1936,7 +1939,7 @@ class Castellation(Part):
 
     def escape1(self):
         pp = self.pads[::-1]
-        names = "TDI TDO TCK TMS".split()
+        names = "PGM TDI TDO TCK TMS".split()
         [t.setname(n) for t,n in zip(pp, names)]
 
         for t in pp:
@@ -1945,7 +1948,7 @@ class Castellation(Part):
             dc.board.layers['GTO'].add(hershey.ctext(x, y, t.name))
             t.w("i f 1").wire('GBL')
 
-        return self.board.enriver(pp, 45).left(45).wire()
+        return (self.board.enriver(pp[1:], 45).left(45).wire(), pp[0])
 
     def escape2(self):
         pp = self.pads

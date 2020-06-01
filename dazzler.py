@@ -111,16 +111,16 @@ if __name__ == "__main__":
     dc.w("l 45 f 24.3 l 90 f 2.95 r 45")
 
     lx9 = cu.XC6LX9(dc)
-    (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_p23, fpga_fl, fpga_jtag, fpga_v12) = lx9.escape()
+    (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_p23, fpga_fl, fpga_jtag, fpga_pgm, fpga_v12) = lx9.escape()
 
     j1 = cu.HDMI(brd.DC((45,33.5)).right(270))
     (hdmi_lvds, hdmi_detect) = j1.escape()
 
     (p0, p1) = cu.Castellation(brd.DC((34, 42)).left(90), 15).escape()
     (p2, p3) = cu.Castellation(brd.DC((0, 36)).left(180), 16).escape()
-    p4 = cu.Castellation(brd.DC((8, 0)).right(90), 4).escape1()
+    (p4, pgm) = cu.Castellation(brd.DC((8, 0)).right(90), 5).escape1()
     v5 = cu.Castellation(brd.DC((30, 0)).right(90), 3).escape2()
-    ctp = cu.Castellation(brd.DC((18, 0)).right(90), 4).escape3()
+    ctp = cu.Castellation(brd.DC((20, 0)).right(90), 4).escape3()
 
     ctp.meet(bt815_rctp)
 
@@ -174,6 +174,13 @@ if __name__ == "__main__":
     fpga_fl.meet(fl2_qspi)
     p4.w("r 45 f 1 l 45 f 4 l 45 f 1 r 45").wire()
     fpga_jtag.meet(p4)
+
+    pgm.forward(1).wire()
+    s = pgm.copy().w("r 90 .").setlayer('GTL')
+    r = cu.R0402(brd.DC((17.8, 3.5)).left(90), "47K")
+    s.goto(r.pads[0]).wire()
+    r.pads[1].w("r 90 f 1 +").wire()
+    fpga_pgm.goto(pgm).wire()
 
     # 5V to the LDO
     v5.w("i f 1.4 l 90 f 12 r 90 f 1").wire(width = 0.8)
