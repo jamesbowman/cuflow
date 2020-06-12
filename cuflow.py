@@ -1873,7 +1873,7 @@ class Castellation(Part):
         dc.w("l 90 f 0.4 r 90")
         def cp():
             dc.right(90)
-            dc.rect(1, 1)
+            dc.rect(1.2, 1)
             p = dc.copy()
             p.part = self.id
             self.pads.append(p)
