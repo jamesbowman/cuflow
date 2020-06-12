@@ -4,7 +4,7 @@ import math
 import cuflow as cu
 import svgout
 
-__VERSION__ = "1.0.0"
+__VERSION__ = "1.0.1"
 
 class Dazzler(cu.Part):
     family = "M"
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     brd = cu.Board(
         (50, 42),
         trace = cu.mil(3.5),
-        space = cu.mil(3.5) * 1.0,
+        space = cu.mil(3.5) * 1.2,
         via_hole = 0.2,
         via = 0.45,
         via_space = cu.mil(5),
@@ -100,6 +100,7 @@ if __name__ == "__main__":
     dc.w("f 11.0 l 90 f 4.0 r 90")
     u2 = cu.W25Q64J(dc)
     fl1_qspi = u2.escape()
+    fl1_qspi.shimmy(0.1).wire()
 
     bt815_qspi.w("r 45 f 2 l 90 f 2.5")
     bt815_qspi.wire()
@@ -167,6 +168,7 @@ if __name__ == "__main__":
     fpga_p2.forward(1).meet(p2)
     fpga_p3.meet(p3)
 
+    print(fpga_main.tt[0].seek(bt815_main.tt[-1]))
     fpga_main.meet(bt815_main)
 
     # Bottom-layer hookups
@@ -187,7 +189,7 @@ if __name__ == "__main__":
 
     # FPGA 1.2 V supply
     t = fpga_v12
-    t.w("f 4 r 90 f 5 l 90").wire(width = 0.8)
+    t.w("f 4.2 r 90 f 5 l 90").wire(width = 0.8)
     t.via()
     t.w("f 2").wire('GTL')
 
@@ -208,14 +210,14 @@ if __name__ == "__main__":
     caps(brd.DC((11.0, 31.0)).left(90), 'GL2', 'GL3')
     caps(brd.DC((30.3, 20.0)).right(90), 'GL2', 'GL3')
     caps(brd.DC((12.8, 14.7)).right(90), 'GL3', 'GL2')
-    caps(brd.DC((18.8, 10.7)), 'GL2', 'GBL')
+    caps(brd.DC((18.8, 10.3)), 'GL2', 'GBL')
 
     caps(brd.DC((46.6, 8.2)), 'GBL', 'GL2', 2)
     caps(brd.DC((43.7, 2.8)).left(90), 'GL2', 'GBL', 2)
-    caps(brd.DC((32.6, 3.9)).left(180), 'GBL', 'GL2')
+    caps(brd.DC((32.5, 3.9)).left(180), 'GBL', 'GL2')
 
     caps(brd.DC((37.0, 1.5)), 'GL2', 'GL3', 2)
-    caps(brd.DC((47.7, 14.2)).right(90), 'GL2', 'GL3', 2)
+    caps(brd.DC((47.8, 14.2)).right(90), 'GL2', 'GL3', 2)
 
     brd.outline()
     # brd.oversize(2)

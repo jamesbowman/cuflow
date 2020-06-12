@@ -1780,12 +1780,15 @@ class XC6LX9(FTG256):
         # [print(c) for c in cand if c[-1] == '2']
 
         # BT815 bus
+        rv1.forward(0.29)
         rv1.right(45)
         rv1.wire()
-        rv2.forward(2)
-        rv2.left(45)
+
+        rv2.w("f 1.8 l 45 f 2")
         rv2.wire()
+
         rv12 = rv1.join(rv2)
+        rv12.wire()
 
         # LVDS
         def makepair(n, p):
@@ -1930,11 +1933,15 @@ class Castellation(Part):
 
     def sidevia(self, dc, dst):
         assert dst in "-+."
-        dc.push()
         dc.setwidth(0.6)
-        dc.w("f -0.3 r 90 f 0.5 " + dst)
-        dc.pop()
-        dc.w("f -0.3 l 90 f 0.5 " + dst)
+        for l in ('GTL', 'GBL'):
+            dc.push()
+            dc.setlayer(l)
+            dc.push()
+            dc.w("f -0.3 r 90 f 0.4 " + dst)
+            dc.pop()
+            dc.w("f -0.3 l 90 f 0.4 " + dst)
+            dc.pop()
 
     def escape1(self):
         pp = self.pads[::-1]
@@ -1959,7 +1966,8 @@ class Castellation(Part):
         label(pp[1], "GND")
         label(pp[2], "5V")
 
-        pp[0].setwidth(0.6).w("f -0.3 r 90 f 0.5 + f 0.5 +")
+        for l in ('GTL', 'GBL'):
+            pp[0].push().setlayer(l).setwidth(0.6).w("f -0.3 r 90 f 0.5 + f 0.5 +").pop()
         self.sidevia(pp[1], "-")
         return pp[2]
 
