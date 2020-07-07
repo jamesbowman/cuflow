@@ -698,6 +698,9 @@ class Board:
             g.difference(notouch.buffer(d)), include
         )
 
+    def addnet(self, a, b):
+        self.nets.append(((a.part, a.name), (b.part, b.name)))
+
     def body(self):
         # Return the board outline with holes and slots removed.
         # This is the shape of the resin subtrate.

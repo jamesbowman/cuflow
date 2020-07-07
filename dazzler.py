@@ -128,6 +128,7 @@ if __name__ == "__main__":
     osc = cu.Osc_6MHz(brd.DC((9.9, 30.7)).right(0))
     clk = osc.escape()
     fpga_ep0.goto(clk).wire()
+    brd.addnet(fpga_ep0, clk)
     
     p_fl_f = cu.W25Q64J(brd.DC((35, 23)).left(45))
     fl2_qspi = p_fl_f.escape1()
