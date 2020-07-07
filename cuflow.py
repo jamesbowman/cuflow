@@ -76,7 +76,8 @@ class Layer:
                 y0 = min([y for (x, y) in po.exterior.coords])
                 y1 = max([y for (x, y) in po.exterior.coords])
                 xm = (x0 + x1) / 2
-                eps = 0.005
+                # eps = 0.005
+                eps = 0.000
                 renderpoly(g, po.intersection(sg.box(x0, y0, xm + eps, y1)))
                 renderpoly(g, po.intersection(sg.box(xm - eps, y0, x1, y1)))
 
@@ -301,6 +302,7 @@ class Draw(Turtle):
         self.forward(.3)
         self.silk()
         self.pop()
+        return self
 
     def n_agon(self, r, n):
         # an n-agon approximating a circle radius r
@@ -441,6 +443,9 @@ class River(Turtle):
         self.tt = tt
         self.board = board
         self.c = self.board.c
+
+    def __repr__(self):
+        return "<River %d at %r>" % (len(self.tt), self.tt[0])
 
     def r(self):
         return self.c * (len(self.tt) - 1)
@@ -694,6 +699,9 @@ class Board:
             g.difference(notouch.buffer(d)), include
         )
 
+    def addnet(self, a, b):
+        self.nets.append(((a.part, a.name), (b.part, b.name)))
+
     def body(self):
         # Return the board outline with holes and slots removed.
         # This is the shape of the resin subtrate.
@@ -760,7 +768,7 @@ class Board:
 
     def bom(self, fn):
         parts = defaultdict(list)
-        rank = "UJRCM"
+        rank = "UJRCMY"
         for f,pp in self.parts.items():
             for p in pp:
                 if p.inBOM:
@@ -945,7 +953,7 @@ class Part:
         (x, y) = dc.xy
         dc.board.layers['GTO'].add(hershey.text(x, y, s, scale = 0.1))
 
-    def chamfered(self, dc, w, h, drawid = True):
+    def chamfered(self, dc, w, h, drawid = True, idoffset = (0, 0)):
         # Outline in top silk, chamfer indicates top-left
         # ID next to chamfer
 
@@ -966,6 +974,8 @@ class Part:
         dc.forward(h / 2 + 0.5)
         dc.left(90)
         dc.forward(w / 2 + 0.5)
+        dc.right(90)
+        dc.goxy(*idoffset)
         (x, y) = dc.xy
         if drawid:
             dc.board.layers['GTO'].add(hershey.ctext(x, y, self.id))
@@ -1121,8 +1131,8 @@ BT815pins = [
     'M_MISO',
     'M_IO2',
     'M_IO3',
-    '',
-    '',
+    'X1',
+    '',         # X2
     'GND',
     '3V3',
     '+1V2',
@@ -1265,10 +1275,11 @@ class BT815(QFN64):
 
         rv2.forward(0.6)
 
+        # rv0.forward(1).shimmy(0.344)
+        # rv3.shimmy(0.344)
         rv23 = rv2.join(rv3, 1.0)
-        rv23.wire()
+        print('---->')
         rv230 = rv23.join(rv0)
-        # rv230.w("f 1 r 31 f 1")
         rv230.wire()
 
         rv4 = brd.enriver90(bank(0, spi), -90)
@@ -1679,7 +1690,7 @@ class XC6LX9(FTG256):
             for nm,p in byname.items():
                 if "GCLK" in nm:
                     self.minilabel(p, "C")
-        if 0:
+        if 1:
             for pn,s in self.signals.items():
                 p = padname[pn]
                 self.notate(p, pn)
@@ -1738,8 +1749,8 @@ class XC6LX9(FTG256):
             (0, ".1$",  "l 90 " + s1),
             (0, "R2",   "l 90 " + "r 45  f {0} l 45 f 1.117".format(d1)),
             (0, ".2$",  "l 90 " + s2),
-            (0, "L3$",  "l 90 " + "l 45 f {0} r 45 f 2.117".format(d1)),
-            (0, "M3$",  "l 90 " + "r 45 f {0} l 45 f 2.117".format(d1)),
+            (0, "[JL]3$",  "l 90 " + "l 45 f {0} r 45 f 2.117".format(d1)),
+            (0, "[KM]3$",  "l 90 " + "r 45 f {0} l 45 f 2.117".format(d1)),
             (0, ".3$",  "l 90 " + s3),
             (1, "T",    "r 180 " + s1),
             (1, "R",    "r 180 " + s2),
@@ -1771,9 +1782,10 @@ class XC6LX9(FTG256):
         oc = [self.collect(outer[i]) for i in range(4)]
         x = 3
         oc = oc[x:] + oc[:x]
+        ep0 = oc[0][-16]
         rv0 = board.enriver90(oc[0][-15:], -90)
         rv1 = board.enriver90(oc[1], -90)
-        rem = 37 - len(rv1.tt)
+        rem = 38 - len(rv1.tt)
         rv2 = board.enriver90(oc[2][:rem], 90)
         p0 = board.enriverS(oc[3][:7], -45)
         p1 = board.enriverS(oc[3][-7:], 45)
@@ -1782,7 +1794,9 @@ class XC6LX9(FTG256):
         # [print(c) for c in cand if c[-1] == '2']
 
         # BT815 bus
-        rv1.forward(0.29)
+        # rv1.forward(0.29)
+        a = 0
+        rv1.left(a).right(a)
         rv1.right(45)
         rv1.wire()
 
@@ -1837,7 +1851,7 @@ class XC6LX9(FTG256):
         frv.wire('GBL')
     
         program = byname['PROGRAM_B_2']
-        program.w("l 90 f 7 l 45 f 6").wire('GBL')
+        program.w("l 90 f 7.5 l 45 f 6").wire('GBL')
 
         # JTAG
         jtag = [byname[s] for s in ('TCK', 'TDI', 'TMS', 'TDO')]
@@ -1847,7 +1861,7 @@ class XC6LX9(FTG256):
         extend(jtag[2], jtag)
         jrv = board.enriver90(self.collect(jtag), -90).wire()
 
-        return (rv12, lvds, p0, p1, rv0, frv, jrv, program, v12)
+        return (rv12, lvds, p0, p1, ep0, rv0, frv, jrv, program, v12)
 
     def dump_ucf(self, basename):
         with open(basename + ".ucf", "wt") as ucf:
@@ -2029,3 +2043,24 @@ class WiiPlug(Part):
         g = [self.s(nm) for nm in ("SCL", "DET", "SDA")]
         extend2(g)
         return self.board.enriver90(g, -90).wire()
+
+class SMD_3225_4P(Part):
+    family = "Y"
+    def place(self, dc):
+        self.chamfered(dc, 2.8, 3.5, idoffset = (1.4, .2))
+
+        for _ in range(2):
+            dc.push()
+            dc.goxy(-1.75 / 2, 2.20 / 2).right(180)
+            self.train(dc, 2, lambda: self.rpad(dc, 1.2, 0.95), 2.20)
+            dc.pop()
+            dc.right(180)
+        [p.setname(nm) for p,nm in zip(self.pads, ["", "GND", "CLK", "VDD"])]
+
+class Osc_6MHz(SMD_3225_4P):
+    source = {'LCSC': 'C387333'}
+    mfr = 'S3D6.000000B20F30T'
+    def escape(self):
+        self.s("GND").w("i -")
+        self.s("VDD").w("i +")
+        return self.s("CLK")
