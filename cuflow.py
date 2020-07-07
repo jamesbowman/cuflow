@@ -881,9 +881,10 @@ class Board:
                     p1 = p
             return 2 * p0
         for l in ('GTL', 'GBL'):
-            clr = clearance(self.layers[l].preview())
-            if clr < (self.space - micron(1.5)):
-                print("space violation on layer %s, actual %.3f expected %.3f mm" % (l, clr, self.space))
+            if self.layers[l].polys:
+                clr = clearance(self.layers[l].preview())
+                if clr < (self.space - micron(1.5)):
+                    print("space violation on layer %s, actual %.3f expected %.3f mm" % (l, clr, self.space))
 
         def h2pt(d, xys):
             return so.unary_union([sg.Point(xy).buffer(d / 2) for xy in xys])
@@ -906,8 +907,8 @@ def extend(dst, traces):
         t.approach(0, finish_line)
 
 def extend2(traces):
-    by_y = [p for (_,p) in sorted([(p.seek(traces[0])[1], p) for p in traces])]
-    extend(by_y[0], traces)
+    by_y = {p.seek(traces[0])[1]: p for p in traces}
+    extend(by_y[min(by_y)], traces)
     
 class Part:
     mfr = ''
@@ -944,7 +945,7 @@ class Part:
         (x, y) = dc.xy
         dc.board.layers['GTO'].add(hershey.text(x, y, s, scale = 0.1))
 
-    def chamfered(self, dc, w, h):
+    def chamfered(self, dc, w, h, drawid = True):
         # Outline in top silk, chamfer indicates top-left
         # ID next to chamfer
 
@@ -966,7 +967,8 @@ class Part:
         dc.left(90)
         dc.forward(w / 2 + 0.5)
         (x, y) = dc.xy
-        dc.board.layers['GTO'].add(hershey.ctext(x, y, self.id))
+        if drawid:
+            dc.board.layers['GTO'].add(hershey.ctext(x, y, self.id))
         dc.pop()
 
     def pad(self, dc):
@@ -1105,8 +1107,8 @@ BT815pins = [
     'E_MISO',
     'E_MOSI',
     'E_CS',
-    'IO2',
-    'IO3',
+    'E_IO2',
+    'E_IO3',
     '3V3',
     '',
     'E_INT',
