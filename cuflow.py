@@ -301,6 +301,7 @@ class Draw(Turtle):
         self.forward(.3)
         self.silk()
         self.pop()
+        return self
 
     def n_agon(self, r, n):
         # an n-agon approximating a circle radius r
@@ -441,6 +442,9 @@ class River(Turtle):
         self.tt = tt
         self.board = board
         self.c = self.board.c
+
+    def __repr__(self):
+        return "<River %d at %r>" % (len(self.tt), self.tt[0])
 
     def r(self):
         return self.c * (len(self.tt) - 1)
@@ -760,7 +764,7 @@ class Board:
 
     def bom(self, fn):
         parts = defaultdict(list)
-        rank = "UJRCM"
+        rank = "UJRCMY"
         for f,pp in self.parts.items():
             for p in pp:
                 if p.inBOM:
@@ -944,7 +948,7 @@ class Part:
         (x, y) = dc.xy
         dc.board.layers['GTO'].add(hershey.text(x, y, s, scale = 0.1))
 
-    def chamfered(self, dc, w, h):
+    def chamfered(self, dc, w, h, idoffset = (0, 0)):
         # Outline in top silk, chamfer indicates top-left
         # ID next to chamfer
 
@@ -965,6 +969,8 @@ class Part:
         dc.forward(h / 2 + 0.5)
         dc.left(90)
         dc.forward(w / 2 + 0.5)
+        dc.right(90)
+        dc.goxy(*idoffset)
         (x, y) = dc.xy
         dc.board.layers['GTO'].add(hershey.ctext(x, y, self.id))
         dc.pop()
@@ -1769,6 +1775,7 @@ class XC6LX9(FTG256):
         oc = [self.collect(outer[i]) for i in range(4)]
         x = 3
         oc = oc[x:] + oc[:x]
+        ep0 = oc[0][-16]
         rv0 = board.enriver90(oc[0][-15:], -90)
         rv1 = board.enriver90(oc[1], -90)
         rem = 37 - len(rv1.tt)
@@ -1845,7 +1852,7 @@ class XC6LX9(FTG256):
         extend(jtag[2], jtag)
         jrv = board.enriver90(self.collect(jtag), -90).wire()
 
-        return (rv12, lvds, p0, p1, rv0, frv, jrv, program, v12)
+        return (rv12, lvds, p0, p1, ep0, rv0, frv, jrv, program, v12)
 
     def dump_ucf(self, basename):
         with open(basename + ".ucf", "wt") as ucf:
@@ -2027,3 +2034,24 @@ class WiiPlug(Part):
         g = [self.s(nm) for nm in ("SCL", "DET", "SDA")]
         extend2(g)
         return self.board.enriver90(g, -90).wire()
+
+class SMD_3225_4P(Part):
+    family = "Y"
+    def place(self, dc):
+        self.chamfered(dc, 2.8, 3.5, (1.4, .2))
+
+        for _ in range(2):
+            dc.push()
+            dc.goxy(-1.75 / 2, 2.20 / 2).right(180)
+            self.train(dc, 2, lambda: self.rpad(dc, 1.2, 0.95), 2.20)
+            dc.pop()
+            dc.right(180)
+        [p.setname(nm) for p,nm in zip(self.pads, ["", "GND", "CLK", "VDD"])]
+
+class Osc_6MHz(SMD_3225_4P):
+    source = {'LCSC': 'C387333'}
+    mfr = 'S3D6.000000B20F30T'
+    def escape(self):
+        self.s("GND").w("i -")
+        self.s("VDD").w("i +")
+        return self.s("CLK")

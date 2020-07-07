@@ -112,7 +112,7 @@ if __name__ == "__main__":
     dc.w("l 45 f 24.3 l 90 f 2.95 r 45")
 
     lx9 = cu.XC6LX9(dc)
-    (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_p23, fpga_fl, fpga_jtag, fpga_pgm, fpga_v12) = lx9.escape()
+    (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_ep0, fpga_p23, fpga_fl, fpga_jtag, fpga_pgm, fpga_v12) = lx9.escape()
 
     j1 = cu.HDMI(brd.DC((45,33.5)).right(270))
     (hdmi_lvds, hdmi_detect) = j1.escape()
@@ -125,6 +125,10 @@ if __name__ == "__main__":
 
     ctp.meet(bt815_rctp)
 
+    osc = cu.Osc_6MHz(brd.DC((9.9, 30.7)).right(0))
+    clk = osc.escape()
+    fpga_ep0.goto(clk).wire()
+    
     p_fl_f = cu.W25Q64J(brd.DC((35, 23)).left(45))
     fl2_qspi = p_fl_f.escape1()
 
@@ -162,6 +166,7 @@ if __name__ == "__main__":
 
     fpga_p23.right(90).wire()
     (fpga_p2,fpga_p3) = fpga_p23.split(8)
+    print(fpga_p2, fpga_p3)
     # fpga_p2.w("r 45 f 1 l 45").wire()
     fpga_p3.w("f 2").wire()
 
@@ -207,7 +212,7 @@ if __name__ == "__main__":
 
     caps(brd.DC((18.4, 34.5)), 'GL2', 'GBL', 3)
     caps(brd.DC((27.6, 34.5)), 'GL2', 'GL3', 3)
-    caps(brd.DC((11.0, 31.0)).left(90), 'GL2', 'GL3')
+    caps(brd.DC(( 9.3, 24.0)).left(90), 'GL2', 'GL3')
     caps(brd.DC((30.3, 20.0)).right(90), 'GL2', 'GL3')
     caps(brd.DC((12.8, 14.7)).right(90), 'GL3', 'GL2')
     caps(brd.DC((18.8, 10.3)), 'GL2', 'GBL')
@@ -226,9 +231,9 @@ if __name__ == "__main__":
 
     if 1:
         im = Image.open("img/dazzler-logo.png").transpose(Image.ROTATE_270)
-        brd.logo(6.9, 28.8, im)
+        brd.logo(6.4, 28.8, im)
         im = Image.open("img/gd3x-logo.png")
-        brd.logo(9.5, 36, im, 0.8)
+        brd.logo(9.1, 36, im, 0.8)
         im = Image.open("img/oshw-logo-outline.png")
         brd.logo(6.9, 13.6, im, 0.5)
 
