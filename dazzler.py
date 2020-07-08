@@ -4,7 +4,7 @@ import math
 import cuflow as cu
 import svgout
 
-__VERSION__ = "1.0.1"
+__VERSION__ = "1.1.0"
 
 class Dazzler(cu.Part):
     family = "M"
@@ -100,9 +100,9 @@ if __name__ == "__main__":
     dc.w("f 11.0 l 90 f 4.0 r 90")
     u2 = cu.W25Q64J(dc)
     fl1_qspi = u2.escape()
-    fl1_qspi.shimmy(0.1).wire()
+    fl1_qspi.left(45).wire()
 
-    bt815_qspi.w("r 45 f 2 l 90 f 2.5")
+    bt815_qspi.w("r 45 f 2 l 90 f 4.5 l 45")
     bt815_qspi.wire()
     bt815_qspi.meet(fl1_qspi)
 
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     dc.w("l 45 f 24.3 l 90 f 2.95 r 45")
 
     lx9 = cu.XC6LX9(dc)
-    (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_p23, fpga_fl, fpga_jtag, fpga_pgm, fpga_v12) = lx9.escape()
+    (fpga_main, fpga_lvds, fpga_p0, fpga_p1, fpga_ep0, fpga_p23, fpga_fl, fpga_jtag, fpga_pgm, fpga_v12) = lx9.escape()
 
     j1 = cu.HDMI(brd.DC((45,33.5)).right(270))
     (hdmi_lvds, hdmi_detect) = j1.escape()
@@ -125,6 +125,11 @@ if __name__ == "__main__":
 
     ctp.meet(bt815_rctp)
 
+    osc = cu.Osc_6MHz(brd.DC((9.9, 30.7)).right(0))
+    clk = osc.escape()
+    fpga_ep0.goto(clk).wire()
+    brd.addnet(fpga_ep0, clk)
+    
     p_fl_f = cu.W25Q64J(brd.DC((35, 23)).left(45))
     fl2_qspi = p_fl_f.escape1()
 
@@ -200,24 +205,30 @@ if __name__ == "__main__":
     t.goto(r.pads[0]).wire()
     r.pads[1].w("o -").wire()
 
-    def caps(dc, l0, l1, n = 1):
+    def caps(dc, l0, l1, n = 1, val = '0.1 uF'):
+        r = []
         for i in range(n):
-            cu.C0402(dc, '0.1 uF').escape(l0, l1)
+            d = cu.C0402(dc, val)
+            r.append(d)
+            d.escape(l0, l1)
             dc.forward(1)
+        return r
+
+    caps(brd.DC((32.5, 3.9)).left(180), 'GBL', 'GL2', val = '4.7 uF')
 
     caps(brd.DC((18.4, 34.5)), 'GL2', 'GBL', 3)
     caps(brd.DC((27.6, 34.5)), 'GL2', 'GL3', 3)
-    caps(brd.DC((11.0, 31.0)).left(90), 'GL2', 'GL3')
+    caps(brd.DC(( 9.3, 24.0)).left(90), 'GL2', 'GL3')
     caps(brd.DC((30.3, 20.0)).right(90), 'GL2', 'GL3')
     caps(brd.DC((12.8, 14.7)).right(90), 'GL3', 'GL2')
-    caps(brd.DC((18.8, 10.3)), 'GL2', 'GBL')
+    caps(brd.DC((21.7, 10.1)), 'GBL', 'GL2')
 
-    caps(brd.DC((46.6, 8.2)), 'GBL', 'GL2', 2)
+    c1v2 = caps(brd.DC((47.4, 9.4)).left(90), 'GBL', 'GL2', 2)
+    c1v2[0].pads[0].setlayer('GBL').w("r 90 f 2").wire()
     caps(brd.DC((43.7, 2.8)).left(90), 'GL2', 'GBL', 2)
-    caps(brd.DC((32.5, 3.9)).left(180), 'GBL', 'GL2')
 
     caps(brd.DC((37.0, 1.5)), 'GL2', 'GL3', 2)
-    caps(brd.DC((47.8, 14.2)).right(90), 'GL2', 'GL3', 2)
+    caps(brd.DC((41.5, 18.6)).right(45), 'GL2', 'GL3', 1)
 
     brd.outline()
     # brd.oversize(2)
@@ -226,9 +237,9 @@ if __name__ == "__main__":
 
     if 1:
         im = Image.open("img/dazzler-logo.png").transpose(Image.ROTATE_270)
-        brd.logo(6.9, 28.8, im)
+        brd.logo(6.4, 28.8, im)
         im = Image.open("img/gd3x-logo.png")
-        brd.logo(9.5, 36, im, 0.8)
+        brd.logo(9.1, 36, im, 0.8)
         im = Image.open("img/oshw-logo-outline.png")
         brd.logo(6.9, 13.6, im, 0.5)
 

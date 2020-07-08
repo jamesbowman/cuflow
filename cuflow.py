@@ -575,7 +575,6 @@ class River(Turtle):
         r = c * (len(self.tt) - 1)
         l = math.sqrt(d ** 2 - r ** 2)
         dir_d = self.tt[0].direction(other.tt[0])
-        print('d', d, 'r', r, 'l', l)
         a = math.acos(l / d)
         self.right(180 * (dir_d + a) / math.pi)
         self.forward(l)
@@ -1131,8 +1130,8 @@ BT815pins = [
     'M_MISO',
     'M_IO2',
     'M_IO3',
-    'X1',
-    '',         # X2
+    'X1',       # X1: in
+    '',         # X2: out
     'GND',
     '3V3',
     '+1V2',
@@ -1254,36 +1253,31 @@ class BT815(QFN64):
         for i in ext:
             self.pads[i].forward(1)
             self.pads[i].wire()
-        self.s("AUDIO").forward(.5)
+        # self.s("AUDIO").forward(.5)
         [self.pads[i].outside() for i in spi]
 
         def bank(n, pool):
             return [self.pads[i] for i in pool if (i - 1) // 16 == n]
         rv0 = brd.enriver90(bank(0, ext), 90)
-        rv1 = brd.enriver(bank(1, ext), -45)
+        rv1 = brd.enriver90(bank(1, ext), -90)
         rv2 = brd.enriver(bank(2, ext), -45)
         rv3 = brd.enriver(bank(3, ext), 45)
-        rv0.forward(.2)
-        rv0.right(45)
-        rv0.forward(1)
-        rv0.wire()
+        rv0.w("f .2 r 45 f .3").wire()
 
-        rv1.w("f .2 l 45 f 3.5 l 45 f 3 l 45 f .53 r 45 f 3")
+        rv1.w("r 45 f 1.0 l 45 f 2.5 l 45 f 3 l 45 f 1.2 r 45")
         rv1.wire()
 
         rv2 = rv1.join(rv2, 1)
 
         rv2.forward(0.6)
 
-        # rv0.forward(1).shimmy(0.344)
-        # rv3.shimmy(0.344)
+        rv0.forward(1).shimmy(0.344)
+        rv3.shimmy(0.344)
         rv23 = rv2.join(rv3, 1.0)
-        print('---->')
         rv230 = rv23.join(rv0)
         rv230.wire()
 
         rv4 = brd.enriver90(bank(0, spi), -90)
-        # rv4.w("f 0.7 l 90 f 2.3 l 45 f 1 r 45")
         rv4.w("f 1 l 45")
         rv5 = brd.enriver(bank(1, spi), -45)
         rvspi = rv4.join(rv5)
@@ -1690,7 +1684,7 @@ class XC6LX9(FTG256):
             for nm,p in byname.items():
                 if "GCLK" in nm:
                     self.minilabel(p, "C")
-        if 1:
+        if 0:
             for pn,s in self.signals.items():
                 p = padname[pn]
                 self.notate(p, pn)
@@ -1851,7 +1845,7 @@ class XC6LX9(FTG256):
         frv.wire('GBL')
     
         program = byname['PROGRAM_B_2']
-        program.w("l 90 f 7.5 l 45 f 6").wire('GBL')
+        program.w("l 90 f 7.5 l 45 f 7").wire('GBL')
 
         # JTAG
         jtag = [byname[s] for s in ('TCK', 'TDI', 'TMS', 'TDO')]
