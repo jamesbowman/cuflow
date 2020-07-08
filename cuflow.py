@@ -76,8 +76,8 @@ class Layer:
                 y0 = min([y for (x, y) in po.exterior.coords])
                 y1 = max([y for (x, y) in po.exterior.coords])
                 xm = (x0 + x1) / 2
-                # eps = 0.005
-                eps = 0.000
+                eps = 0.005
+                # eps = 0.000
                 renderpoly(g, po.intersection(sg.box(x0, y0, xm + eps, y1)))
                 renderpoly(g, po.intersection(sg.box(xm - eps, y0, x1, y1)))
 
