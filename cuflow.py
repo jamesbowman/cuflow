@@ -294,6 +294,7 @@ class Draw(Turtle):
         self.forward(w)
         self.pop()
         self.h = h  # used by inside, outside for pad escape
+        return self
 
     def mark(self):
         self.board.layers['GTO'].add(sg.Point(self.xy).buffer(.2))
@@ -426,6 +427,10 @@ class Draw(Turtle):
         strut_y = sa.scale(g4.envelope, xfact = 0.15)
         struts = strut_x.union(strut_y)
         brd.layers['GTP'].add(g4.difference(struts))
+
+    def text(self, s):
+        (x, y) = self.xy
+        self.board.layers['GTO'].add(hershey.ctext(x, y, s))
 
 class Drawf(Draw):
     def defaults(self):
@@ -767,7 +772,7 @@ class Board:
 
     def bom(self, fn):
         parts = defaultdict(list)
-        rank = "UJRCMY"
+        rank = "UJKTRCMY"
         for f,pp in self.parts.items():
             for p in pp:
                 if p.inBOM:
@@ -933,6 +938,10 @@ class Part:
         self.place(dc)
         if source is not None:
             self.source = source
+
+    def text(self, dc, s):
+        (x, y) = dc.xy
+        dc.board.layers['GTO'].add(hershey.ctext(x, y, s))
 
     def label(self, dc):
         (x, y) = dc.xy
