@@ -7,7 +7,7 @@ class dip(cu.Part):
         height = T * ((self.N // 2) - 1)
         for _ in range(2):
             dc.push()
-            dc.goxy(cu.inches(-self.width / 2), height / 2).left(180)
+            dc.goxy(-self.width / 2, height / 2).left(180)
             def gh():
                 dc.board.hole(dc.xy, .8)
                 p = dc.copy()

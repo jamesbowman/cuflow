@@ -63,7 +63,7 @@ def thermal(t, layer, d = 1.3):
 
 if __name__ == "__main__":
     brd = cu.Board(
-        (85, 56),
+        (65, 56),
         trace = 0.2,
         space = cu.inches(1 / 20) - 0.2,
         via_hole = 0.3,
@@ -95,7 +95,7 @@ if __name__ == "__main__":
     rv1.w("l 90")
     rv1.wire()
 
-    j2 = dip.Screw2(brd.DC((80, 50)).left(90))
+    j2 = dip.Screw2(brd.DC((60, 42)).left(90))
     thermal(j2.s("1"), "GBL", 2)
     thermal(j2.s("2"), "GTL", 2)
 
@@ -145,3 +145,4 @@ if __name__ == "__main__":
         brd.fill_any("GBL", "GBL")
 
     brd.save("pihat")
+    brd.postscript("pihat.ps")

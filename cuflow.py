@@ -797,6 +797,31 @@ class Board:
                     vendor,
                     vendor_c])
 
+    def postscript(self, fn):
+        ps = ["%!PS-Adobe-2.0"]
+        ps.append("72 72 translate")
+        ps.append(".05 setlinewidth")
+
+        body = self.body()
+        pts = 72 / inches(1)
+        def addring(r, style = "stroke"):
+            ps.append("newpath")
+            a = "moveto"
+            for (x, y) in r.coords:
+                ps.append("%f %f %s" % (x * pts, y * pts, a))
+                a = "lineto"
+            ps.append(style)
+
+        addring(body.exterior)
+        [addring(p) for p in body.interiors]
+        [addring(p.exterior) for (_,p) in self.layers['GTL'].polys]
+        rings = [body.exterior] + [r for r in body.interiors]
+
+        ps.append("showpage")
+
+        with open(fn, "wt") as f:
+            f.write("".join([l + "\n" for l in ps]))
+
     def enriver(self, ibank, a):
         if a > 0:
             bank = ibank[::-1]
