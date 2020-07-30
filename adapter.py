@@ -112,27 +112,82 @@ class DIP8(cu.Part):
     family = "J"
     inBOM = False
     def place(self, dc):
-        dc.push()
-        dc.goxy(cu.inches(-.15), cu.inches(.15)).left(90)
-        dc.board.hole(dc.xy, .8)
-        dc.pop()
+        for _ in range(2):
+            dc.push()
+            dc.goxy(cu.inches(-.15), cu.inches(.15)).left(180)
+            def gh():
+                dc.board.hole(dc.xy, .8)
+                p = dc.copy()
+                p.part = self.id
+                p.n_agon(0.8, 60)
+                p.contact()
+                self.pads.append(dc.copy())
+            self.train(dc, 4, gh, cu.inches(.1))
+            dc.pop()
+            dc.right(180)
+    def escape(self):
+        ii = cu.inches(.1) / 2
+        q = math.sqrt((ii ** 2) + (ii ** 2))
+        for p in self.pads[:4]:
+            p.w("l 45").forward(q).left(45).forward(1)
+        for p in self.pads[4:]:
+            p.w("r 90 f 1")
+        oo = list(sum(zip(self.pads[4:], self.pads[:4]), ()))
+        cu.extend2(oo)
+        [p.wire() for p in oo]
+        return oo
+
+class WSON8L(cu.Part):
+    family = "U"
+    def place(self, dc):
+        self.chamfered(dc, 8, 6)
+        self.chamfered(dc, 6, 5, False)
+        e = 1.27
+        for _ in range(2):
+            dc.push()
+            dc.goxy(-6.75 / 2, e * 1.5).left(180)
+            self.train(dc, 4, lambda: self.rpad(dc, 0.5, 2.00), e)
+            dc.pop()
+            dc.right(180)
+    def escape(self):
+        ii = 1.27 / 2
+        q = math.sqrt((ii ** 2) + (ii ** 2))
+        for p in self.pads[4:]:
+            p.w("i r 45").forward(q).left(45).forward(1)
+        for p in self.pads[:4]:
+            p.w("o f .2")
+        oo = list(sum(zip(self.pads[4:], self.pads[:4]), ()))
+        cu.extend2(oo)
+        [p.wire() for p in oo]
+        return oo
 
 if __name__ == "__main__":
     brd = cu.Board(
-        (10, 10),
-        trace = cu.mil(5),
+        (24, 12),
+        trace = cu.mil(6),
         space = cu.mil(5) * 2.0,
         via_hole = 0.3,
         via = 0.6,
         via_space = cu.mil(5),
         silk = cu.mil(6))
 
-    dc = brd.DC((5, 5))
-    d = DIP8(dc)
+    dc = brd.DC((6, 6))
+    u1 = DIP8(dc).escape()
+
+    u2 = WSON8L(brd.DC((18, 6))).escape()
+
+    for src,dst in zip(u1, u2):
+        src.path.append(dst.xy)
+        src.wire()
+
+    p = brd.DC((6, 12))
+    p.n_agon(1.5, 60)
+    p.silko()
 
     brd.outline()
 
-    if 1:
+    brd.check()
+    if 0:
         brd.fill_any("GTL", "VCC")
         brd.fill_any("GBL", "GL2")
 
