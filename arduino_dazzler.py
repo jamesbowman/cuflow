@@ -97,7 +97,7 @@ class SD(LibraryPart):
     partname = "MICROSD"
     family = "J"
 
-__VERSION__ = "0.1.0"
+__VERSION__ = "1.0.0"
 
 def gentext(s):
     fn = "../../.fonts/Arista-Pro-Alternate-Light-trial.ttf"
@@ -107,6 +107,16 @@ def gentext(s):
     draw = ImageDraw.Draw(im)
     draw.text((200, 200), s, font=font, fill = 255)
     return im.crop(im.getbbox())
+
+class padline(cu.Part):
+    family = "J"
+    inBOM = False
+    def place(self, dc):
+        self.train(dc, self.val, lambda: self.rpad(dc, 1.27, 2.54), 2.54)
+
+    def escape(self, a = -45):
+        tt = [t.copy().w("i") for t in self.pads][::-1]
+        return self.board.enriver(tt, a)
 
 if __name__ == "__main__":
     brd = cu.Board(
@@ -145,13 +155,31 @@ if __name__ == "__main__":
     for nm in ("GND", "GND1", "GND2"):
         daz.s(nm).inside().forward(2).wire(width = 0.5).w("-")
 
-    jtag = [daz.s(nm) for nm in ('TDI', 'TDO', 'TCK', 'TMS')]
+    jtag_names = ('TDI', 'TDO', 'TCK', 'TMS')
+    jtag = [daz.s(nm) for nm in jtag_names]
     for i,t in enumerate(jtag):
-        t.inside().forward(8 + 2.54 * i).wire().via().setlayer('GBL').right(90)
-    for t in jtag:
-        t.forward(t.xy[0] - 2.5).wire()
-        t.rect(1.27, 2.54)
-        t.pad()
+        t.inside().forward(8 + 2.54 * i).wire().via().setlayer('GBL').right(45)
+    cu.extend2(jtag)
+    jtag0 = brd.enriver(jtag, 45)
+    jtag0.wire()
+
+    jtag_port = padline(brd.DC((12.0, 51.33)).left(90).setlayer("GBL"), 4)
+    jtag1 = jtag_port.escape().wire()
+    jtag0.w("f 11 r 45 f 3").meet(jtag1)
+
+    for p,nm in zip(jtag_port.pads, jtag_names):
+        p.text(nm)
+
+    uart_names = ('DTR', 'OUT', 'IN', '3V3', 'CTS', 'GND')
+
+    uart0 = daz.escapesM(["1", "2", "3"][::-1], -90).w("r 90").wire()
+
+    uart_port = padline(brd.DC((2.0, 39.0)).left(180).setlayer("GBL"), 6)
+    for p,nm in zip(uart_port.pads, uart_names):
+        p.text(nm)
+    uart_port.pads[5].copy().setname("GL2").w("i f 1").wire()
+    tt = [uart_port.pads[i].w("i") for i in (2, 1, 0)]
+    uart1 = brd.enriver(tt, 45).w("f 13 r 45").meet(uart0)
 
     daz_i2cbus = daz.escapesM(["8", "9", "10", "11", "12", "13"][::-1], 90)
     daz_i2cbus.meet(wii)
