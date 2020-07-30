@@ -158,14 +158,13 @@ if __name__ == "__main__":
     jtag_names = ('TDI', 'TDO', 'TCK', 'TMS')
     jtag = [daz.s(nm) for nm in jtag_names]
     for i,t in enumerate(jtag):
-        t.inside().forward(8 + 2.54 * i).wire().via().setlayer('GBL').right(45)
+        t.inside().forward(8 + 1 * i).wire().via().setlayer('GBL').right(45)
     cu.extend2(jtag)
     jtag0 = brd.enriver(jtag, 45)
-    jtag0.wire()
 
-    jtag_port = padline(brd.DC((12.0, 51.33)).left(90).setlayer("GBL"), 4)
+    jtag_port = padline(brd.DC((11.0, 51.33)).left(90).setlayer("GBL"), 4)
     jtag1 = jtag_port.escape().wire()
-    jtag0.w("f 11 r 45 f 3").meet(jtag1)
+    jtag0.w("f 15 r 45 f 3").meet(jtag1)
 
     for p,nm in zip(jtag_port.pads, jtag_names):
         p.text(nm)
