@@ -2031,7 +2031,7 @@ class Castellation(Part):
 class WiiPlug(Part):
     family = "J"
     def place(self, dc):
-        dc.rect(19, 10)
+        dc.rect(21, 10)
         self.board.keepouts.append(dc.poly().buffer(0))
 
         def finger():
@@ -2056,10 +2056,13 @@ class WiiPlug(Part):
         dc.pop()
 
         dc.goxy(-9.5, 4.8)
+        # turn right 90, with a radius of 1mm
+        R1MM = 90 * (" f %f r 1 " % (0.5 * math.pi / 90))
+        F15 = " l 90 f 1 r 90 f 15 r 90 f 1 l 90 "
         dc.newpath()
         dc.w("r 90 f 3.3 r 90 f 3.15 r 90 f 1 l 90 f 3.25 l 90 f 1 r 90 f 2 l 90 f 2.95 l 90 f 7.3 r 90 f 3.25")
         dc.w("f 3.25 r 90 f 7.3 l 90 f 2.95 l 90 f 2 r 90 f 1 l 90 f 3.25 l 90 f 1 r 90 f 3.15 r 90 f 3.3")
-        dc.w("r 90 f 15 r 90 f 19 r 90 f 15")
+        dc.w("r 90" + F15 + "r 90 f 19 r 90" + F15)
         self.board.layers['GML'].union(dc.poly())
 
     def escape(self):
