@@ -88,6 +88,8 @@ if __name__ == "__main__":
 
     uart0 = daz.escapesI(["3", "2", "1"], -90).w("r 90").wire()
     uart_names = ('DTR', 'OUT', 'IN', '3V3', 'CTS', 'GND')
+    brd.hole((2, 39 + 4), 2.5, 5.5)
+    brd.hole((2, 39 - cu.inches(.5) - 4), 2.5, 5.5)
     uart_port = padline(brd.DC((2.0, 39.0)).left(180), 6)
     for p,nm in zip(uart_port.pads, uart_names):
         p.copy().goxy(0, -3).text(nm)
