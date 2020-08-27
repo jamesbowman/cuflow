@@ -111,5 +111,5 @@ if __name__ == "__main__":
         brd.fill_any("GBL", "GBL")
 
     brd.save("loader")
-    # svgout.write(brd, "loader.svg")
+    svgout.write(brd, "loader.svg")
     brd.postscript("loader.ps")

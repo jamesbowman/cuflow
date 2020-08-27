@@ -71,6 +71,12 @@ class Dazzler(cu.Part):
         [t.outside().forward(board.c) for t in g]
         return board.enriver90(g, a).wire()
 
+    def escapesI(self, padnames, a):
+        board = self.board
+        g = [self.s(nm) for nm in padnames]
+        [t.inside().forward(board.c) for t in g]
+        return board.enriver90(g, a).wire()
+
     def escapesM(self, padnames, a):
         board = self.board
         g = [self.s(nm) for nm in padnames]
@@ -230,8 +236,10 @@ if __name__ == "__main__":
     caps(brd.DC((37.0, 1.5)), 'GL2', 'GL3', 2)
     caps(brd.DC((41.5, 18.6)).right(45), 'GL2', 'GL3', 1)
 
-    brd.outline()
-    # brd.oversize(2)
+    if 0:
+        brd.outline()
+    else:
+        brd.oversize(2)
     brd.fill()
     brd.check()
 

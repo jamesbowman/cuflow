@@ -70,8 +70,8 @@ class LibraryPart(cu.Part):
             g = so.linemerge(ls["20"])
             brd.layers['GML'].add(g)
         if self.use_silk and ls["21"]:
-            g = so.linemerge(ls["21"]).buffer(brd.silk / 2)
-            brd.layers['GTO'].add(g)
+            g = so.linemerge(ls["21"]).buffer(self.board.silk / 2)
+            self.board.layers['GTO'].add(g)
 
 class ArduinoR3(LibraryPart):
     libraryfile = "adafruit.lbr"
