@@ -3,11 +3,13 @@ from PIL import Image
 import math
 import cuflow as cu
 import svgout
+import tikzout
 
 __VERSION__ = "1.1.0"
 
 class Dazzler(cu.Part):
     family = "M"
+    source = {"EXCAMERA": "GD3XD"}
     def place(self, dc):
         def local(x, y):
             p = dc.copy()
@@ -236,14 +238,14 @@ if __name__ == "__main__":
     caps(brd.DC((37.0, 1.5)), 'GL2', 'GL3', 2)
     caps(brd.DC((41.5, 18.6)).right(45), 'GL2', 'GL3', 1)
 
-    if 0:
+    if 1:
         brd.outline()
     else:
         brd.oversize(2)
     brd.fill()
     brd.check()
 
-    if 1:
+    if 0:
         im = Image.open("img/dazzler-logo.png").transpose(Image.ROTATE_270)
         brd.logo(6.4, 28.8, im)
         im = Image.open("img/gd3x-logo.png")
@@ -257,4 +259,5 @@ if __name__ == "__main__":
 
     brd.save("dazzler")
     svgout.write(brd, "dazzler.svg")
+    tikzout.write(brd, "dazzler.tikz")
     lx9.dump_ucf("dazzler")

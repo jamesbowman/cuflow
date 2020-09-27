@@ -2034,6 +2034,7 @@ class Castellation(Part):
 
 class WiiPlug(Part):
     family = "J"
+    inBOM = False
     def place(self, dc):
         dc.rect(21, 10)
         self.board.keepouts.append(dc.poly().buffer(0))

@@ -62,8 +62,10 @@ class EDS(cu.Part):
         return (pp[2], pp[3])
 
 if __name__ == "__main__":
+    (xo, yo) = (20, 26)
+    # (xo, yo) = (4, 4)
     brd = cu.Board(
-        (50 + 20, 42 + 26),
+        (50 + xo, 42 + yo),
         trace = 0.2,
         space = cu.inches(1 / 20) - 0.2,
         via_hole = 0.3,
@@ -80,28 +82,29 @@ if __name__ == "__main__":
     for x,y in holexy:
         brd.hole((x + 2, y + 2), 2.6, 5)
 
-    daz = DazzlerPogo(brd.DC((25, 21)))
     teensy = Teensy40(brd.DC((42, 57)).right(90))
-    (sda, scl) = EDS(brd.DC((10, 54))).escape()
+    if 0:
+        daz = DazzlerPogo(brd.DC((25, 21)))
+        (sda, scl) = EDS(brd.DC((10, 54))).escape()
 
-    daz.pads[5].setname("GBL").forward(2).wire(layer = "GBL")
-    daz.pads[6].setwidth(1).w("r 90 f 6 l 90 f 12 r 90 f 12 l 90").goto(teensy.pads[-1]).wire()
-    straight(teensy.s("16"), daz.pads[8])
-    straight(teensy.s("17"), daz.pads[7])
-    
-    sda.w("f 33 r 90").wire().via().setlayer("GTL").goto(teensy.s("18")).wire()
-    scl.w("l 90 f 1 r 90 f 35 r 90").wire().via().setlayer("GTL").goto(teensy.s("19")).wire()
+        daz.pads[5].setname("GBL").forward(2).wire(layer = "GBL")
+        daz.pads[6].setwidth(1).w("r 90 f 6 l 90 f 12 r 90 f 12 l 90").goto(teensy.pads[-1]).wire()
+        straight(teensy.s("16"), daz.pads[8])
+        straight(teensy.s("17"), daz.pads[7])
+        
+        sda.w("f 33 r 90").wire().via().setlayer("GTL").goto(teensy.s("18")).wire()
+        scl.w("l 90 f 1 r 90 f 35 r 90").wire().via().setlayer("GTL").goto(teensy.s("19")).wire()
 
-    tt = daz.pads[:5][::-1]
-    [t.w("f 2") for t in tt]
-    jtag1 = brd.enriver(tt, 45)
-    jtag1.w("l 45").wire()
+        tt = daz.pads[:5][::-1]
+        [t.w("f 2") for t in tt]
+        jtag1 = brd.enriver(tt, 45)
+        jtag1.w("l 45").wire()
 
-    tt = teensy.pads[9:14][::-1]
-    [t.w("l 90 f 1") for t in tt]
-    jtag2 = brd.enriver(tt, 45).w("f 13 l 45").wire()
+        tt = teensy.pads[9:14][::-1]
+        [t.w("l 90 f 1") for t in tt]
+        jtag2 = brd.enriver(tt, 45).w("f 13 l 45").wire()
 
-    jtag1.meet(jtag2)
+        jtag1.meet(jtag2)
 
     brd.outline()
 
