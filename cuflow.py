@@ -428,6 +428,10 @@ class Draw(Turtle):
         struts = strut_x.union(strut_y)
         brd.layers['GTP'].add(g4.difference(struts))
 
+    def meet(self, other):
+        self.path.append(other.xy)
+        return self.wire()
+
     def text(self, s):
         (x, y) = self.xy
         self.board.layers['GTO'].add(hershey.ctext(x, y, s))
