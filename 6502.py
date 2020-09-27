@@ -14,6 +14,9 @@ class SD(LibraryPart):
     partname = "MICROSD"
     family = "J"
 
+def thermal(t, layer, d = 1.3):
+    t.setname(layer).thermal(d).wire(layer = layer)
+
 __VERSION__ = "1.0.0"
 
 def gentext(s):
@@ -76,16 +79,41 @@ class W65C02S(dip.dip):
     N       = 40
     def place(self, dc):
         dip.dip.place(self, dc)
-        return
-        for i in range(24):
-            self.pads[i + 1].setname(str(i))
-        thermal(self.pads[0], "GBL")
-        thermal(self.pads[-2], "GBL")
-        thermal(self.pads[-3], "GTL")
+        nms = [
+            "VPB", "RDY", "PHI1O", "IRQB", "MLB", "NMIB", "SYNC", "VDD", "A0", "A1",
+            "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10", "A11", "VSS",
+            "A12", "A13", "A14", "A15", "D7", "D6", "D5", "D4", "D3", "D2", "D1",
+            "D0", "RWB", "NC", "BE", "PHI2", "SOB", "PHI2C", "RESB" ]
+        assert len(nms) == 40
+
+        for p,nm in zip(self.pads, nms):
+            p.setname(nm)
+
+        thermal(self.s("VSS"), "GBL")
+        tied = "VDD NMIB IRQB RDY SOB".split()
+        for t in tied:
+            thermal(self.s(t), "GTL")
+
+    def escape(self):
+        s1 = [
+            "A0", "A1",
+            "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10", "A11"]
+        s2 = [
+            "A12", "A13", "A14", "A15", "D7", "D6", "D5", "D4", "D3", "D2", "D1",
+            "D0", "RWB", "PHI2", "RESB" ]
+        p1 = [self.s(s) for s in s1[::-1]]
+        [p.left(90).forward(2) for p in p1]
+        r1 = self.board.enriver90(p1, -90).wire()
+
+        p2 = [self.s(s) for s in s2[::-1]]
+        [p.left(90).forward(2) for p in p2]
+        r2 = self.board.enriver90(p2, 90).wire()
+
+        return r2.join(r1).wire()
 
 if __name__ == "__main__":
     brd = cu.Board(
-        (75, 60),
+        (81, 64),
         trace = cu.mil(5),
         space = cu.mil(5) * 2.0,
         via_hole = 0.3,
@@ -96,9 +124,9 @@ if __name__ == "__main__":
     daz = Dazzler(brd.DC((33, 25)).right(90))
     # cu.C0402(brd.DC((70, 20)).right(90), '0.1 uF').escape_2layer()
     usb = Amphenol10118194(brd.DC((6, 0)))
-    mcu = W65C02S(brd.DC((70, 20)))
+    mcu = W65C02S(brd.DC((71, 27)))
 
-    uart0 = daz.escapesI(["3", "2", "1"], -90).w("r 90").wire()
+    uart0 = daz.escapesI(["2", "1"], -90).w("r 90").wire()
     uart_names = ('DTR', 'OUT', 'IN', '3V3', 'CTS', 'GND')
     brd.hole((2, 39 + 4), 2.5, 5.5)
     brd.hole((2, 39 - cu.inches(.5) - 4), 2.5, 5.5)
@@ -106,15 +134,24 @@ if __name__ == "__main__":
     for p,nm in zip(uart_port.pads, uart_names):
         p.copy().goxy(0, -3).text(nm)
     uart_port.pads[5].copy().w("i -")
-    tt = [uart_port.pads[i].w("i") for i in (2, 1, 0)]
+    tt = [uart_port.pads[i].w("i") for i in (2, 1)]
     uart1 = brd.enriver(tt, 45).w("f 16 l 45").meet(uart0)
 
     usb.pads[0].left(90).goto(daz.s("5V")).wire(width = 0.4)
     usb.pads[4].setwidth(0.4).w("i -")
 
+    d1 = daz.escapes([str(i) for i in range(3, 15)], -90).forward(5).right(45).wire()
+    d2 = daz.escapes([str(i) for i in range(15, 30)], 90).forward(4).left(45).wire()
+    daz12 = d1.join(d2, 0.5).wire()
+
     daz.s("VCC").thermal(1).wire()
     for nm in ("GND", "GND1", "GND2"):
         daz.s(nm).inside().forward(2).wire(width = 0.5).w("-")
+
+    mcu12 = mcu.escape()
+    mcu12.w("f 2 l 90 f 4 l 45").wire()
+
+    mcu12.meet(daz12)
 
     if 0:
         im = Image.open("img/gameduino-mono.png")

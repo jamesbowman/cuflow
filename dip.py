@@ -1,9 +1,11 @@
+import math
 import cuflow as cu
 
 T = cu.inches(0.1)    # tenth on an inch, used throughout
 
 class dip(cu.Part):
     def place(self, dc):
+        self.chamfered(dc, self.width - T, T * (self.N / 2) + 2)
         height = T * ((self.N // 2) - 1)
         for _ in range(2):
             dc.push()
@@ -100,3 +102,26 @@ class Hdr_1_7(PTH):
         self.train(dc, self.N, lambda: self.gh(dc), T)
         [p.setname(str(i + 1)) for (i, p) in enumerate(self.pads)]
 
+class DIP(PTH):
+    family = "U"
+    def place(self, dc):
+        self.chamfered(dc, 6.2, 9.2)
+        for _ in range(2):
+            dc.push()
+            dc.goxy(-1.5 * T, 1.5 * T).left(180)
+            self.train(dc, self.N // 2, lambda: self.gh(dc), cu.inches(.1))
+            dc.pop()
+            dc.right(180)
+    def escape(self):
+        ii = cu.inches(.1) / 2
+        q = math.sqrt((ii ** 2) + (ii ** 2))
+        for p in self.pads[:4]:
+            p.w("l 45").forward(q).left(45).forward(1)
+        for p in self.pads[4:]:
+            p.w("r 90 f 1")
+        oo = list(sum(zip(self.pads[4:], self.pads[:4]), ()))
+        cu.extend2(oo)
+        return oo
+
+class DIP8(DIP):
+    N = 8
