@@ -16,7 +16,7 @@ class LibraryPart(cu.Part):
     partname = None
     use_silk = True
     use_pad_text = True
-    def __init__(self, dc, val = None, source = {}):
+    def __init__(self, dc, val = None, source = None):
         tree = ET.parse(self.libraryfile)
         root = tree.getroot()
         x_packages = root.find("drawing").find("library").find("packages")
@@ -78,6 +78,7 @@ class ArduinoR3(LibraryPart):
     partname = "ARDUINOR3"
     use_pad_text = False
     family = "J"
+    inBOM = False
     def escape(self):
         for nm in ("GND", "GND1", "GND2"):
             self.s(nm).setname("GL2").thermal(1.3).wire(layer = "GBL")
@@ -95,6 +96,8 @@ class ArduinoR3(LibraryPart):
 class SD(LibraryPart):
     libraryfile = "x.lbrSD_TF_holder.lbr"
     partname = "MICROSD"
+    source = {'LCSC': 'C91145'}
+    inBOM = True
     family = "J"
 
 __VERSION__ = "1.0.0"
@@ -134,6 +137,12 @@ if __name__ == "__main__":
     shield = ArduinoR3(brd.DC((0, 0)))
     cu.C0402(brd.DC((65, 39.0)), '0.1 uF').escape_2layer()
     cu.C0402(brd.DC((59, 27.5)), '0.1 uF').escape_2layer()
+
+    R1 = cu.R0402(brd.DC((51.5, 46.0)).right(90), '4.7K')
+    R2 = cu.R0402(brd.DC((53.0, 46.0)).right(90), '4.7K')
+    R1.pads[0].w("o l 90 f 0.5 -")
+    daz.s("PGM").w("o f 1 r 90 f 13 r 45 f 5.5 l 45 f 2").wire()
+    daz.s("5V").copy().w("i f 6 l 90 f 9.15 l 90 f 11.3 r 90 f 26.9 r 90 f 4").goto(R2.pads[0]).wire()
 
     def wii(i):
         y = 53.3 / 2 + i * (24.0 / 2)
@@ -204,7 +213,7 @@ if __name__ == "__main__":
 
     if 1:
         im = Image.open("img/gameduino-mono.png")
-        brd.logo(59, 45, im)
+        brd.logo(62, 46, im)
 
         im = Image.open("img/dazzler-logo.png")
         brd.logo(64, 30, im)

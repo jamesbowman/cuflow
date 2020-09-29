@@ -3,7 +3,7 @@ from PIL import Image, ImageDraw, ImageFont
 import math
 import cuflow as cu
 import svgout
-from dazzler import Dazzler
+from dazzler import Dazzler, DazzlerSocket
 from collections import defaultdict
 
 from arduino_dazzler import LibraryPart, padline
@@ -27,23 +27,6 @@ def gentext(s):
     draw = ImageDraw.Draw(im)
     draw.text((200, 200), s, font=font, fill = 255)
     return im.crop(im.getbbox())
-
-class IRMH6XXT(cu.Part):
-    # https://datasheet.lcsc.com/szlcsc/1810121714_Everlight-Elec-IRM-H638T-TR2_C91447.pdf
-    family = "U"
-    def place(self, dc):
-        self.chamfered(dc, 4, 5)
-        for _ in range(2):
-            dc.push()
-            dc.goxy(-2.7, 1.27).left(180)
-            self.train(dc, 2, lambda: self.rpad(dc, 0.7, 1.4), 2.54)
-            dc.pop()
-            dc.right(180)
-    def escape(self):
-        self.pads[0].w("i - ")
-        self.pads[1].w("i - ")
-        self.pads[3].setname("VCC").w("i f 1").wire()
-        return self.pads[2]
 
 class Amphenol10118194(cu.Part):
     # https://www.amphenol-icc.com/media/wysiwyg/files/drawing/10118194.pdf
@@ -88,13 +71,16 @@ class W65C02S(dip.dip):
 
         for p,nm in zip(self.pads, nms):
             p.setname(nm)
+            p.copy().w("r 90 f 3").text(nm)
 
-        thermal(self.s("VSS"), "GBL")
-        tied = "VDD NMIB IRQB RDY SOB".split()
-        for t in tied:
-            thermal(self.s(t), "GTL")
+        # p.copy().goxy(0, -3).text(nm)
 
     def escape(self):
+        self.s("VSS").setlayer("GBL").setname("GL2").thermal(1).wire()
+        tied = "VDD NMIB IRQB RDY SOB BE".split()
+        for t in tied:
+             self.s(t).setname("VCC").thermal(1).wire()
+
         s1 = [
             "A0", "A1",
             "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10", "A11"]
@@ -113,7 +99,7 @@ class W65C02S(dip.dip):
 
 if __name__ == "__main__":
     brd = cu.Board(
-        (81, 64),
+        (85, 64),
         trace = cu.mil(5),
         space = cu.mil(5) * 2.0,
         via_hole = 0.3,
@@ -121,7 +107,8 @@ if __name__ == "__main__":
         via_space = cu.mil(5),
         silk = cu.mil(6))
 
-    daz = Dazzler(brd.DC((33, 25)).right(90))
+    daz = DazzlerSocket(brd.DC((33, 25)).right(90))
+    daz.labels()
     # cu.C0402(brd.DC((70, 20)).right(90), '0.1 uF').escape_2layer()
     usb = Amphenol10118194(brd.DC((6, 0)))
     mcu = W65C02S(brd.DC((71, 27)))
