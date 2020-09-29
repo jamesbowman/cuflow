@@ -436,6 +436,10 @@ class Draw(Turtle):
         (x, y) = self.xy
         self.board.layers['GTO'].add(hershey.ctext(x, y, s))
 
+    def ltext(self, s):
+        (x, y) = self.xy
+        self.board.layers['GTO'].add(hershey.ltext(x, y, s))
+
 class Drawf(Draw):
     def defaults(self):
         self.layer = 'GBL'

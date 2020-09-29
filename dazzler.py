@@ -10,6 +10,10 @@ __VERSION__ = "1.1.0"
 class Dazzler(cu.Part):
     family = "M"
     source = {"EXCAMERA": "GD3XD"}
+
+    def padline(self, dc, n):
+        self.train(dc, n, lambda: self.rpad(dc, 1, 1), 2.00)
+
     def place(self, dc):
         def local(x, y):
             p = dc.copy()
@@ -21,20 +25,17 @@ class Dazzler(cu.Part):
         hdmi.silk()
         self.hdmi_holes(hdmi)
 
-        def padline(dc, n):
-            self.train(dc, n, lambda: self.rpad(dc, 1, 1), 2.00)
-
-        padline(local(34, 42).left(90), 15)
-        padline(local(0, 36).left(180), 16)
-        padline(local(8, 0).right(90), 4)
-        padline(local(30, 0).right(90), 3)
+        self.padline(local(34, 42).left(90), 15)
+        self.padline(local(0, 36).left(180), 16)
+        self.padline(local(8, 0).right(90), 5)
+        self.padline(local(30, 0).right(90), 3)
 
         def sr(a,b):
             return [str(i) for i in range(a, b)]
         names = (sr(1, 8) + ["GND1"] +
             sr(8, 23) + ["GND2"] +
             sr(23, 30) +
-            ["TMS", "TCK", "TDO", "TDI", "VCC", "GND", "5V"])
+            ["TMS", "TCK", "TDO", "TDI", "PGM", "VCC", "GND", "5V"])
         [p.setname(nm) for (p, nm) in zip(self.pads, names)]
         # (p0, p1) = cu.Castellation(brd.DC((34, 42)).left(90), 15).escape()
         # (p2, p3) = cu.Castellation(brd.DC((0, 36)).left(180), 16).escape()
@@ -45,6 +46,11 @@ class Dazzler(cu.Part):
         brd.hole(local(47.2, 2.8).xy, 2.5, 5)
         brd.hole(local(2.8, 42 - 2.8).xy, 2.5, 5)
         brd.hole(local(2.8, 2.8).xy, 2.5, 5)
+
+    def labels(self):
+        for i in range(1, 30):
+            p = self.s(str(i))
+            p.copy().w("o f 1.4").text(p.name)
 
     def hdmi_holes(self, dc):
 
@@ -84,6 +90,20 @@ class Dazzler(cu.Part):
         g = [self.s(nm) for nm in padnames]
         [t.inside().forward(1).wire().via('GBL').setlayer('GBL').forward(0.8) for t in g]
         return board.enriver90(g, a).wire()
+
+class DazzlerSocket(Dazzler):
+    def edgepad(self, dc):
+        dc.board.hole(dc.xy, 0.8)
+        p = dc.copy()
+        p.right(90)
+        self.roundpad(p, 1.4)
+
+    def padline(self, dc, n):
+        # e.g.  Digikey 2057-2RS1-15-G-ND or LCSC C225286
+        A = 2 * (n - 1)
+        h = dc.copy().forward(A / 2)
+        h.rect(2.5, 2 * (n - 1) + 2.6).silko()
+        self.train(dc, n, lambda: self.edgepad(dc), 2.00)
 
 if __name__ == "__main__":
     brd = cu.Board(

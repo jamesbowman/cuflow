@@ -85,6 +85,12 @@ def ctext(x, y, s):
     o = sa.translate(o, -cx + x, -cy + y)
     return o.buffer(6 * .0254 / 2)
 
+def ltext(x, y, s):
+    o = chars(s)
+    o = sa.scale(o, sf, -sf, origin = (0,0))
+    o = sa.translate(o, x, y)
+    return o.buffer(6 * .0254 / 2)
+
 if __name__ == '__main__':
     hf = dict([hersheyparse(l[:-1]) for l in open("hershey-occidental.dat")])
     print('hf = '+ repr(hf))
