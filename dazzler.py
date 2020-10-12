@@ -94,9 +94,13 @@ class Dazzler(cu.Part):
 class DazzlerSocket(Dazzler):
     def edgepad(self, dc):
         dc.board.hole(dc.xy, 0.8)
+        dc.h = 1.2
+        p = dc.copy()
+        p.n_agon(0.75, 60)
+        p.contact()
         p = dc.copy()
         p.right(90)
-        self.roundpad(p, 1.4)
+        self.pads.append(p)
 
     def padline(self, dc, n):
         # e.g.  Digikey 2057-2RS1-15-G-ND or LCSC C225286
