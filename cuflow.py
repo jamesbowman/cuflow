@@ -1438,7 +1438,7 @@ class SOT764(Part):
 
 class M74LVC245(SOT764):
     source = {'LCSC': 'C294612'}
-    mfr = 'W25Q64JVSSIQ'
+    mfr = '74LVC245ABQ'
     def escape(self):
         names = [
             "DIR", "A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "GND",
