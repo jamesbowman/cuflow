@@ -368,6 +368,10 @@ class Draw(Turtle):
         g = sg.LinearRing(self.path).buffer(self.board.silk / 2)
         self.board.layers['GTO'].add(g)
 
+    def outline(self):
+        g = sg.LinearRing(self.path)
+        self.board.layers['GML'].add(g)
+
     def drill(self, d):
         self.board.drill(self.xy, d)
 
@@ -473,7 +477,6 @@ class River(Turtle):
         c = math.cos(a)
         (x0, y0) = self.tt[0].xy
         for (i, t) in enumerate(self.tt):
-            r = self.c * i
             x = t.xy[0] - x0
             y = t.xy[1] - y0
             nx = x * c - y * s
@@ -488,7 +491,6 @@ class River(Turtle):
         tt = self.tt[::-1]
         (x0, y0) = tt[0].xy
         for (i, t) in enumerate(tt):
-            r = self.c * i
             x = t.xy[0] - x0
             y = t.xy[1] - y0
             nx = x * c - y * s
@@ -614,6 +616,24 @@ class River(Turtle):
     def wire(self, layer = None, width = None):
         [t.wire(layer, width) for t in self.tt]
         return self
+
+    def through(self):
+        print(self.tt[0].distance(self.tt[-1]))
+        h = self.board.via + self.board.via_space
+        th = math.acos(self.c / h)
+        d = self.board.via / 2 + self.board.via_space
+        a = h * math.sin(th)
+        th_d = math.degrees(th)
+        dst = {'GTL': 'GBL', 'GBL': 'GTL'}[self.tt[0].layer]
+
+        self.forward(d)
+        for i,t in enumerate(self.tt):
+            t.forward(i * a).right(th_d).forward(d).wire()
+            t.via().setlayer(dst)
+            t.forward(d).left(th_d).forward((len(self.tt) - 1 - i) * a)
+        self.forward(d)
+        self.wire()
+        print(self.tt[0].distance(self.tt[-1]))
 
 class Board:
     def __init__(self, size,
@@ -1461,6 +1481,30 @@ class M74LVC245(SOT764):
         outs = self.board.enriver90(gout, 90).wire()
 
         return (ins, outs)
+
+    def escape2(self):
+        names = [
+            "DIR", "A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "GND",
+            "B7", "B6", "B5", "B4", "B3", "B2", "B1", "B0", "OE", "VCC"]
+        [p.setname(nm) for (p, nm) in zip(self.pads, names)]
+        [p.outside() for p in self.pads]
+        self.s("GND").w("o -")
+        self.s("OE").w("l 90 f 0.4 -")
+        self.s("VCC").w("o f 0.5").wire()
+
+        gin = [self.s(nm) for nm in ('A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7')]
+        extend2(gin)
+        ins = self.board.enriver90(gin, 90)
+
+        # self.s("B7").w("l 90 f 1.56").wire()
+        self.s("B7").w("l 90 f 0.9").wire()
+        gout = [self.s(nm) for nm in ('B7', 'B6', 'B5', 'B4', 'B3', 'B2', 'B1', 'B0')]
+        # [s.forward(0.2) for s in gout]
+        extend2(gout)
+
+        outs = self.board.enriver90(gout, 90).wire()
+
+        return (ins, self.s("DIR"), outs)
 
 class W25Q64J(SOIC8):
     source = {'LCSC': 'C179171'}

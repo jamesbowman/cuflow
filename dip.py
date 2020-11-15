@@ -102,6 +102,15 @@ class Hdr_1_7(PTH):
         self.train(dc, self.N, lambda: self.gh(dc), T)
         [p.setname(str(i + 1)) for (i, p) in enumerate(self.pads)]
 
+class SIL(PTH):
+    family  = "J"
+    def place(self, dc):
+        self.N = int(self.val)
+        # self.chamfered(dc, T + 2, T * self.N + 2)
+        dc.forward(((self.N - 1) / 2) * T).left(180)
+        self.train(dc, self.N, lambda: self.gh(dc), T)
+        [p.setname(str(i + 1)) for (i, p) in enumerate(self.pads)]
+
 class DIP(PTH):
     family = "U"
     def place(self, dc):
