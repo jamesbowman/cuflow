@@ -88,13 +88,18 @@ if __name__ == "__main__":
     d.outline()
     brd.hole((5.029, 33.122), 3.2, 7)
 
+    def gnd(s):
+        s.setname("GL2").thermal(1.1).wire(layer = "GBL")
+
     # ------------------------------ RC2014 bus
     bus = dip.SIL(brd.DC((2.54 * 19.5, 1.715)).right(270), "39")
     nms = "a15 a14 a13 a12 a11 a10 a9 a8 a7 a6 a5 a4 a3 a2 a1 a0 gnd 5v m1 rst clk int mreq wr rd iorq d0 d1 d2 d3 d4 d5 d6 d7 tx rx u1 u2 u3".split()
     for (nm, p) in zip(nms, bus.pads):
         p.setname(nm)
         p.copy().w("l 90 f 2").text(nm.upper())
-        p.left(90).forward(1)
+        if nm != "gnd":
+            p.left(90).forward(1)
+    gnd(bus.s("gnd"))
     
     def routel(layer, sigs):
         zsig = [bus.s(nm) for nm in sigs]
@@ -103,23 +108,35 @@ if __name__ == "__main__":
         cu.extend2(zsig)
         zsig0 = brd.enriver90(zsig, -90)
         return zsig0.wire()
-    b_names = "d7 d6 d5 d4 d3 d2 d1 d0 iorq wr int clk m1 a0 a1 a2 a3 a4 a5 a6 a7".split()
+    for nm in "d7 d6 d5 d4 d3 d2 d1 d0".split():
+        bus.s(nm).w("f 1 r 45 f 2 l 45 f 3")
     za = routel('GTL', "iorq wr int clk m1 a0 a1 a2 a3 a4 a5 a6 a7".split())
     zd = routel('GBL', "d7 d6 d5 d4 d3 d2 d1 d0".split())
-    zd.w("r 30 f 10 l 30 f 27 / r 90").wire()
+    zd.w("f 38 / r 90").wire()
     za.w("r 90").wire()
 
-    # PS/2 keyboard: MD-60S from CUI, Future Electronics $1.10
+    # ------------------------------ FTDI conn
+    ftdi = dip.SIL(brd.DC((1.2, 24.6)).right(0), "6")
+    ftdi_names = ('DTR', 'OUT', 'IN', '5V', 'CTS', 'GND')
+    for p,nm in zip(ftdi.pads, ftdi_names):
+        p.setname(nm)
+        p.copy().w("l 90 f 2").text(nm)
+    gnd(ftdi.s("GND"))
+    i = ftdi.s("IN").w("l 90 f 4 r 90 f 8 l 90 f 4 r 45 f 5 r 45 f 4 l 90 f 1 l 90")
+    ftdi_in = brd.river1(i).wire()
+
+    # ------------------------------ PS/2
+    # MD-60S from CUI, Future Electronics $1.10
     # 1: DATA  5: CLOCK
-    ps2 = MD_60S(brd.DC((6.2, 12)).right(90))
+    ps2 = MD_60S(brd.DC((6.2, 10)).right(90))
     dc = [ps2.s("5"), ps2.s("1")]
     ps2.s("1").w("f 1").wire()
     ps2.s("3").w("f 0 l 90 f 2 -")
     ps2.s("5").w("f 0.5 r 90 f 2 l 90 f 0.5").wire()
     ps2b = brd.enriver90([t.w("f 4") for t in dc], -90).wire()
     
-    zbus = zd.join(za, 0.5).join(ps2b).wire()
-    print(len(zbus))
+    print(ftdi_in.tt)
+    zbus = zd.join(za, 0.5).join(ps2b).join(ftdi_in).wire()
 
     daz = Dazzler(brd.DC((73, 26)).right(0), "nosw")
 
@@ -144,6 +161,16 @@ if __name__ == "__main__":
     daz2 = brd.enriver90(ss, 90)
     daz2.w("l 45 f 15 r 45 f 6 / l 45").wire()
 
+    # ------------------------------ dazzler console
+    uart_names = ('DTR', 'OUT', 'IN', '3V3', 'CTS', 'GND')
+
+    uart_port = padline(brd.DC((2.0, 39.0)).left(90).setlayer("GBL"), 6)
+    for p,nm in zip(uart_port.pads, uart_names):
+        p.text(nm)
+    # uart_port.pads[5].copy().setname("GL2").w("i f 1").wire()
+    # tt = [uart_port.pads[i].w("i") for i in (2, 1, 0)]
+    # uart1 = brd.enriver(tt, 45).w("f 13 r 45").meet(uart0)
+
     # ------------------------------ level shifters
     d = brd.DC((25, 42)).right(180)
     asig = []       # FPGA, 3.3V side
@@ -162,7 +189,8 @@ if __name__ == "__main__":
     zbus.meet(bbus)
 
     # ------------------------------ 5V power
-    bus.s("5v").setlayer('GBL').setwidth(1).w("f 2").wire()
+    v5 = bus.s("5v").setlayer('GBL').setwidth(1)
+    v5.copy().w("f 2 r 90 f 22 / l 45 f 11 r 45 f 8").goto(daz.s("5V")).wire()
 
     """
     cu.C0402(brd.DC((65, 39.0)), '0.1 uF').escape_2layer()
@@ -222,7 +250,7 @@ if __name__ == "__main__":
         for i,s in enumerate(["(C) 2020", "EXCAMERA LABS", str(__VERSION__)]):
             brd.annotate(57.5, 8.5 - 1.5 * i, s)
 
-    if 0:
+    if 1:
         brd.fill_any("GTL", "VCC")
         brd.fill_any("GBL", "GL2")
 
