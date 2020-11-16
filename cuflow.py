@@ -212,6 +212,7 @@ class Draw(Turtle):
         r.layer = self.layer
         r.name = self.name
         r.part = self.part
+        r.width = self.width
         return r
 
     def forward(self, d):
@@ -267,7 +268,7 @@ class Draw(Turtle):
         return self
 
     def is_behind(self, other):
-        assert abs(self.dir - other.dir) < 0.0001
+        assert abs(self.dir - other.dir) < 0.0001, abs(self.dir - other.dir)
         (_, y) = self.seek(other)
         return y > 0
 
@@ -445,6 +446,11 @@ class Draw(Turtle):
     def ltext(self, s):
         (x, y) = self.xy
         self.board.layers['GTO'].add(hershey.ltext(x, y, s))
+
+    def through(self):
+        self.wire()
+        dst = {'GTL': 'GBL', 'GBL': 'GTL'}[self.layer]
+        self.via().setlayer(dst)
 
 class Drawf(Draw):
     def defaults(self):
@@ -854,6 +860,9 @@ class Board:
 
         with open(fn, "wt") as f:
             f.write("".join([l + "\n" for l in ps]))
+
+    def river1(self, i):
+        return River(self, [i])
 
     def enriver(self, ibank, a):
         if a > 0:
