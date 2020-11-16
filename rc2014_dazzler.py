@@ -53,6 +53,18 @@ class MD_60S(eagle.LibraryPart):
     use_pad_text = False
     family = "J"
 
+def dazzler_console(dc):
+    uart0 = daz.escapesI(["3", "2", "1"], -90).w("r 90").wire()
+    uart_names = ('DTR', 'OUT', 'IN', '3V3', 'CTS', 'GND')
+    # brd.hole((2, 39 + 4), 2.5, 5.5)
+    # brd.hole((2, 39 - cu.inches(.5) - 4), 2.5, 5.5)
+    uart_port = padline(dc, 6)
+    for p,nm in zip(uart_port.pads, uart_names):
+        p.copy().goxy(0, -3).text(nm)
+    uart_port.pads[5].copy().w("i -")
+    tt = [uart_port.pads[i].w("i") for i in (2, 1)]
+    return brd.enriver(tt, 45)
+
 if __name__ == "__main__":
     brd = cu.Board(
         (100, 50),
