@@ -141,6 +141,7 @@ class Turtle:
             '-' : lambda: self.wvia('GL2'),
             '+' : lambda: self.wvia('GL3'),
             '.' : lambda: self.wvia('GBL'),
+            '/' : self.through,
         }
         cmds2 = {
             'f' : self.forward,
@@ -162,6 +163,7 @@ class Turtle:
 
     def inside(self): pass
     def outside(self): pass
+    def through(self): pass
 
 class Draw(Turtle):
     def __init__(self, board, xy, dir = 0, name = None):
@@ -464,6 +466,9 @@ class River(Turtle):
     def __repr__(self):
         return "<River %d at %r>" % (len(self.tt), self.tt[0])
 
+    def __len__(self):
+        return len(self.tt)
+
     def r(self):
         return self.c * (len(self.tt) - 1)
 
@@ -618,7 +623,7 @@ class River(Turtle):
         return self
 
     def through(self):
-        print(self.tt[0].distance(self.tt[-1]))
+        # print(self.tt[0].distance(self.tt[-1]))
         h = self.board.via + self.board.via_space
         th = math.acos(self.c / h)
         d = self.board.via / 2 + self.board.via_space
@@ -1383,7 +1388,7 @@ class SOIC8(SOIC):
 class TSSOP(Part):
     family = "U"
     def place(self, dc):
-        self.chamfered(dc, 4.4, 5.0)
+        self.chamfered(dc, 4.4, {14:5.0, 20:6.5}[self.N])
         P = self.N // 2
         e = 0.65
         for _ in range(2):

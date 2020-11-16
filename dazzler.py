@@ -15,6 +15,7 @@ class Dazzler(cu.Part):
         self.train(dc, n, lambda: self.rpad(dc, 1, 1), 2.00)
 
     def place(self, dc):
+        SW = not "nosw" in self.val
         def local(x, y):
             p = dc.copy()
             return p.goxy(x - 25, y - 21)
@@ -27,15 +28,19 @@ class Dazzler(cu.Part):
 
         self.padline(local(34, 42).left(90), 15)
         self.padline(local(0, 36).left(180), 16)
-        self.padline(local(8, 0).right(90), 5)
+        if SW:
+            self.padline(local(8, 0).right(90), 5)
         self.padline(local(30, 0).right(90), 3)
 
         def sr(a,b):
             return [str(i) for i in range(a, b)]
         names = (sr(1, 8) + ["GND1"] +
             sr(8, 23) + ["GND2"] +
-            sr(23, 30) +
-            ["TMS", "TCK", "TDO", "TDI", "PGM", "VCC", "GND", "5V"])
+            sr(23, 30))
+        if SW:
+            names += ["TMS", "TCK", "TDO", "TDI", "PGM"]
+        names += ["VCC", "GND", "5V"]
+
         [p.setname(nm) for (p, nm) in zip(self.pads, names)]
         # (p0, p1) = cu.Castellation(brd.DC((34, 42)).left(90), 15).escape()
         # (p2, p3) = cu.Castellation(brd.DC((0, 36)).left(180), 16).escape()
@@ -45,7 +50,8 @@ class Dazzler(cu.Part):
         brd = self.board
         brd.hole(local(47.2, 2.8).xy, 2.5, 5)
         brd.hole(local(2.8, 42 - 2.8).xy, 2.5, 5)
-        brd.hole(local(2.8, 2.8).xy, 2.5, 5)
+        if SW:
+            brd.hole(local(2.8, 2.8).xy, 2.5, 5)
 
     def labels(self):
         for i in range(1, 30):

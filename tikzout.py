@@ -17,7 +17,7 @@ def write(board, filename):
     y1 -= y0
 
     with open(filename, "wt") as hh:
-        hh.write("\\begin{tikzpicture}[scale=2]\n")
+        # hh.write("\\begin{tikzpicture}[scale=2]\n")
         li = [block.exterior] + list(block.interiors)
         for l in li:
             print(l.coords)
@@ -25,7 +25,7 @@ def write(board, filename):
             cc = " -- ".join(["(%fmm,%fmm)" % p for p in l.coords])
             hh.write("\\draw[color=blue, line width=.2mm] " + cc + ";\n")
 
-        hh.write("\\end{tikzpicture}\n")
+        # hh.write("\\end{tikzpicture}\n")
 
         """
         gto = board.layers['GTO'].preview()
