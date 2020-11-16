@@ -39,7 +39,7 @@ class TXB0108(cu.TSSOP):
             if p.name == "GND":
                 p.w("i -")
             elif p.name == "VCCA":
-                p.w("i f 1").wire()
+                p.setname("VCC").w("i f 1").wire()
             else:
                 p.outside()
         a = [self.s(nm) for nm in "A1 A2 A3 A4 A5 A6 A7 A8".split()]
@@ -54,16 +54,46 @@ class MD_60S(eagle.LibraryPart):
     family = "J"
 
 def dazzler_console(dc):
-    uart0 = daz.escapesI(["3", "2", "1"], -90).w("r 90").wire()
     uart_names = ('DTR', 'OUT', 'IN', '3V3', 'CTS', 'GND')
-    # brd.hole((2, 39 + 4), 2.5, 5.5)
-    # brd.hole((2, 39 - cu.inches(.5) - 4), 2.5, 5.5)
+    brd.hole(dc.copy().w("r 180 f 4").xy, 2.5, 5.5)
+    brd.hole(dc.copy().forward(4 + cu.inches(0.5)).xy, 2.5, 5.5)
     uart_port = padline(dc, 6)
     for p,nm in zip(uart_port.pads, uart_names):
-        p.copy().goxy(0, -3).text(nm)
-    uart_port.pads[5].copy().w("i -")
+        p.setname(nm)
+        p.copy().goxy(0, 0).text(nm)
+    uart_port.s("GND").setname("GL2").w("l 90 f 2").wire(layer = "GBL")
     tt = [uart_port.pads[i].w("i") for i in (2, 1)]
-    return brd.enriver(tt, 45)
+    return brd.enriver(tt, -45).wire()
+
+class MD_60Sb(dip.PTH):
+    family = "J"
+    mfr = 'MD-60S'
+    def place(self, dc):
+        self.chamfered(dc, 14, 12.3)
+
+        def mounting(dc, l):
+            self.board.hole(dc.xy, l, l * 1.1)
+            return
+            dc.push()
+            dc.newpath()
+            dc.forward(l / 2)
+            dc.right(180)
+            dc.forward(l)
+            dc.slot(.25)
+            dc.pop()
+
+        dc.right(180).forward(12.3 / 2).right(180)
+        mounting(dc.copy().forward(4.70).right(90), 2.5)
+        def pin(nm, x, y):
+            self.gh(dc.copy().setname(nm).goxy(x, y).text(nm))
+
+        pin("1",  2.6 / 2, 8.50)
+        pin("2", -2.6 / 2, 8.50)
+        pin("3", -6.5 / 2, 8.50)
+        pin("5",  6.5 / 2, 8.50)
+
+        pin("8", -6.5 / 2, 11)
+        pin("6",  6.5 / 2, 11)
 
 if __name__ == "__main__":
     brd = cu.Board(
@@ -128,11 +158,11 @@ if __name__ == "__main__":
     # ------------------------------ PS/2
     # MD-60S from CUI, Future Electronics $1.10
     # 1: DATA  5: CLOCK
-    ps2 = MD_60S(brd.DC((6.2, 10)).right(90))
-    dc = [ps2.s("5"), ps2.s("1")]
-    ps2.s("1").w("f 1").wire()
-    ps2.s("3").w("f 0 l 90 f 2 -")
-    ps2.s("5").w("f 0.5 r 90 f 2 l 90 f 0.5").wire()
+    ps2 = MD_60Sb(brd.DC((6.2, 10)).right(90))
+    dc = [ps2.s("6"), ps2.s("1")]
+    ps2.s("5").w("f 0 r 180 f 1 -")
+    ps2.s("3").newpath().setlayer('GBL').w("r 45 f 3").wire()
+    cu.extend2(dc)
     ps2b = brd.enriver90([t.w("f 4") for t in dc], -90).wire()
     
     print(ftdi_in.tt)
@@ -152,6 +182,11 @@ if __name__ == "__main__":
     daz.s("VCC").thermal(1).wire()
     for nm in ("GND", "GND1", "GND2"):
         daz.s(nm).inside().forward(2).wire(width = 0.5).w("-")
+
+    ss = [daz.s(str(i)) for i in (2, 1)]
+    [s.w("i f 0.5") for s in ss]
+    daz0 = brd.enriver90(ss, -90).wire()
+
     ss = [daz.s(str(i)) for i in range(15, 30)]
     [s.forward(1) for s in ss]
     daz1 = brd.enriver90(ss, 90).wire()
@@ -161,21 +196,20 @@ if __name__ == "__main__":
     daz2 = brd.enriver90(ss, 90)
     daz2.w("l 45 f 15 r 45 f 6 / l 45").wire()
 
-    # ------------------------------ dazzler console
-    uart_names = ('DTR', 'OUT', 'IN', '3V3', 'CTS', 'GND')
+    daz.s("12").w("i f 1 / r 45 f 14 r 45 f 30").goto(ftdi.s("OUT")).wire()
 
-    uart_port = padline(brd.DC((2.0, 39.0)).left(90).setlayer("GBL"), 6)
-    for p,nm in zip(uart_port.pads, uart_names):
-        p.text(nm)
-    # uart_port.pads[5].copy().setname("GL2").w("i f 1").wire()
-    # tt = [uart_port.pads[i].w("i") for i in (2, 1, 0)]
-    # uart1 = brd.enriver(tt, 45).w("f 13 r 45").meet(uart0)
+    # ------------------------------ dazzler console
+    cx = dazzler_console(brd.DC((37.0, 48.0)).left(90).setlayer('GBL'))
+    daz0.w("f 2 l 90 f 2 l 90")
+    daz0.w("f 34 / l 45 f 12 r 90 f 3").wire()
+    daz0.meet(cx)
 
     # ------------------------------ level shifters
     d = brd.DC((25, 42)).right(180)
     asig = []       # FPGA, 3.3V side
     bsig = []       # Z80, 5V side
     for i in range(3):
+        cu.C0402(d.copy().goxy(1.2, 4), '0.1 uF').escape_2layer()
         (a, b) = TXB0108(d).escape()
         asig = a + asig
         bsig += b
@@ -191,6 +225,8 @@ if __name__ == "__main__":
     # ------------------------------ 5V power
     v5 = bus.s("5v").setlayer('GBL').setwidth(1)
     v5.copy().w("f 2 r 90 f 22 / l 45 f 11 r 45 f 8").goto(daz.s("5V")).wire()
+    print([(p.name, p) for p in ps2.pads])
+    v5.copy().w("f 2 l 90 f 27 r 90 f 6").goto(ps2.s("3")).wire()
 
     """
     cu.C0402(brd.DC((65, 39.0)), '0.1 uF').escape_2layer()
