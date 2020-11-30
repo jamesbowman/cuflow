@@ -452,6 +452,7 @@ class Draw(Turtle):
         self.wire()
         dst = {'GTL': 'GBL', 'GBL': 'GTL'}[self.layer]
         self.via().setlayer(dst)
+        return self
 
 class Drawf(Draw):
     def defaults(self):
@@ -554,6 +555,14 @@ class River(Turtle):
             self.left(a)
         return self
 
+    def spread(self, d):
+        c = self.board.trace + self.board.space
+        n = len(self.tt) - 1
+        for i,t in enumerate(self.tt[::-1]):
+            i_ = n - i
+            t.forward(c * i).left(90).forward(i_ * d).right(90).forward(c * i_)
+        return self
+
     def join(self, other, ratio = 0.0):
         assert 0 <= ratio <= 1
         st = self.tt[-1]
@@ -645,7 +654,7 @@ class River(Turtle):
             t.forward(d).left(th_d).forward((len(self.tt) - 1 - i) * a)
         self.forward(d)
         self.wire()
-        print(self.tt[0].distance(self.tt[-1]))
+        return self
 
 class Board:
     def __init__(self, size,
