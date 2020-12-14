@@ -6,7 +6,6 @@ import cuflow as cu
 import dip
 import svgout
 from dazzler import Dazzler
-import eagle
 
 __VERSION__ = "1.0.0"
 
@@ -39,19 +38,18 @@ class TXB0108(cu.TSSOP):
             if p.name == "GND":
                 p.w("i -")
             elif p.name == "VCCA":
-                p.setname("VCC").w("i f 1").wire()
+                p.setname("VCC").w("i f 0.4").wire()
+            elif p.name == "VCCB":
+                p.w("i f 1.5").wire()
             else:
                 p.outside()
         a = [self.s(nm) for nm in "A1 A2 A3 A4 A5 A6 A7 A8".split()]
         b = [self.s(nm) for nm in "B8 B7 B6 B5 B4 B3 B2 B1".split()]
 
-        return (a, b)
+        oe = self.s("OE").w("i f 1.5").wire()
+        oe.copy().via()
 
-class MD_60S(eagle.LibraryPart):
-    libraryfile = "MD-60S.lbr"
-    partname = "CUI_MD-60S"
-    use_pad_text = False
-    family = "J"
+        return (a, b, oe)
 
 def dazzler_console(dc):
     uart_names = ('DTR', 'OUT', 'IN', '3V3', 'CTS', 'GND')
@@ -165,18 +163,9 @@ if __name__ == "__main__":
     cu.extend2(dc)
     ps2b = brd.enriver90([t.w("f 4") for t in dc], -90).wire()
     
-    print(ftdi_in.tt)
     zbus = zd.join(za, 0.5).join(ps2b).join(ftdi_in).wire()
 
     daz = Dazzler(brd.DC((73, 26)).right(0), "nosw")
-
-    if 0:
-        (lvl_a, lvl_d, lvl_b) = cu.M74LVC245(brd.DC((60, 37)).right(45)).escape2()
-        lvl_a.w("l 45 f 3").wire()
-        lvl_d.setname("VCC").w("o f 0.5").wire()
-        lvl_b.w("l 45 r 90 f 5 r 90")
-        lvl_b.through()
-        lvl_b.through()
 
     # ------------------------------ dazzler busses
     daz.s("VCC").thermal(1).wire()
@@ -196,7 +185,8 @@ if __name__ == "__main__":
     daz2 = brd.enriver90(ss, 90)
     daz2.w("l 45 f 15 r 45 f 6 / l 45").wire()
 
-    daz.s("12").w("i f 1 / r 45 f 14 r 45 f 30").goto(ftdi.s("OUT")).wire()
+    daz.s("13").w("i f 1 / r 45 f 10 r 45 f 12 r 45 f 10.5 l 45 f 16 l 45 f 7 l 45 f 12").goto(ftdi.s("OUT")).wire()
+    oe = daz.s("12").w("i f 1 / r 45 f 13.5 r 45 f 23").wire()
 
     # ------------------------------ dazzler console
     cx = dazzler_console(brd.DC((37.0, 48.0)).left(90).setlayer('GBL'))
@@ -209,11 +199,12 @@ if __name__ == "__main__":
     asig = []       # FPGA, 3.3V side
     bsig = []       # Z80, 5V side
     for i in range(3):
-        cu.C0402(d.copy().goxy(1.2, 4), '0.1 uF').escape_2layer()
-        (a, b) = TXB0108(d).escape()
+        cu.C0402(d.copy().goxy(-2.8, 4.5).left(180), '0.1 uF').escape_2layer()
+        (a, b, _oe) = TXB0108(d).escape()
+        oe.copy().goto(_oe).wire()
         asig = a + asig
         bsig += b
-        d.forward(8)
+        d.forward(9)
     bbus = brd.enriver90(bsig, -90).wire()
 
     x = 24 - len(daz1)
@@ -223,10 +214,11 @@ if __name__ == "__main__":
     zbus.meet(bbus)
 
     # ------------------------------ 5V power
-    v5 = bus.s("5v").setlayer('GBL').setwidth(1)
+    v5 = bus.s("5v").setlayer('GBL').setwidth(0.6)
     v5.copy().w("f 2 r 90 f 22 / l 45 f 11 r 45 f 8").goto(daz.s("5V")).wire()
-    print([(p.name, p) for p in ps2.pads])
-    v5.copy().w("f 2 l 90 f 27 r 90 f 6").goto(ps2.s("3")).wire()
+    lv5 = v5.copy().w("f 2 l 90 f 27 r 90 f 6").wire()
+    lv5.copy().goto(ps2.s("3")).wire()
+    lv5.w("r 45 f 10 l 45 / f 22").wire()
 
     """
     cu.C0402(brd.DC((65, 39.0)), '0.1 uF').escape_2layer()
@@ -286,7 +278,7 @@ if __name__ == "__main__":
         for i,s in enumerate(["(C) 2020", "EXCAMERA LABS", str(__VERSION__)]):
             brd.annotate(57.5, 8.5 - 1.5 * i, s)
 
-    if 1:
+    if 0:
         brd.fill_any("GTL", "VCC")
         brd.fill_any("GBL", "GL2")
 
