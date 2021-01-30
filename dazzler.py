@@ -24,7 +24,7 @@ class Dazzler(cu.Part):
         hdmi = local(45, 33.5).right(270)
         hdmi.rect(15, 11.1)
         hdmi.silk()
-        self.hdmi_holes(hdmi)
+        self.hdmi_holes(hdmi, dc)
 
         self.padline(local(34, 42).left(90), 15)
         self.padline(local(0, 36).left(180), 16)
@@ -58,8 +58,7 @@ class Dazzler(cu.Part):
             p = self.s(str(i))
             p.copy().w("o f 1.4").text(p.name)
 
-    def hdmi_holes(self, dc):
-
+    def hdmi_holes(self, dc, org):
         dc.right(90)
         dc.forward(14.5 / 2)
         dc.left(90)
@@ -68,8 +67,10 @@ class Dazzler(cu.Part):
         def holepair():
             dc.push()
             self.board.hole(dc.xy, 2.4)
+            # print('--->', org.seek(dc), 2.4)
             dc.forward(5.96)
             self.board.hole(dc.xy, 1.4)
+            # print('--->', org.seek(dc), 1.4)
             dc.pop()
         holepair()
         dc.right(90)
@@ -87,7 +88,7 @@ class Dazzler(cu.Part):
 
     def escapesI(self, padnames, a):
         board = self.board
-        g = [self.s(nm) for nm in padnames]
+        g = [self.s(nm).copy() for nm in padnames]
         [t.inside().forward(board.c) for t in g]
         return board.enriver90(g, a).wire()
 

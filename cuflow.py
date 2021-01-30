@@ -656,6 +656,39 @@ class River(Turtle):
         self.wire()
         return self
 
+    def shuffle(self, other, mp):
+        # print(self.tt[0].distance(self.tt[-1]))
+        h = (self.board.via + self.board.via_space) # / math.sqrt(2)
+        th = math.acos(self.c / h)
+        d = self.board.via / 2 + self.board.via_space
+        a = h * math.sin(th)
+        th_d = math.degrees(th)
+        dst = {'GTL': 'GBL', 'GBL': 'GTL'}[self.tt[0].layer]
+
+        # print('         mp', mp)
+        # print('   original', [t.name for t in self.tt])
+        # print('      other', [t.name for t in other.tt])
+        self.forward(d)
+        othernames = {p.name:i for i,p in enumerate(other.tt)}
+        newt = [None for _ in self.tt]
+        for i,t in enumerate(self.tt):
+            t.forward(i * a).right(th_d)
+            t.forward(d)
+            fa = othernames[mp[t.name]]
+            newt[fa] = t
+            t.forward(h * fa)
+            t.wire()
+            t.through()
+            t.left(90)
+        extend2(self.tt)
+        # print('       newt', [t.name for t in newt])
+        self.tt = newt[::-1]
+        self.forward(d)
+        for i,t in enumerate(self.tt):
+            t.left(th_d).forward((len(self.tt) - 1 - i) * a)
+        self.wire()
+        return self
+
 class Board:
     def __init__(self, size,
                trace,
@@ -2133,9 +2166,7 @@ class WiiPlug(Part):
         dc.pop()
 
         dc.goxy(-9.5, 4.8)
-        # turn right 90, with a radius of 1mm
-        R1MM = 90 * (" f %f r 1 " % (0.5 * math.pi / 90))
-        F15 = " l 90 f 1 r 90 f 15 r 90 f 1 l 90 "
+        F15 = " l 90 f 3 r 90 f 15 r 90 f 3 l 90 "
         dc.newpath()
         dc.w("r 90 f 3.3 r 90 f 3.15 r 90 f 1 l 90 f 3.25 l 90 f 1 r 90 f 2 l 90 f 2.95 l 90 f 7.3 r 90 f 3.25")
         dc.w("f 3.25 r 90 f 7.3 l 90 f 2.95 l 90 f 2 r 90 f 1 l 90 f 3.25 l 90 f 1 r 90 f 3.15 r 90 f 3.3")
