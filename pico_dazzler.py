@@ -101,6 +101,18 @@ class Pico(dip.dip):
             if nm != "GND":
                 pad.setname(nm)
 
+class Teensy40(dip.dip):
+    family  = "U"
+    width   = cu.inches(.6)
+    N       = 28
+    def place(self, dc):
+        dip.dip.place(self, dc)
+        for i in range(24):
+            self.pads[i + 1].setname(str(i))
+        thermal(self.pads[0], "GBL")
+        thermal(self.pads[-2], "GBL")
+        thermal(self.pads[-3], "GTL")
+
 class SD(eagle.LibraryPart):
     libraryfile = "x.lbrSD_TF_holder.lbr"
     partname = "MICROSD"
@@ -120,8 +132,13 @@ if __name__ == "__main__":
     brd.outline()
     brd.layers['GML'].union(sg.box(-9.8, 0, 0, 16))
 
+    target = "teensy"
+
     daz = Dazzler(brd.DC((28, 38)).left(90))
-    pico = Pico(brd.DC((70, 28)))
+    if target == "pico":
+        pico = Pico(brd.DC((70, 28)))
+    elif target == "teensy":
+        teensy = Teensy40(brd.DC((70, 28)))
     sd = SD(brd.DC((3, 12)).right(180))
 
     # ------------------------------ SD
@@ -146,7 +163,6 @@ if __name__ == "__main__":
     wii1.w("r 90 f 2").wire()
     wii2.w("f 10 r 45 f 4 r 45").wire()
     wii = wii2.join(wii1, 0.5).wire()
-    print('--->', [t.name for t in wii.tt])
 
     tt = [daz.s(str(i)) for i in (13, 12, 11, 10, 9, 8)]
     [t.w("i f 4") for t in tt]
@@ -158,17 +174,6 @@ if __name__ == "__main__":
     daz.s("VCC").thermal(1).wire()
     for nm in ("GND", "GND1", "GND2"):
         daz.s(nm).inside().forward(2).wire(width = 0.5).w("-")
-    daz.s("5V").setwidth(0.5).w("o f 1 l 90 f 7 r 90 f 14 r 90 f 2.5").goto(pico.s("VBUS")).wire()
-
-    pico_used = (
-        "GP0",
-        "GP2", "GP3", "GP4", "GP5",
-        "GP6", "GP7", "GP8", "GP9", "GP10"
-    )
-
-    tt = [pico.s(str(i)) for i in pico_used]
-    [p.setlayer("GBL").w("r 180 f 2").wire() for p in tt]
-    b0 = brd.enriver90(tt[::-1], -90).wire()
 
     daz_used = ("1", "2", "22", "23", "25", "26", "27", "28", "29", "PGM")
     tt = [daz.s(nm) for nm in daz_used]
@@ -178,29 +183,67 @@ if __name__ == "__main__":
     daz.s("PGM").right(90)
     cu.extend2(tt)
     b1 = brd.enriver90(tt[::-1], 90)
-    b1.w("l 90 f 2 r 45").wire()
 
-    b0.shuffle(b1, {         # Pico         Dazzler    
-        "GP8": "1"  ,    # UART1 TX     CONSOLE IN 
-        "GP9": "2"  ,    # UART1 RX     CONOLE OUT 
-        "GP4": "22" ,    # SPI0 RX      MISO       
-        "GP5": "25" ,    # GP5          GPU SEL    
-        "GP6": "26" ,    # GP6          SD SEL     
-        "GP7": "27" ,    # GP7          DAZZLER SEL
-        "GP3": "28" ,    # SPI0 TX      MOSI       
-        "GP2": "29" ,    # SPI0 SCK     SCK        
-        "GP10":"PGM",    # GP10         PGM        
-        "GP0": "23" ,    # UART0 TX     UART       
-    }).w("f 9 l 45").meet(b1)
+    if target == "pico":
+        b1.w("l 90 f 2 r 45").wire()
+        pico_used = (
+            "GP0",
+            "GP2", "GP3", "GP4", "GP5",
+            "GP6", "GP7", "GP8", "GP9", "GP10"
+        )
+        tt = [pico.s(str(i)) for i in pico_used]
+        [p.setlayer("GBL").w("r 180 f 2").wire() for p in tt]
+        b0 = brd.enriver90(tt[::-1], -90).wire()
+
+        b0.shuffle(b1, {         # Pico         Dazzler    
+            "GP8": "1"  ,    # UART1 TX     CONSOLE IN 
+            "GP9": "2"  ,    # UART1 RX     CONOLE OUT 
+            "GP4": "22" ,    # SPI0 RX      MISO       
+            "GP5": "25" ,    # GP5          GPU SEL    
+            "GP6": "26" ,    # GP6          SD SEL     
+            "GP7": "27" ,    # GP7          DAZZLER SEL
+            "GP3": "28" ,    # SPI0 TX      MOSI       
+            "GP2": "29" ,    # SPI0 SCK     SCK        
+            "GP10":"PGM",    # GP10         PGM        
+            "GP0": "23" ,    # UART0 TX     UART       
+        }).w("f 9 l 45").meet(b1)
+        daz.s("5V").setwidth(0.5).w("o f 1 l 90 f 7 r 90 f 14 r 90 f 2.5").goto(pico.s("VBUS")).wire()
+    elif target == "teensy":
+        b1.w("l 45 f 2 r 45").wire()
+        teensy_used = (
+            "1", "8", "9", "10", "11", "12",
+            "13", "14", "15", "16"
+        )
+        tt = [teensy.s(str(i)) for i in teensy_used]
+        [p.setlayer("GBL").w("l 90 f 2").wire() for p in tt]
+        rv0 = brd.enriver90(tt[:6][::-1], -90).wire()
+        rv1 = brd.enriver90(tt[6:][::-1], 90).wire()
+        b0 = rv1.join(rv0, 1).wire()
+        b0.shuffle(b1, {    # Teensy       Dazzler
+            "14": "1"  ,    # TX3          CONSOLE IN 
+            "15": "2"  ,    # RX3          CONOLE OUT 
+            "12": "22" ,    # MISO         MISO       
+            "8" : "25" ,    # 8            GPU SEL    
+            "9" : "26" ,    # 9            SD SEL     
+            "10": "27" ,    # 10           DAZZLER SEL
+            "11": "28" ,    # MOSI         MOSI       
+            "13": "29" ,    # SCK          SCK        
+            "16":"PGM" ,    # 16           PGM        
+            "1" : "23" ,    # UART0 TX     UART       
+        }).w("f 8").meet(b1)
 
     if 1:
         im = Image.open("img/gameduino-mono.png")
         brd.logo(15, 4, im)
-    if 1:
+
         im = Image.open("img/dazzler-logo.png")
         brd.logo(36, 4, im)
 
-        brd.logo(pico.center.xy[0], pico.center.xy[1] - 15, gentext("PICO"))
+        if target == "pico":
+            brd.logo(pico.center.xy[0], pico.center.xy[1] - 15, gentext("PICO"))
+        elif target == "teensy":
+            brd.logo(teensy.center.xy[0], teensy.center.xy[1] - 24, gentext("TEENSY 4.0"))
+
         brd.logo(-5, 38.5 - 12, gentext("1").transpose(Image.ROTATE_90), scale = 1.0)
         brd.logo(-5, 38.5 + 12, gentext("2").transpose(Image.ROTATE_90), scale = 1.0)
 
