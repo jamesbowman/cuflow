@@ -33,9 +33,6 @@ class padline(cu.Part):
         tt = [t.copy().w("i") for t in self.pads][::-1]
         return self.board.enriver(tt, a)
 
-def thermal(t, layer, d = 1.3):
-    t.setname(layer).thermal(d).wire(layer = layer)
-
 class Pico(dip.dip):
     family  = "U"
     width   = 17.78
@@ -48,7 +45,8 @@ class Pico(dip.dip):
         gpins = {3, 8, 13, 18, 23, 28, 33, 38}
         io = set(range(1, 35)) - gpins
         for g in gpins:
-            thermal(self.s(str(g)).copy(), "GBL")
+            p = self.s(str(g)).copy()
+            p.setname("GL2").thermal(1.3).wire(layer = "GBL")
         pnames = [
             "GP0",
             "GP1",
@@ -109,9 +107,9 @@ class Teensy40(dip.dip):
         dip.dip.place(self, dc)
         for i in range(24):
             self.pads[i + 1].setname(str(i))
-        thermal(self.pads[0], "GBL")
-        thermal(self.pads[-2], "GBL")
-        thermal(self.pads[-3], "GTL")
+        for n in (0, -2):
+            p = self.pads[n]
+            p.setname("GL2").thermal(1.3).wire(layer = "GBL")
 
 class SD(eagle.LibraryPart):
     libraryfile = "x.lbrSD_TF_holder.lbr"
@@ -132,7 +130,7 @@ if __name__ == "__main__":
     brd.outline()
     brd.layers['GML'].union(sg.box(-9.8, 0, 0, 16))
 
-    target = "teensy"
+    target = sys.argv[1]
 
     daz = Dazzler(brd.DC((28, 38)).left(90))
     if target == "pico":
@@ -244,10 +242,10 @@ if __name__ == "__main__":
         elif target == "teensy":
             brd.logo(teensy.center.xy[0], teensy.center.xy[1] - 24, gentext("TEENSY 4.0"))
 
-        brd.logo(-5, 38.5 - 12, gentext("1").transpose(Image.ROTATE_90), scale = 1.0)
-        brd.logo(-5, 38.5 + 12, gentext("2").transpose(Image.ROTATE_90), scale = 1.0)
+        brd.logo(-5, 38.5 - 12, gentext("2").transpose(Image.ROTATE_270), scale = 0.9)
+        brd.logo(-5, 38.5 + 12, gentext("1").transpose(Image.ROTATE_270), scale = 0.9)
 
-        brd.logo(-5, 38.5, Image.open("img/oshw-logo-outline.png").transpose(Image.ROTATE_90), scale = 0.7)
+        brd.logo(-4.8, 38.5, Image.open("img/oshw-logo-outline.png").transpose(Image.ROTATE_270), scale = 0.7)
 
         for i,s in enumerate(["(C) 2021", "EXCAMERA LABS", str(__VERSION__)]):
             brd.annotate(81, 60 - 1.5 * i, s)
@@ -256,7 +254,8 @@ if __name__ == "__main__":
         brd.fill_any("GTL", "VCC")
         brd.fill_any("GBL", "GL2")
 
-    brd.save("pico_dazzler")
+    name = target + "_dazzler"
+    brd.save(name)
     for n in brd.nets:
         print(n)
-    svgout.write(brd, "pico_dazzler.svg")
+    svgout.write(brd, name + ".svg")

@@ -87,9 +87,12 @@ class Layer:
             [renderpoly(g, po) for po in surface]
         g.finish()
 
-    def povray(self, f, prefix = "polygon {", mask = None):
+    def povray(self, f, prefix = "polygon {", mask = None, invert = False):
         surface = self.preview()
-        if mask is not None:
+        print("povray", (mask, invert))
+        if invert:
+            surface = mask.difference(surface)
+        elif mask is not None:
             surface = surface.intersection(mask)
         def renderpoly(po):
             if type(po) == sg.MultiPolygon:
@@ -835,6 +838,8 @@ class Board:
             self.layers['GTO'].povray(f, mask = mask)
         with open(basename + ".gtl.pov", "wt") as f:
             self.layers['GTL'].povray(f, mask = mask)
+        with open(basename + ".gts.pov", "wt") as f:
+            self.layers['GTS'].povray(f, mask = mask, invert = True)
 
         self.bom(basename)
         self.pnp(basename)
