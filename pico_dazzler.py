@@ -9,10 +9,8 @@ from dazzler import Dazzler
 from collections import defaultdict
 
 import shapely.geometry as sg
-import shapely.affinity as sa
-import shapely.ops as so
 
-__VERSION__ = "1.0.0"
+__VERSION__ = "1.0.1"
 
 def gentext(s):
     fn = "../../.fonts/Arista-Pro-Alternate-Light-trial.ttf"
@@ -110,6 +108,7 @@ class Teensy40(dip.dip):
         for n in (0, -2):
             p = self.pads[n]
             p.setname("GL2").thermal(1.3).wire(layer = "GBL")
+        self.pads[-1].setname("vin")
 
 class SD(eagle.LibraryPart):
     libraryfile = "x.lbrSD_TF_holder.lbr"
@@ -229,6 +228,7 @@ if __name__ == "__main__":
             "16":"PGM" ,    # 16           PGM        
             "1" : "23" ,    # UART0 TX     UART       
         }).w("f 8").meet(b1)
+        daz.s("5V").setwidth(0.5).w("o f 2 r 90 f 38 l 90 f 23").goto(teensy.s("vin")).wire()
 
     if 1:
         im = Image.open("img/gameduino-mono.png")
@@ -250,7 +250,7 @@ if __name__ == "__main__":
         for i,s in enumerate(["(C) 2021", "EXCAMERA LABS", str(__VERSION__)]):
             brd.annotate(81, 60 - 1.5 * i, s)
 
-    if 0:
+    if 1:
         brd.fill_any("GTL", "VCC")
         brd.fill_any("GBL", "GL2")
 

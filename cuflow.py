@@ -89,7 +89,6 @@ class Layer:
 
     def povray(self, f, prefix = "polygon {", mask = None, invert = False):
         surface = self.preview()
-        print("povray", (mask, invert))
         if invert:
             surface = mask.difference(surface)
         elif mask is not None:
