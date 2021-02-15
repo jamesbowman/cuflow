@@ -132,7 +132,7 @@ if __name__ == "__main__":
     brd.outline()
     brd.layers['GML'].union(sg.box(-9.8, 0, 0, 16))
 
-    target = "teensy"
+    target = sys.argv[1]
 
     daz = Dazzler(brd.DC((28, 38)).left(90))
     if target == "pico":
@@ -252,7 +252,7 @@ if __name__ == "__main__":
         for i,s in enumerate(["(C) 2021", "EXCAMERA LABS", str(__VERSION__)]):
             brd.annotate(81, 60 - 1.5 * i, s)
 
-    if 1:
+    if 0:
         brd.fill_any("GTL", "VCC")
         brd.fill_any("GBL", "GL2")
 
