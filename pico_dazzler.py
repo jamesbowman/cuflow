@@ -110,6 +110,19 @@ class Teensy40(dip.dip):
             p.setname("GL2").thermal(1.3).wire(layer = "GBL")
         self.pads[-1].setname("vin")
 
+class Feather(dip.dip):
+    family = "U"
+    width   = cu.inches(.6)
+    N       = 32
+    N2      = (16, 12)
+    def place(self, dc):
+        dip.dip.place(self, dc)
+        names = "RESET 3V AREF GND A0 A1 A2 A3 A4 A5 SCK MOSI MISO RX TX D4 SDA SCL D5 D6 D9 D10 D11 D12 D13 USB EN BAT"
+        for p,nm in zip(self.pads, names.split()):
+            p.setname(nm)
+        self.s("GND").setname("GL2").thermal(1.3).wire(layer = "GBL")
+
+
 class SD(eagle.LibraryPart):
     libraryfile = "x.lbrSD_TF_holder.lbr"
     partname = "MICROSD"
@@ -117,7 +130,7 @@ class SD(eagle.LibraryPart):
     inBOM = True
     family = "J"
 
-if __name__ == "__main__":
+def gen(target):
     brd = cu.Board(
         (90, 63),
         trace = cu.mil(5),
@@ -129,7 +142,6 @@ if __name__ == "__main__":
     brd.outline()
     brd.layers['GML'].union(sg.box(-9.8, 0, 0, 16))
 
-    target = sys.argv[1]
     # https://cdn-learn.adafruit.com/assets/assets/000/078/438/original/arduino_compatibles_Feather_M4_Page.png
 
     daz = Dazzler(brd.DC((28, 38)).left(90))
@@ -137,6 +149,8 @@ if __name__ == "__main__":
         pico = Pico(brd.DC((70, 28)))
     elif target == "teensy":
         teensy = Teensy40(brd.DC((70, 28)))
+    elif target == "feather":
+        feather = Feather(brd.DC((70, 28)))
     sd = SD(brd.DC((3, 12)).right(180))
 
     # ------------------------------ SD
@@ -230,6 +244,29 @@ if __name__ == "__main__":
             "1" : "23" ,    # UART0 TX     UART       
         }).w("f 8").meet(b1)
         daz.s("5V").setwidth(0.5).w("o f 2 r 90 f 38 l 90 f 23").goto(teensy.s("vin")).wire()
+    elif target == "feather":
+        mapping = {
+#           Feather             Dazzler
+            "SCK"   : "29" ,    # SCK        
+            "MOSI"  : "28" ,    # MOSI       
+            "MISO"  : "22" ,    # MISO       
+            "TX"    : "23" ,    # UART       
+            "D4"    : "25" ,    # GPU SEL    
+            "D5"    : "26" ,    # SD SEL     
+            "D6"    : "27" ,    # DAZZLER SEL
+            "D9"    :"PGM" ,    # PGM        
+            "D10"   : "1"  ,    # CONSOLE IN 
+            "D11"   : "2"  ,    # CONOLE OUT 
+        }
+        b1.w("l 45 f 2 r 45").wire()
+        used = mapping.keys()
+        tt = [feather.s(str(i)) for i in used]
+        [p.setlayer("GBL").w("l 90 f 2").wire() for p in tt]
+        rv0 = brd.enriver90(tt[:5][::-1], -90).wire()
+        rv1 = brd.enriver90(tt[5:][::-1], 90).wire()
+        b0 = rv1.join(rv0, 1).forward(19).wire()
+        b0.shuffle(b1, mapping).w("f 8").meet(b1)
+        daz.s("5V").setwidth(0.5).w("o f 2 r 90 f 40 l 90 f 23").goto(feather.s("USB")).wire()
 
     if 1:
         im = Image.open("img/gameduino-mono.png")
@@ -251,7 +288,7 @@ if __name__ == "__main__":
         for i,s in enumerate(["(C) 2021", "EXCAMERA LABS", str(__VERSION__)]):
             brd.annotate(81, 60 - 1.5 * i, s)
 
-    if 1:
+    if 0:
         brd.fill_any("GTL", "VCC")
         brd.fill_any("GBL", "GL2")
 
@@ -260,3 +297,7 @@ if __name__ == "__main__":
     for n in brd.nets:
         print(n)
     svgout.write(brd, name + ".svg")
+
+if __name__ == "__main__":
+    for target in ("feather","pico","teensy"):
+        gen(target);

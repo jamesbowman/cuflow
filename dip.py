@@ -4,10 +4,15 @@ import cuflow as cu
 T = cu.inches(0.1)    # tenth on an inch, used throughout
 
 class dip(cu.Part):
+    N2 = None
     def place(self, dc):
         self.chamfered(dc, self.width - T, T * (self.N / 2) + 2)
         height = T * ((self.N // 2) - 1)
-        for _ in range(2):
+        if self.N2 is None:
+            nps = [self.N // 2, self.N // 2]
+        else:
+            nps = self.N2
+        for np in nps:
             dc.push()
             dc.goxy(-self.width / 2, height / 2).left(180)
             def gh():
@@ -17,7 +22,7 @@ class dip(cu.Part):
                 p.n_agon(0.8, 60)
                 p.contact()
                 self.pads.append(dc.copy())
-            self.train(dc, self.N // 2, gh, cu.inches(.1))
+            self.train(dc, np, gh, cu.inches(.1))
             dc.pop()
             dc.right(180)
 
