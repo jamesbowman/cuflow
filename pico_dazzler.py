@@ -130,6 +130,7 @@ if __name__ == "__main__":
     brd.layers['GML'].union(sg.box(-9.8, 0, 0, 16))
 
     target = sys.argv[1]
+    # https://cdn-learn.adafruit.com/assets/assets/000/078/438/original/arduino_compatibles_Feather_M4_Page.png
 
     daz = Dazzler(brd.DC((28, 38)).left(90))
     if target == "pico":
