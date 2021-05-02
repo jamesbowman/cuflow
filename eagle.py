@@ -46,6 +46,8 @@ class LibraryPart(cu.Part):
                 p.setname(attr["name"])
                 self.pad(p)
             elif c.tag == "pad":
+                if 'diameter' not in attr:
+                    attr['diameter'] = float(attr['drill']) * 1.5
                 (x, y, diameter, drill) = [float(attr[t]) for t in "x y diameter drill".split()]
                 nm = attr["name"]
 
@@ -65,7 +67,7 @@ class LibraryPart(cu.Part):
                 self.pads.append(p)
                 p.contact()
 
-                if self.use_pad_text and nm not in ("RESERVED", ):
+                if 0 and self.use_pad_text and nm not in ("RESERVED", ):
                     self.board.annotate(dc.xy[0], dc.xy[1], nm)
                 dc.pop()
         if ls["20"]:
