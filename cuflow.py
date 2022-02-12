@@ -368,6 +368,7 @@ class Draw(Turtle):
     def silk(self):
         g = sg.LineString(self.path).buffer(self.board.silk / 2)
         self.board.layers['GTO'].add(g)
+        return self
 
     def silko(self):
         g = sg.LinearRing(self.path).buffer(self.board.silk / 2)
@@ -691,6 +692,22 @@ class River(Turtle):
         self.wire()
         return self
 
+    def widen(self, c):
+        y = math.sqrt((c ** 2) - (self.c ** 2))
+        print(c, self.c, y)
+        th = math.acos(self.c / c)
+        th_d = math.degrees(th)
+        print('th', th_d)
+
+        for i,t in enumerate(self.tt):
+            t.forward(i * y).wire().right(th_d).wire()
+        print('dist', self.tt[0].distance(self.tt[1]))
+
+        self.c = c
+        self.left(th_d)
+        self.wire()
+        return self
+
 class Board:
     def __init__(self, size,
                trace,
@@ -777,12 +794,16 @@ class Board:
         self.layers['GL3'].fill(g, 'GL3', self.via_space)
 
     def fill_any(self, layer, include):
+        if isinstance(include, str):
+            include = [include]
         ko = so.unary_union(self.keepouts)
         g = self.body().buffer(-0.2).difference(ko)
         la = self.layers[layer]
 
         d = max(self.space, self.via_space)
-        notouch = so.unary_union([o for (nm, o) in la.polys if nm != include])
+        print('include', include)
+        print({nm for (nm, o) in la.polys})
+        notouch = so.unary_union([o for (nm, o) in la.polys if nm not in include])
         self.layers[layer].add(
             g.difference(notouch.buffer(d)), include
         )
@@ -794,6 +815,7 @@ class Board:
         # Return the board outline with holes and slots removed.
         # This is the shape of the resin subtrate.
         gml = self.layers['GML'].lines
+        assert gml != [], "Missing board outline"
         mask = sg.Polygon(gml[-1], gml[:-1])
         for d,xys in self.holes.items():
             if d > 0.3:
@@ -1022,6 +1044,25 @@ class Board:
         show = [po for po in self.layers['GTL'].p if po.intersects(hot_vcc)]
                 
         # self.layers['GTP'].p = so.unary_union(show)
+
+    def toriver(self, tt, ratio = 0.5):
+        if len(tt) == 1:
+            return River(self, tt)
+        p = len(tt) // 2
+        if ratio == 0.5:
+            (lratio, rratio) = (1.0, 0.0)
+        else:
+            (lratio, rratio) = (ratio, ratio)
+        (ra, rb) = (self.toriver(tt[:p], lratio), self.toriver(tt[p:], rratio))
+
+        # Length-1 joins make horizontal lines, so must advance by C
+        if len(ra.tt) == 1 or len(rb.tt) == 1:
+            d = self.c
+        else:
+            d = 0
+
+        extend2(ra.tt + rb.tt)
+        return ra.join(rb, ratio).forward(d)
 
 def extend(dst, traces):
     # extend parallel traces so that they are all level with dst

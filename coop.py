@@ -93,9 +93,19 @@ class EDS(cu.Part):
         # pp[3].w("i f 2").wire().via().setlayer("GBL")
         return (pp[2], pp[3])
 
+def ldo(p):
+    r = cu.SOT223(p)
+    p.goxy(-2.3/2, -5.2).w("r 180")
+    cu.C0603(p, val = '4.7 uF', source = {'LCSC' : 'C19666'})
+    p.forward(2)
+    pa = cu.C0603(p, val = '22 uF', source = {'LCSC': 'C159801'}).pads
+    pa[0].w("l 90 f 3").wire(width = 0.4)
+    pa[1].w("r 90 f 3").wire(width = 0.4)
+    return r.escape()
+
 def coop():
     brd = cu.Board(
-        (90, 63),
+        (65, 56),
         trace = cu.mil(6),
         space = cu.mil(6) * 2.0,
         via_hole = 0.3,
@@ -104,39 +114,31 @@ def coop():
         silk = cu.mil(6))
     brd.outline()
 
-    j1 = dip.Screw2(brd.DC((83, 51)).right(90))
-    thermal_gnd(j1.s("1"), 2)
-    vin = j1.s("2")
+    for x in (0, 58):
+        for y in (0, 49):
+            brd.hole((3.5 + x, 3.5 + y), 2.7, 6)
 
-    (sda0, scl0) = EDS(brd.DC((17, 44)).right(90)).escape()
-    (sda1, scl1) = EDS(brd.DC((17, 24)).right(90)).escape()
+    j1 = dip.Screw2(brd.DC((60, 32)).right(90))
+    thermal_gnd(j1.s("1"), 2)
+    vin = j1.s("2").w("r 180 f 3").wire(width = 0.5)
+
+    (sda0, scl0) = EDS(brd.DC((17, 35)).right(90)).escape()
+    (sda1, scl1) = EDS(brd.DC((17, 15)).right(90)).escape()
 
     target = "pico"
-    pico = Pico(brd.DC((50, 28)))
+    pico = Pico(brd.DC((38, 28)))
 
-    pico.s("GP26").mark()
-
-    R1 = cu.R0402(brd.DC((61, 29)).right(90), '4.7K')
-    R2 = cu.R0402(brd.DC((63, 29)).right(90), '4.7K')
+    R1 = cu.R0402(brd.DC((51, 29)).right(90), '4.7K')
+    R2 = cu.R0402(brd.DC((53, 29)).right(90), '4.7K')
     R1.pads[1].w("o f 0.5 -")
     R2.pads[1].w("o").goto(vin).wire()
     R2.pads[0].goto(R1.pads[0]).goto(pico.s("GP26")).wire()
 
-    def ldo(p):
-        r = cu.SOT223(p)
-        p.goxy(-2.3/2, -5.2).w("r 180")
-        cu.C0603(p, val = '4.7 uF', source = {'LCSC' : 'C19666'})
-        p.forward(2)
-        pa = cu.C0603(p, val = '22 uF', source = {'LCSC': 'C159801'}).pads
-        pa[0].w("l 90 f 3").wire(width = 0.4)
-        pa[1].w("r 90 f 3").wire(width = 0.4)
-        return r.escape()
+    conn = dip.SIL(brd.DC((17, 53)).left(90), "6")
 
-    conn = dip.SIL(brd.DC((31, 56)).left(90), "6")
-
-    L = ldo(brd.DC((66, 46.5)))
+    L = ldo(brd.DC((54, 44.5)))
     L[0].goto(vin).wire(width = 0.5)
-    L[1].goto(pico.s("VSYS")).wire(width = 0.5)
+    pico.s("VSYS").goto(L[1]).wire(width = 0.5)
 
     # I2C hookup
 
@@ -174,11 +176,11 @@ def coop():
     conn.s("1").setname("GL3").thermal(1.3).wire(layer = "GTL")
     conn.s("6").setname("GL2").thermal(1.3).wire(layer = "GBL")
 
-    serial0 = brd.enriver([pico.s(s).right(90) for s in ("GP4", "GP5")], 45).w("f 7").wire()
+    serial0 = brd.enriver([pico.s(s).right(90) for s in ("GP0", "GP1")], -45).w("f 1").wire()
     serial1 = brd.enriver([conn.s(s).setlayer("GBL").right(90) for s in ("3", "4")], -45).w("f 1").wire()
     serial0.shuffle(serial1, {
-        "GP4" : "3",
-        "GP5" : "4"}).w("r 90 f 2").wire().meet(serial1)
+        "GP0" : "3",
+        "GP1" : "4"}).w("r 90 f 1 r 90").wire().meet(serial1)
 
     # serial.shuffle(
     # print(serial.board.c)
@@ -186,7 +188,7 @@ def coop():
     # pico.s("GP4").goto(conn.s("3")).wire()
     # pico.s("GP5").goto(conn.s("4")).wire()
 
-    if 0:
+    if 1:
         brd.fill_any("GTL", "GL3")
         brd.fill_any("GBL", "GL2")
 

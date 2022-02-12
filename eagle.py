@@ -42,6 +42,8 @@ class LibraryPart(cu.Part):
             elif c.tag == "smd":
                 (x, y, dx, dy) = [float(attr[t]) for t in "x y dx dy".split()]
                 p = dc.copy().goxy(x, y)
+                if attr['rot'] in ("R90", "R270"):
+                    (dx, dy) = (dy, dx)
                 p.rect(dx, dy)
                 p.setname(attr["name"])
                 self.pad(p)
