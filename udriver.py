@@ -1,5 +1,6 @@
 import cuflow as cu
 import dip
+import sot
 import eagle
 
 class USB(eagle.LibraryPart):
@@ -113,26 +114,26 @@ class FT231X(QFN20):
     def setnames(self):
         names = [
             "GND",
-            "RXD",             # 1
+            "RXD",            # 1
             "RI",             # 2
-            "GND",             # 3
-            "DSR",             # 4
-            "DCD",             # 5
-            "CTS",             # 6
-            "CBUS2",             # 7
-            "USBDP",             # 8
-            "USBDM",             # 9
-            "VCC",             # 10
-            "RESET",             # 11
+            "GND",            # 3
+            "DSR",            # 4
+            "DCD",            # 5
+            "CTS",            # 6
+            "CBUS2",          # 7
+            "USBDP",          # 8
+            "USBDM",          # 9
+            "VCCOUT",         # 10
+            "RESET",          # 11
             "5V",             # 12
-            "GND",             # 13
-            "CBUS1",             # 14
-            "CBUS0",             # 15
-            "CBUS3",             # 16
-            "TXD",             # 17
-            "DTR",             # 18
-            "RTS",             # 19
-            "VCC",             # 20
+            "GND",            # 13
+            "CBUS1",          # 14
+            "CBUS0",          # 15
+            "CBUS3",          # 16
+            "TXD",            # 17
+            "DTR",            # 18
+            "RTS",            # 19
+            "VCC",            # 20
         ]
         for (p,nm) in zip(self.pads, names):
             p.setname(nm)
@@ -144,8 +145,22 @@ class FT231X(QFN20):
             if t.name == "GND":
                 t.copy().w("i f 1").wire()
                 t.w("o -")
-        self.s("USBDP").mark()
-        return (None, None)
+        self.s("VCC").w("o f 0.7 / r 90 f 3 +").wire()
+
+        self.s("VCCOUT").goto(self.s("RESET")).wire()
+
+        self.s("CTS").w("o f 1 r 90 f 3 r 90")
+        self.s("RXD").w("o f 1 r 90")
+        self.s("TXD").w("o f 1")
+        self.s("DTR").w("o f 1")
+        tt = [self.s(n).wire() for n in ["TXD", "DTR", "RXD", "CTS"]]
+        cu.extend2(tt)
+        # [t.wire().text(t.name) for t in tt]
+        r0 = self.board.enriver90(tt, 90).wire()
+
+        tt = [self.s(n).w("o f 0.5") for n in ["USBDP", "USBDM"]]
+        r1 = self.board.enriver90(tt, -90).wire()
+        return (r0, r1)
 
 class QFN20(cu.Part):
     # EFM8BB2 datasheet, figure 9.2 "QFN20 Land Pattern"
@@ -213,7 +228,7 @@ class EFM8BB2(QFN20):
         banks = ([], [], [], [])
         for i,p in enumerate(self.pads[1:]):
             b = i // 5
-            if p.name == "xVCC":
+            if p.name == "VCC":
                 p.forward(0.5).wire()
             elif p.name != "GND":
                 p.forward(0.5).wire()
@@ -225,6 +240,42 @@ class EFM8BB2(QFN20):
         r0.join(r1).wire()
 
         return (r0, )
+
+    def escape2(self):
+        banks = ([], [], [], [])
+        for i,p in enumerate(self.pads[1:]):
+            b = i // 5
+            if p.name == "GND":
+                p.copy().w("i f 1").wire()
+                p.w("o -")
+            elif p.name != "VCC":
+                p.forward(1.5).wire()
+                banks[b].append(p)
+        self.s("VCC").w("o f 0.8 / r 45 f 2 +").wire()
+        [cu.extend2(b) for b in banks]
+        [t.wire() for t in self.pads]
+        rr = [self.board.enriver(bb, a).wire() for a,bb in zip([-45,-45,45,45], banks)]
+        rr[0].forward(0.4).left(90)
+        a = rr[0].join(rr[1], 1.0)
+        b = rr[2].join(rr[3].right(90)).forward(1)
+        cu.extend2(a.tt + b.tt)
+        r = a.join(b, 0.5).wire()
+        return r
+
+class LCD(cu.Part):
+    family = "U"
+    def place(self, dc):
+        self.train(dc, 12, lambda: self.rpad(dc, 0.35, 2.0), 0.7)
+        self.pads[0].text("12")
+        self.pads[-1].text("1")
+
+    def escape(self):
+        tt = [p.copy().w("o") for p in self.pads]
+        r = cu.R0402(tt[10].copy().forward(1.5).left(90))
+        r.pads[0].goto(tt[10]).wire()
+        tt[10] = r.pads[1].w("o f 1")
+        cu.extend2(tt)
+        return self.board.toriver(tt)
 
 def bb2_breakout():
     brd = cu.Board(
@@ -257,45 +308,126 @@ def bb2_breakout():
 
 def proto1():
     brd = cu.Board(
-        (80, 50),
-        trace = cu.mil(6),
-        space = cu.mil(5) * 2.0,
+        (99, 99),
+        trace = cu.mil(5),
+        space = cu.mil(5) * 1.6,
         via_hole = 0.2,
         via = 0.45,
         via_space = cu.mil(5),
         silk = cu.mil(6))
 
-    tu = brd.DC((1.4, 15))
+    tu = brd.DC((1.4, 80))
     usb = USB(tu.copy().right(90))
     (aUSB, ) = usb.escape()
+    usb.pads[4].w("o -")
 
-    ft230x = FT231X(tu.goxy(3.5, 8).copy().right(90))
+    ft230x = FT231X(tu.goxy(3.5, 9).copy().right(90))
     (aSER, bUSB) = ft230x.escape()
-    # cc = [cu.C0402(tu.copy().goxy(-1 + 1.0 * i, -3.6).right(90), "0.1") for i in range(3)]
-    # cc[0].pads[1].copy().goto(cc[2].pads[1]).wire()
-    # cc[0].pads[1].w("o f 1").wire()
+    cc = [cu.C0402(tu.copy().goxy(2 + 1.0 * i, -4.6).right(90), "0.1") for i in range(4)]
+    cc[0].pads[0].copy().goto(cc[1].pads[0]).wire()
+    for c in cc[2:]:
+        c.pads[0].setname('VCC').w("o f 1").wire()
+    for c in cc:
+        c.pads[1].w("o -").wire()
+    c = cu.C0402(tu.copy().goxy(0.2, -4.6).right(90), "0.1")
+    c.pads[0].goto(ft230x.s("RESET")).wire()
+    c.pads[1].w("r 90 f 1 -")
 
-    dc = brd.DC((15, 15))
-    efm8 = EFM8BB2(dc)
+    ldo = sot.SOT23(brd.DC((10, 80)).left(90))
+    ldo.pads[0].w("i -")
+    ldo.pads[1].setname("VCC").w("i f 1").wire()
+    ldo.pads[2].setwidth(0.2).goto(usb.pads[0]).wire()
+
+    lcd = LCD(brd.DC((50, 72)).right(90))
+    lcd0 = lcd.escape().wire()
+
+    dc = brd.DC((19, 68))
+    efm8 = EFM8BB2(dc.right(45))
     efm8.setnames()
+    bus0 = efm8.escape2()
+    bus0.w("f 1").wire()
+    c4 = cu.C0402(brd.DC((19, 72)))
+    c4.pads[0].setname('VCC').w("o f 1").wire()
+    c4.pads[1].setname('GND').w("o -")
 
-    ext = dip.SIL(brd.DC((72, 25)), "6")
+    print([t.name for t in bus0.tt])
+
+    def grid(t):
+        t.w(".").setlayer('GTL')
+        t.w("r 90 f 0.5").wire()
+        if t.name == "VCC":
+            t.copy().w("r 90 f 1").wire()
+        t.setname("")
+        def p(t):
+            t.copy().rect(0.5, 0.5).pad()
+        p(t)
+        t = t.forward(0.5 + 0.125).copy()
+        p(t)
+        t.w("l 90 f 0.5 r 90").wire()
+        return t
+
+    busdip = dip.SIL(brd.DC((97, 28)), "19")
+    names = [p.name for p in bus0.tt[::-1]] + ["VCC", "GND"]
+    for (a, nm) in zip(busdip.pads, names):
+        a.copy().w("r 90 f 2").text(nm)
+    tt = [t.copy().setlayer('GBL').right(90) for t in busdip.pads]
+    tt[17].setname("VCC")
+    tt[18].setname("GND")
+
+    [t.w("f 10").wire() for t in tt]
+    struts = []
+    [t.newpath() for t in tt]
+    for i in range(22):
+        [t.w("f 2.54").copy().wire() for t in tt]
+        [t.silk() for t in tt]
+        s = [grid(t.copy()) for t in tt][-1].w("f 48").wire()
+        struts.append(s)
+    for (a, nm) in zip(tt, names):
+        a.copy().w("f 2").text(nm)
+    [t.w("f 10").wire() for t in tt]
+    bus1 = brd.enriver90(tt[:17], 90).w("/")
+    bus0.meet(bus1)
+    # tt[17].w("f 3 +").setname("GL1").thermal(1.3).wire(layer = "GTL")
+
+    ext = dip.SIL(brd.DC((77, 92)).left(90), "6")
+    uart_names = ('DTR', 'RXI', 'TXO', '3V3', 'CTS', 'GND')
+    for p,nm in zip(ext.pads, uart_names):
+        p.copy().w("r 90 f 2").text(nm)
+
+    brk = dip.SIL(struts[11].copy().right(90), "23")
+    [t.forward(2.54) for t in struts]
+    brk = dip.SIL(struts[11].copy().right(90), "23")
+    [t.forward(2.54) for t in struts]
+
+    fps0 = brd.toriver(struts[:6])
+    fps0.forward(0).wire()
+
+    fps1 = brd.toriver([p.w("r 90 f 10") for p in ext.pads]).w("f 10").wire()
+    fps0.meet(fps1)
+
+    lcd1 = brd.toriver(struts[6:18]).wire()
+    lcd0.meet(lcd1)
 
     # Routing
-    """
     aUSB.w("f 4").meet(bUSB)
-    (ft230x.s("5V").setwidth(.2).w("o f .2").
-     goto(cc[1].pads[0]).
-     goto(cc[2].pads[0]).
-     w("l 90 f 1.0 r 90 f 3").
-     goto(usb.s("5V").w("f 1").wire())
+    # bUSB.w("f 1 r 90 f 1").wire()
+    (ft230x.s("5V").setwidth(.2).w("o f 0.9").
+     goto(cc[0].pads[0]).
+     goto(usb.s("5V").setwidth(.2).w("o f 1.4").wire()).
+     wire()
     ).wire()
-    # .wire()
-    """
+
+    bSER = brd.toriver(struts[18:]).wire()
+    aSER.w("l 90 f 20 r 90").meet(bSER)
 
     brd.outline()
+    if 0:
+        brd.fill_any("GTL", ["GL3", "VCC"])
+        brd.fill_any("GBL", ["GL2", "GND"])
+
     brd.save("udriver")
 
 if __name__ == "__main__":
     # bb2_breakout()
     proto1()
+
