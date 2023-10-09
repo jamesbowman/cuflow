@@ -15,6 +15,7 @@ class LibraryPart(cu.Part):
     libraryfile = None
     partname = None
     use_silk = True
+    cut_outline = True
     use_pad_text = True
     def __init__(self, dc, val = None, source = None):
         tree = ET.parse(self.libraryfile)
@@ -66,7 +67,8 @@ class LibraryPart(cu.Part):
                 if self.use_pad_text and nm not in ("RESERVED", ):
                     self.board.annotate(dc.xy[0], dc.xy[1], nm)
                 dc.pop()
-        if ls["20"]:
+        brd = self.board
+        if self.cut_outline and ls["20"]:
             g = so.linemerge(ls["20"])
             brd.layers['GML'].add(g)
         if self.use_silk and ls["21"]:
