@@ -65,7 +65,7 @@ class Layer:
         g = gerber.Gerber(f, self.desc)
         def renderpoly(g, po):
             if type(po) == sg.MultiPolygon:
-                [renderpoly(g, p) for p in po]
+                [renderpoly(g, p) for p in po.geoms]
                 return
             # Subdivide a poly if it has holes
             if len(po.interiors) == 0:
@@ -84,7 +84,7 @@ class Layer:
         if isinstance(surface, sg.Polygon):
             renderpoly(g, surface)
         else:
-            [renderpoly(g, po) for po in surface]
+            [renderpoly(g, po) for po in surface.geoms]
         g.finish()
 
     def povray(self, f, prefix = "polygon {", mask = None, invert = False):
@@ -108,7 +108,7 @@ class Layer:
         if isinstance(surface, sg.Polygon):
             renderpoly(surface)
         else:
-            [renderpoly(po) for po in surface]
+            [renderpoly(po) for po in surface.geoms]
 
 class OutlineLayer:
     def __init__(self, desc):

@@ -52,10 +52,10 @@ def write(board, filename):
         if isinstance(gto, sg.Polygon):
             renderpoly(gto)
         else:
-            [renderpoly(po) for po in gto]
+            [renderpoly(po) for po in gto.geoms]
 
     args = {'stroke':'blue', 'fill_opacity':0.0, 'stroke_width':.1}
-    for po in gto:
+    for po in gto.geoms:
         li = [po.exterior] + list(po.interiors)
         for l in li:
             dwg.add(dwg.polyline(l.coords, **args))
