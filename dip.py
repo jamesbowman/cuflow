@@ -19,12 +19,15 @@ class dip(cu.Part):
                 dc.board.hole(dc.xy, .8)
                 p = dc.copy()
                 p.part = self.id
-                p.n_agon(0.8, 60)
+                self.padfoot(p)
                 p.contact()
                 self.pads.append(dc.copy())
             self.train(dc, np, gh, cu.inches(.1))
             dc.pop()
             dc.right(180)
+
+    def padfoot(self, p):
+        p.n_agon(0.8, 60)
 
 class PTH(cu.Part):
     r = .8
@@ -77,6 +80,10 @@ class Screw2(hdr):
     width   = 5
     N       = 2
     r       = 1.2
+
+    def place(self, dc):
+        self.chamfered(dc, 10, 10)
+        hdr.place(self, dc)
 
     def escape(self):
         return

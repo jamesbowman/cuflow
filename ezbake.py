@@ -146,7 +146,7 @@ class Pico(dip.dip):
         self.s("3V3(OUT)").copy().setname("GL3").thermal(1.3).wire(layer = "GTL")
         self.pool = {
             "analog" : ["GP26", "GP27", "GP28"],
-            "digital" : ["GP10", "GP11", "GP12", "GP13"],
+            "digital" : ["GP10", "GP11", "GP12", "GP13", "GP14"],
             "tx" : ["GP0", "GP8"],
             "rx" : ["GP1", "GP9"],
         }
@@ -295,8 +295,8 @@ class Protoboard:
         brd.save(name)
         svgout.write(brd, name + ".svg")
 
-    def add_module(self, mod):
-        mod_signals = mod(self)
+    def add_module(self, mod, *args):
+        mod_signals = mod(*((self, ) + args))
 
         du = self.du
         mcu = self.mcu
@@ -329,6 +329,7 @@ class GPS_NEO_6M(cu.Part):
         self.chamfered(dc, 27.6, 26.6)
         dc.goxy((26.6/2) + 0.1, -cu.inches(0.2))
         self.train(dc, 5, lambda: self.rpad(dc, 2, 4), cu.inches(0.1))
+
     def escape(self):
         pp = self.pads
         pp[3].setname("GL2").w("o f 1 -")
@@ -384,11 +385,11 @@ def ldo(p):
     pa[1].w("r 90 f 3").wire(width = 0.4)
     return r.escape()
 
-def Module_VIN(pb):
+def Module_VIN(pb, sensing = True):
     brd = pb.brd
-    x = pb.upper_edge + 6
-    pb.upper_edge += 12
-    pt = brd.DC((x, 95)).right(180)
+    x = pb.upper_edge + 5
+    pb.upper_edge += 10
+    pt = brd.DC((x, 94)).right(180)
     j1 = dip.Screw2(pt)
     j1.s("1").setname("GL2").thermal(1.5).wire(layer = "GBL")
     vin = j1.s("2")
@@ -397,6 +398,10 @@ def Module_VIN(pb):
     L = ldo(pt.copy())
     L[0].copy().goto(vin).wire(width = 0.5)
     L[1].setwidth(0.5).w("o f 1 l 45 f 1 /")
+
+    vinp = vin.copy().w("/ f 1").wire(width = 0.5)
+    if not sensing:
+        return {"5v" : L[1], "VH" : vinp}.items()
 
     pt.w("f 7 r 90 f 2 l 90")
 
@@ -408,17 +413,17 @@ def Module_VIN(pb):
     R2.pads[1].w("o").goto(L[0]).wire()
     vsense = R2.pads[0].goto(R1.pads[0]).w("o r 90 f 1 /")
     
-    vinp = vin.copy().w("/ f 1").wire(width = 0.5)
     return {"5v" : L[1], "analog" : vsense, "VH" : vinp}.items()
 
 def Module_7SEG_LARGE(pb):
     brd = pb.brd
-    conn = dip.SIL(brd.DC((pb.upper_edge + 9, 96)).left(90), "6")
+    width = cu.inches(0.6) + 1
+    conn = dip.SIL(brd.DC((pb.upper_edge + width / 2, 96)).left(90), "6")
     conn.s("1").setname("GL2").thermal(1.3).wire(layer = "GBL")
     for p,nm in zip(conn.pads, ["GND", "LAT", "CLK", "SER", "5V", "12V"]):
         p.copy().right(90).forward(2).text(str(nm))
 
-    pb.upper_edge += 18
+    pb.upper_edge += width
     return (
             ("digital", conn.s("2")),
             ("digital", conn.s("3")),
@@ -426,6 +431,86 @@ def Module_7SEG_LARGE(pb):
             ("5v", conn.s("5")),
             ("VH", conn.s("6")),
            )
+
+
+class CD40109(cu.TSSOP):
+    N = 16
+    def escape(self, n):
+        names = "VCC ENA A E F B ENB VSS ENC C G NC H D END VDD"
+        for p,nm in zip(self.pads, names.split()):
+            p.setname(nm)
+        enables = set("VCC ENA ENB ENC END".split()[:n])
+        for s in "VCC ENA ENB ENC END".split():
+            if s in enables | {"VCC"}:
+                self.s(s).setname("GL3").w("o f 0.5").wire()
+            else:
+                self.s(s).w("o -")
+        self.s("VSS").w("o -")
+        self.s("VDD").w("o f 1.25 /")
+
+        ins = [self.s(c) for c in "ABCD"[:n]]
+        outs = [self.s(c) for c in "GHEF"[:n]]
+
+        self.s("A").w("i f 1.5 /")
+        self.s("B").w("i f 0.7 /")
+        self.s("C").w("i f 0.7 /")
+        self.s("D").w("i f 1.5 /")
+        self.s("E").w("o f 1 r 90")
+        self.s("F").w("o f 2 r 90")
+        self.s("H").w("o f 2 l 90")
+        self.s("G").w("o f 3 l 90")
+
+        cu.extend2(outs)
+        [p.forward(3).wire() for p in outs]
+        outs_r = self.board.toriver(outs)
+        outs_r.forward(2).wire()
+
+        return {
+            'ins': ins,
+            'outs': outs_r,
+            '5v': self.s("VDD"),
+        }
+
+def Module_7SEG_LARGE_LS(pb):
+    brd = pb.brd
+    width = cu.inches(0.6) + 1
+    p = brd.DC((pb.upper_edge + width / 2, 96))
+    pb.upper_edge += width
+    conn = dip.SIL(p.copy().left(90), "6")
+
+    ls = CD40109(p.w("r 180 f 15  r 90 f 2 l 90   l 180"))
+    ls_h = ls.escape(3)
+
+    conn.s("1").setname("GL2").thermal(1.3).wire(layer = "GBL")
+    for p,nm in zip(conn.pads, ["GND", "LAT", "CLK", "SER", "5V", "12V"]):
+        p.copy().right(90).forward(2).text(str(nm))
+
+    do = [conn.s(c) for c in "234"]
+    [p.w("r 90 f 3").wire() for p in do]
+    do_r = brd.toriver(do)
+    do_r.wire()
+    do_r.meet(ls_h["outs"])
+
+    conn.s("5").copy().through().goto(ls_h["5v"]).wire()
+    return (
+            ("digital", ls_h["ins"][0]),
+            ("digital", ls_h["ins"][1]),
+            ("digital", ls_h["ins"][2]),
+            ("5v", conn.s("5")),
+            # ("5v", ls_h["5v"]),
+            ("VH", conn.s("6")),
+           )
+
+def Module_SwitchInput(pb):
+    brd = pb.brd
+    width = cu.inches(0.2) + 1
+    p = brd.DC((pb.upper_edge + width / 2, 96))
+    pb.upper_edge += width
+    conn = dip.SIL(p.copy().left(90), "2")
+    conn.s("1").setname("GL2").thermal(1.3).wire(layer = "GBL")
+    return (
+            ("digital", conn.s("2")),
+    )
 
 def gen():
     brd = cu.Board(
@@ -515,9 +600,10 @@ def coop_monitor():
 def large_clock():
     pb = Protoboard()
     pb.mcu_pico()
-    pb.add_module(Module_VIN)
+    pb.add_module(Module_VIN, False)
     pb.add_module(Module_GPS_NEO_6M)
-    pb.add_module(Module_7SEG_LARGE)
+    pb.add_module(Module_7SEG_LARGE_LS)
+    pb.add_module(Module_SwitchInput)
     pb.finish()
     pb.save("ezbake")
 

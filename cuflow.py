@@ -134,7 +134,7 @@ class OutlineLayer:
 
 class Turtle:
     def __repr__(self):
-        return "<at (%.3f, %.3f) facing %.3f>" % (self.xy + (self.dir, ))
+        return "<at (%.3f, %.3f) facing %.3f '%s'>" % (self.xy + (self.dir, self.name))
     def w(self, s, layer = 'GTL'):
         tokens = s.split()
         cmds1 = {
@@ -276,6 +276,7 @@ class Draw(Turtle):
 
     def distance(self, other):
         return math.sqrt((other.xy[0] - self.xy[0]) ** 2 + (other.xy[1] - self.xy[1]) ** 2)
+        r.forward(10).wire()
 
     def direction(self, other):
         x = other.xy[0] - self.xy[0]
@@ -324,6 +325,24 @@ class Draw(Turtle):
             self.forward(half_edge)
             self.right(ea)
             self.forward(half_edge)
+        self.pop()
+
+    def stadium(self, r, n, l):
+        # Like n_agon, but with a stretched section, l
+        ea = 360 / n
+        self.push()
+        half_angle = math.pi / n
+        half_edge = r * math.tan(half_angle)
+        self.forward(r)
+        self.right(90)
+
+        self.newpath()
+        for j in (0, 1):
+            self.forward(l)
+            for _ in range(n // 2):
+                self.forward(half_edge)
+                self.right(ea)
+                self.forward(half_edge)
         self.pop()
 
     def thermal(self, d):
@@ -801,8 +820,6 @@ class Board:
         la = self.layers[layer]
 
         d = max(self.space, self.via_space)
-        print('include', include)
-        print({nm for (nm, o) in la.polys})
         notouch = so.unary_union([o for (nm, o) in la.polys if nm not in include])
         self.layers[layer].add(
             g.difference(notouch.buffer(d)), include
@@ -1055,14 +1072,8 @@ class Board:
             (lratio, rratio) = (ratio, ratio)
         (ra, rb) = (self.toriver(tt[:p], lratio), self.toriver(tt[p:], rratio))
 
-        # Length-1 joins make horizontal lines, so must advance by C
-        if len(ra.tt) == 1 or len(rb.tt) == 1:
-            d = self.c
-        else:
-            d = 0
-
         extend2(ra.tt + rb.tt)
-        return ra.join(rb, ratio).forward(d)
+        return ra.join(rb, ratio).forward(self.c)
 
 def extend(dst, traces):
     # extend parallel traces so that they are all level with dst
@@ -1485,7 +1496,7 @@ class SOIC8(SOIC):
 class TSSOP(Part):
     family = "U"
     def place(self, dc):
-        self.chamfered(dc, 4.4, {14:5.0, 20:6.5}[self.N])
+        self.chamfered(dc, 4.4, {14:5.0, 16:5.1, 20:6.5}[self.N])
         P = self.N // 2
         e = 0.65
         for _ in range(2):
