@@ -1,13 +1,16 @@
+import os
 import sys
-from PIL import Image, ImageDraw, ImageFont
+from datetime import datetime
 import math
+import collections
+from collections import defaultdict, namedtuple
+
+from PIL import Image, ImageDraw, ImageFont
 import cuflow as cu
 import svgout
 import dip
 import eagle
-import collections
 from dazzler import Dazzler
-from collections import defaultdict, namedtuple
 
 from arduino_dazzler import LibraryPart
 from EDS import EDS
@@ -18,7 +21,7 @@ __VERSION__ = "1.0.1"
 
 def gentext(s):
     fn = "../../.fonts/Arista-Pro-Alternate-Light-trial.ttf"
-    fn = "../../.fonts/IBMPlexSans-SemiBold.otf"
+    fn = os.getenv("HOME") + "/.fonts/IBMPlexSans-SemiBold.otf"
     font = ImageFont.truetype(fn, 120)
     im = Image.new("L", (2000, 1000))
     draw = ImageDraw.Draw(im)
@@ -238,7 +241,8 @@ class ArduinoR3(LibraryPart):
 
 class Protoboard:
 
-    def __init__(self):
+    def __init__(self, name = None):
+        self.name = name
         self.brd = cu.Board(
             (100, 100),
             trace = 0.127,
@@ -276,8 +280,15 @@ class Protoboard:
         md.meet(mb)
         mb.wire()
 
+    logo_center = (50, 13)
+
     def finish(self):
         brd = self.brd
+
+        if self.name:
+            (x, y) = self.logo_center
+            brd.logo(x, y, gentext(self.name), scale = 2.0)
+            brd.logo(x, y - 7, gentext(datetime.now().replace(microsecond=0).isoformat()), scale = 0.5)
 
         brd.outline()
 
@@ -291,7 +302,6 @@ class Protoboard:
 
     def save(self, name):
         brd = self.brd
-        name = "ezbake"
         brd.save(name)
         svgout.write(brd, name + ".svg")
 
@@ -349,10 +359,10 @@ def Module_GPS_NEO_6M(pb):
 
 def Module_RYLR896(pb):
     brd = pb.brd
-    conn = dip.SIL(brd.DC((pb.upper_edge + 9, 73)).left(90), "6")
+    conn = dip.SIL(brd.DC((pb.upper_edge + 10, 83)).left(90), "6")
     conn.s("1").setname("GL3").thermal(1.3).wire(layer = "GTL")
     conn.s("6").setname("GL2").thermal(1.3).wire(layer = "GBL")
-    pb.upper_edge += 18
+    pb.upper_edge += 20
     return {"tx" : conn.s("3"),
             "rx" : conn.s("4")}.items()
 
@@ -414,6 +424,17 @@ def Module_VIN(pb, sensing = True):
     vsense = R2.pads[0].goto(R1.pads[0]).w("o r 90 f 1 /")
     
     return {"5v" : L[1], "analog" : vsense, "VH" : vinp}.items()
+
+def Module_Battery(pb):
+    brd = pb.brd
+    x = pb.upper_edge + 5
+    pb.upper_edge += 10
+    pt = brd.DC((x, 94)).right(180)
+    j1 = dip.Screw2(pt)
+    j1.s("1").setname("GL2").thermal(1.5).wire(layer = "GBL")
+    vin = j1.s("2").wire(width = 0.5)
+
+    return {"5v" : vin}.items()
 
 def Module_7SEG_LARGE(pb):
     brd = pb.brd
@@ -512,6 +533,117 @@ def Module_SwitchInput(pb):
             ("digital", conn.s("2")),
     )
 
+def Module_Serial3(pb):
+    # 1 RX
+    # 2 TX
+    # 3 GND
+
+    brd = pb.brd
+    width = cu.inches(0.3) + 2
+    p = brd.DC((pb.upper_edge + width / 2, 96))
+    pb.upper_edge += width
+    conn = dip.SIL_o(p.copy().left(90), "3")
+    [c.setname(nm) for (c, nm) in zip(conn.pads, "RX TX GND".split())]
+    conn.s("GND").setname("GL2").thermal(1.3).wire(layer = "GBL")
+    addlabels(conn)
+    return (
+            ("rx",      conn.s("RX")),
+            ("tx",      conn.s("TX"))
+    )
+
+def Module_Serial(pb):
+    # 1 DTR
+    # 2 RX
+    # 3 TX
+    # 4 3V3
+    # 5 CTS
+    # 6 GND
+
+    brd = pb.brd
+    width = cu.inches(0.6) + 2
+    p = brd.DC((pb.upper_edge + width / 2, 96))
+    pb.upper_edge += width
+    conn = dip.SIL_o(p.copy().left(90), "6")
+    [c.setname(nm) for (c, nm) in zip(conn.pads, "DTR RX TX 3V3 CTS GND".split())]
+    conn.s("GND").setname("GL2").thermal(1.3).wire(layer = "GBL")
+    conn.s("3V3").setname("GL3").thermal(1.3).wire()
+    addlabels(conn)
+    return (
+            ("digital", conn.s("DTR")),
+            ("rx",      conn.s("RX")),
+            ("tx",      conn.s("TX")),
+            ("digital", conn.s("CTS")),
+    )
+
+def Module_LCD240x240_breakout(pb):
+    # 1 GND
+    # 2 VCC
+    # 3 SDL
+    # 4 SDA
+    # 5 RES
+    # 6 DC
+
+    brd = pb.brd
+    width = cu.inches(0.6) + 3
+    p = brd.DC((pb.upper_edge + width / 2, 80))
+    pb.upper_edge += width
+    conn = dip.SIL_o(p.copy().left(90), "6")
+    h = 39
+    conn.chamfered(p.copy().forward(-(39 / 2 - 1.6)), 28, 39)
+    [c.setname(nm) for (c, nm) in zip(conn.pads, "GND 3V3 SDL SDA RES DC".split())]
+    conn.s("GND").setname("GL2").thermal(1.3).wire(layer = "GBL")
+    conn.s("3V3").setname("GL3").thermal(1.3).wire()
+    return (
+            ("GP14", conn.s("SDL")),
+            ("GP15", conn.s("SDA")),
+            ("GP11", conn.s("RES")),
+            ("GP10", conn.s("DC")),
+    )
+
+class ST7789_12(cu.Part):
+    family = "U"
+    def place(self, dc):
+        dc.right(90)
+        self.train(dc, 12, lambda: self.rpad(dc, .35, 2), 0.7)
+
+#  1 GND
+#  2 LEDK
+#  3 LEDA
+#  4 VDD
+#  5 GND
+#  6 GND
+#  7 D/C
+#  8 CS
+#  9 SCL
+# 10 SDA
+# 11 RESET
+# 12 GND
+
+
+def Module_LCD240x240(pb):
+    brd = pb.brd
+    width = 23.4
+    p = brd.DC((pb.upper_edge + width / 2 - 7.7 / 2, 70))
+    pb.upper_edge += width
+    c = ST7789_12(p.copy())
+    for (p, nm) in zip(c.pads, "GND LEDK LEDA VDD GND GND D/C CS SCL SDA RESET GND".split()):
+        p.setname(nm)
+    c.pads[11].copy().w("f 2").text("1")
+    c.pads[ 0].copy().w("f 2").text("12")
+    for (i,p) in enumerate(c.pads):
+        if p.name not in ("VDD", ):
+            p.w(f"f {2+i%2} /")
+        if p.name == "GND":
+            p.setname("GL2").forward(1).wire(layer = "GBL")
+    return (
+            ("GP14", c.s("SCL")),
+            ("GP15", c.s("SDA")),
+            ("GP11", c.s("RESET")),
+            ("GP10", c.s("D/C")),
+    )
+
+# https://www.aliexpress.com/i/2251832118582843.html?gatewayAdapt=4itemAdapt
+
 def gen():
     brd = cu.Board(
         (100, 100),
@@ -607,5 +739,43 @@ def large_clock():
     pb.finish()
     pb.save("ezbake")
 
+def remote_i2c():
+    # https://www.reddit.com/r/raspberrypipico/comments/xalach/measuring_vsys_on_pico_w/
+    nm = "remote_i2c"
+    pb = Protoboard(nm)
+    pb.logo_center = (60, 60)
+    pb.mcu_pico()
+    pb.add_module(Module_i2c_pullups_0402)
+    for i in range(3):
+        pb.add_module(Module_EDS)
+
+    pb.add_module(Module_Battery)
+    pb.add_module(Module_Serial3)
+    pb.add_module(Module_RYLR896)
+    pb.finish()
+    pb.save(nm)
+
+def td2_a():
+    nm = "td2_a"
+    pb = Protoboard(nm)
+    pb.mcu_pico()
+    pb.add_module(Module_Serial3)
+    pb.add_module(Module_LCD240x240_breakout)
+    pb.add_module(Module_Serial)
+    pb.finish()
+    pb.save(nm)
+
+def td2_b():
+    nm = "td2_b"
+    pb = Protoboard(nm)
+    pb.mcu_pico()
+    pb.add_module(Module_Serial3)
+    pb.add_module(Module_LCD240x240)
+    pb.add_module(Module_Serial)
+    pb.finish()
+    pb.save(nm)
+
 if __name__ == "__main__":
-    large_clock();
+    # large_clock()
+    td2_b()
+    # remote_i2c()

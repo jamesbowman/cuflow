@@ -30,7 +30,7 @@ def write(board, filename, style = 'laser'):
 
     def renderpoly(po, args):
         if type(po) == sg.MultiPolygon:
-            [renderpoly(p, args) for p in po]
+            [renderpoly(p, args) for p in po.geoms]
             return
         # Subdivide a poly if it has holes
         if len(po.interiors) == 0:
@@ -45,17 +45,12 @@ def write(board, filename, style = 'laser'):
             renderpoly(po.intersection(sg.box(x0, y0, xm + eps, y1)), args)
             renderpoly(po.intersection(sg.box(xm - eps, y0, x1, y1)), args)
 
-    if 1:
-        if isinstance(gto, sg.Polygon):
-            renderpoly(gto)
-        else:
-            [renderpoly(po) for po in gto.geoms]
-
-    args = {'stroke':'blue', 'fill_opacity':0.0, 'stroke_width':.1}
-    for po in gto.geoms:
-        li = [po.exterior] + list(po.interiors)
-        for l in li:
-            dwg.add(dwg.polyline(l.coords, **args))
+    if 0:
+        args = {'stroke':'blue', 'fill_opacity':0.0, 'stroke_width':.1}
+        for po in gto.geoms:
+            li = [po.exterior] + list(po.interiors)
+            for l in li:
+                dwg.add(dwg.polyline(l.coords, **args))
 
     def layer(nm, args1, args2):
         gto = board.layers[nm].preview()
@@ -66,9 +61,9 @@ def write(board, filename, style = 'laser'):
             if isinstance(gto, sg.Polygon):
                 renderpoly(gto, args1)
             else:
-                [renderpoly(po, args1) for po in gto]
+                [renderpoly(po, args1) for po in gto.geoms]
 
-        for po in gto:
+        for po in gto.geoms:
             li = [po.exterior] + list(po.interiors)
             for l in li:
                 dwg.add(dwg.polyline(l.coords, **args2))
