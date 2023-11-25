@@ -9,7 +9,18 @@
 </head>
 
 <body onload="brython(1)">
-<script type="text/python" src="cellcad.py">
+<script>
+function foo(canvas, after) {
+  console.log("FOO", canvas);
+  Promise.all([
+    createImageBitmap(canvas)
+  ]).then((results) => {
+    after(results[0]);
+  });
+  return 4;
+}
+</script>
+<script type="text/python" src="cellcad2.py">
 </body>
 
 </html>

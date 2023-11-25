@@ -1,13 +1,23 @@
+set -e
+
 cp index.html *.py ../hex.py ../*json ~/stage
 sync
 (
+
+T='CellCAD - Google Chrome'
+
+# Try "unset I3SOCK" if this fails
+i3-msg "[title=\"$T\"]" focus
+
 sleep .1
 if [ -x "$(command -v xdotool)" ]; then
   CUR_WID=$(xdotool getwindowfocus)
-  for WID in $(xdotool search --onlyvisible --name 'CellCAD - Google Chrome')
+  for WID in $(xdotool search --onlyvisible --name "$T")
   do
     xdotool windowactivate $WID
+    xdotool mousemove --window $WID 300 300
     xdotool key 'ctrl+r'
+    echo REFRESHED
   done
   xdotool windowactivate $CUR_WID
 fi
