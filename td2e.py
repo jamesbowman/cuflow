@@ -152,7 +152,7 @@ class HexRP2040(RP2040):
         river_ongrid(cu.River(brd, banks[0][-4:-2]).w("f 0.8 r 60"))
         river_ongrid(cu.River(brd, banks[0][-2:]).w(""))
         river_ongrid(cu.River(brd, banks[1][:4 ]).right(30))
-        river_ongrid(cu.River(brd, banks[3][:2]).w("f 0.5 l 30"))
+        river_ongrid(cu.River(brd, banks[3][:2]).w("f 0.0 r 30"))
         river_ongrid(cu.River(brd, banks[3][-6:]).left(30))
         for nm in ("XIN", ):
             wire_ongrid(self.s(nm))
@@ -264,7 +264,7 @@ class SMT6(cu.Part):
             if nm == "GND":
                 p.w("o f 1 / f 1").wire()
             elif nm == "VCC":
-                p.w("o f 1").wire()
+                p.w("o f 0.5").wire()
             elif 0:
                 p.text(nm, scale = 0.2)
 
@@ -306,6 +306,14 @@ def td2e():
     for x in (o, 30 - o):
         for y in (o, 30 - o):
             brd.hole((x, y), 1, 1.5)
+
+    for xy in ((2, 9), (30 - 2, 9)):
+        dc = brd.DC(xy)
+        dc.rect(1, 8)
+        slot = dc.poly().buffer(0.5)
+        brd.keepouts.append(slot.buffer(.2))
+        brd.layers['GML'].route(slot)
+
 
     origin =  Hex.from_xy(21, 20)
     # hexgrid(brd, origin)
@@ -355,8 +363,6 @@ def td2e():
 
     j1 = USB(brd.DC((15, 28.5)).right(180))
     j1.hex_escape()
-    j1.s("D+").hex("3f").wire()
-    j1.s("D-").hex("rlf").wire()
     j1.s("5V").hex("ll 9f l 2f r").wire()
 
     u3 = SOT23_LDO(brd.DC((5, 26)).right(180).left(90))
@@ -379,9 +385,10 @@ def td2e():
         cn = cu.C0402_nolabel(p, '10nF')
         cn.pads[0].setname("GND").w("o f .5 / f .6").wire()
         cn.pads[1].setname("VCC").w("o f .3").wire()
-    cap(brd.DC((21, 27)).right(90))
-    cap(brd.DC((23, 27)).right(90))
-    cap(brd.DC((27, 22)).right(90))
+    cap(brd.DC((24.0, 25)).right(90))
+    cap(brd.DC((25.5, 25)).right(90))
+    cap(brd.DC((27.0, 23)).right(90))
+    cap(brd.DC((28.5, 23)).right(90))
     cap(brd.DC((10, 24.7)))
     cap(brd.DC((8, 18)).right(180))
     cap(brd.DC((14, 18.5)))
@@ -402,10 +409,21 @@ def td2e():
 
     if 1:
         # Pico USB
-        u1.s("USB_DP")
-        d = 8
-        j1.s("D-").hex(f"lf").wire()
-        j1.s("D+").hex(f"lff").wire()
+        r0 = cu.R0402(brd.DC((20.5, 27.5)).left(90), "270")
+        r1 = cu.R0402(brd.DC((22.0, 27.5)).left(90), "270")
+
+        u1.s("USB_DP").hex("r 5f r").goto(r0.pads[0], True).wire()
+        u1.s("USB_DM").hex("r 4f r").goto(r1.pads[0], True).wire()
+
+        r0.pads[1].w("o f 0.6 /")
+        r1.pads[1].w("o f 0.6 /")
+
+        # j1.s("D-").hex("lf").wire()
+        # j1.s("D+").hex("lff").wire()
+        # j1.s("D+").hex("3f").wire()
+        # j1.s("D-").hex("rlf").wire()
+        j1.s("D+").hex("f/").right(30).goto(r0.pads[1]).wire()
+        j1.s("D-").hex("4f/").right(30).goto(r1.pads[1]).wire()
 
     if 1:
         # Pico to ST7789_12
@@ -414,7 +432,7 @@ def td2e():
         RES = u1.s("GPIO11")
         DC  = u1.s("GPIO10")
 
-        SDA.hex("ll / 2r").w("r 30 f 13") .goto(x1.s("SDA"), False).wire()
+        SDA.hex("ll / 2<").w("r 30 f 13") .goto(x1.s("SDA"), False).wire()
         SDL.hex("10 f /").w("r 30 f 10")  .goto(x1.s("SCL"), False).wire()
         RES.hex("ll / rr 2f r ")          .goto(x1.s("RESET"), True).wire()
         DC .hex("2f / r").wire()          .goto(x1.s("D/C"), True).wire()
@@ -423,6 +441,7 @@ def td2e():
             for nm in "SDA SCL D/C RESET".split():
                 x1.s(nm).copy().mark().forward(1).text(nm, scale = 0.2)
 
+    if 1:
         # ST7789_12 backlight power
         r = cu.R0402(brd.DC((7, 3)).left(90))
 

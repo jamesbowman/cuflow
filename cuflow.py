@@ -12,6 +12,7 @@ import math
 import gerber
 from excellon import excellon
 import hershey
+import hex
 
 def inches(x):  return x * 25.4
 def mil(x):     return inches(x / 1000)
@@ -114,6 +115,7 @@ class OutlineLayer:
     def __init__(self, desc):
         self.lines = []
         self.desc = desc
+        self.routed = []
 
     def add(self, o):
         self.lines.append(o)
@@ -126,10 +128,16 @@ class OutlineLayer:
         po = sg.Polygon(self.lines[0]).difference(o.buffer(0))
         self.lines = [po.exterior]
 
+    def route(self, po):
+        # Add po to the routed list
+        self.routed.append(po)
+
     def save(self, f):
         g = gerber.Gerber(f, self.desc)
         for ls in self.lines:
             g.linestring(ls.coords)
+        for po in self.routed:
+            g.linestring(po.exterior.coords)
         g.finish()
 
 class Turtle:
@@ -161,6 +169,42 @@ class Turtle:
                 cmds2[t](float(tokens[i + 1]))
                 i += 2
         # self.wire(layer)
+        return self
+
+    def hex1(self):
+        return self.forward(hex.height)
+
+    def hex(self, s):
+        self.hexn = 0
+        def iter(f):
+            if self.hexn == 0:
+                f()
+            else:
+                for i in range(self.hexn):
+                    f()
+            self.hexn = 0
+
+        for c in s:
+            if c.isdigit():
+                self.hexn = self.hexn * 10 + int(c)
+            elif c == ' ':
+                pass
+            elif c == 'l':
+                iter(lambda: self.left(60).hex1())
+            elif c == 'r':
+                iter(lambda: self.right(60).hex1())
+            elif c == 'f':
+                iter(lambda: self.hex1())
+            elif c == '/':
+                self.through()
+            elif c == '>':
+                iter(lambda: self.left(60))
+            elif c == '<':
+                iter(lambda: self.right(60))
+            elif c == '!':
+                self.right(180)
+            else:
+                assert 0, f"Illegal h() operator '{c}'"
         return self
 
     def inside(self): pass
@@ -259,14 +303,31 @@ class Draw(Turtle):
         oy = dy * c + dx * s
         return (ox, oy)
 
-    def goto(self, other):
-        return self.goxy(*self.seek(other))
+    def goto(self, other, twist = False):
+        f = [self.goxy, self.goyx][twist]
+        return f(*self.seek(other))
 
     def goxy(self, x, y):
         self.right(90)
         self.forward(x)
         self.left(90)
         self.forward(y)
+        return self
+
+    def goyx(self, x, y):
+        self.forward(y)
+        self.right(90)
+        self.forward(x)
+        self.left(90)
+        return self
+
+    def go_hex(self, x, y):
+        # (x, y) = (x - self.xy[0], y - self.xy[0])
+        print(x, y)
+        a = DEGREES(math.atan2(x, y))
+        self.left(a)
+        # self.forward(.1)
+        self.mark()
         return self
 
     def is_behind(self, other):
@@ -276,7 +337,6 @@ class Draw(Turtle):
 
     def distance(self, other):
         return math.sqrt((other.xy[0] - self.xy[0]) ** 2 + (other.xy[1] - self.xy[1]) ** 2)
-        r.forward(10).wire()
 
     def direction(self, other):
         x = other.xy[0] - self.xy[0]
@@ -432,6 +492,7 @@ class Draw(Turtle):
         self.forward(b.via_space + b.via / 2)
         self.wire()
         self.via(l)
+        return self
 
     def fan(self, l, dst):
         for a in (-45, 0, 45):
@@ -461,9 +522,14 @@ class Draw(Turtle):
         self.path.append(other.xy)
         return self.wire()
 
-    def text(self, s):
+    def text(self, s, scale = 1.0):
         (x, y) = self.xy
-        self.board.layers['GTO'].add(hershey.ctext(x, y, s))
+        self.board.layers['GTO'].add(hershey.text(x, y, s, scale = scale))
+        return self
+
+    def ctext(self, s, scale = 1.0):
+        (x, y) = self.xy
+        self.board.layers['GTO'].add(hershey.ctext(x, y, s, scale = scale))
         return self
 
     def ltext(self, s):
@@ -567,6 +633,7 @@ class River(Turtle):
         else:
             a = 180 * math.acos(1 - abs(d) / r) / math.pi
             f = 0
+
         if d > 0:
             self.left(a)
             self.forward(f)
@@ -843,6 +910,8 @@ class Board:
     def substrate(self):
         substrate = Layer(None)
         gml = self.layers['GML'].lines
+        if gml == []:
+            return substrate
         mask = sg.Polygon(gml[-1], gml[:-1])
         for d,xys in self.holes.items():
             if d > 0.3:
@@ -897,7 +966,7 @@ class Board:
 
     def bom(self, fn):
         parts = defaultdict(list)
-        rank = "UJKTRCMY"
+        rank = "UJKTRCDMY"
         for f,pp in self.parts.items():
             for p in pp:
                 if p.inBOM:
@@ -1221,6 +1290,10 @@ class C0402(Discrete2):
         self.pads[0].setname("VCC").w("o f 0.5").wire()
         self.pads[1].w("o -")
 
+class C0402_nolabel(C0402):
+    def label(self, dc):
+        pass
+
 class C0603(Discrete2):
     family = "C"
     footprint = "0603"
@@ -1243,6 +1316,10 @@ class C0603(Discrete2):
         dc.forward(2)
         self.label(dc)
         dc.pop()
+
+class D0603(C0603):
+    family = "D"
+    footprint = "0603"
 
 class R0402(C0402):
     family = "R"
@@ -1492,6 +1569,33 @@ class SOIC8(SOIC):
     D = 3.81
     G = 3.0
     Z = 7.4
+
+class SOIC28(SOIC):
+    N = 28
+
+    A = 7.6
+    B = 18.39
+    C = 9.2
+    D = 16.51
+    G = 7
+    Z = 11.4
+
+class USON8(Part):
+    family = "U"
+    footprint = "USON-8"
+    N = 8
+
+    def place(self, dc):
+
+        self.A = 3
+        self.B = 4
+        self.chamfered(dc, self.A, self.B)
+        for _ in range(2):
+            dc.push()
+            dc.goxy(self.A / 2, -0.8 * 1.5)
+            self.train(dc, self.N // 2, lambda: self.rpad(dc, 0.30, 1.00), 0.80)
+            dc.pop()
+            dc.right(180)
 
 class TSSOP(Part):
     family = "U"
