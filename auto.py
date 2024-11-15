@@ -99,7 +99,7 @@ class Pico(dip.dip):
         io = set(range(1, 35)) - gpins
         for g in gpins:
             p = self.s(str(g)).copy()
-            p.setname("GND").through().thermal(1.3).wire()
+            p.setname("GL2").thermal(1.3).wire(layer = "GBL")
         pnames = [
             "GP0",
             "GP1",
@@ -153,7 +153,7 @@ class Pico(dip.dip):
             # p.n_agon(0.8, 60)
             # p.contact()
             pad.setname(nm)
-        self.s("3V3(OUT)").setname("VCC").thermal(1.3).wire()
+        self.s("3V3(OUT)").copy().setname("GL3").thermal(1.3).wire(layer = "GTL")
         self.pool = {
             "analog" : ["GP26", "GP27", "GP28"],
             "digital" : ["GP10", "GP11", "GP12", "GP13", "GP14"],
@@ -162,7 +162,7 @@ class Pico(dip.dip):
         }
 
     def escape(self):
-        pp = [p for p in self.pads if p.name not in ("GND", "VCC")]
+        pp = [p for p in self.pads if p.name not in ("GND", "3V3(OUT)")]
         c = self.board.c
         n = 15
         pivot = pp[n].copy().left(180)  # bottom left pad
@@ -182,7 +182,6 @@ class Pico(dip.dip):
     def interface(self, name):
         if name in self.pool:
             return self.pool[name].pop(0)
-        self.pool = {nm:sorted(set(sigs) - {name}) for (nm,sigs) in self.pool.items()}
         return {
             "sda" : "GP14",
             "scl" : "GP15",
@@ -226,6 +225,94 @@ class QFN56(cu.Part):
             dc.pop()
             dc.left(90)
 
+RP2040pins = [
+    (0, "GND"),
+    (1, "VCC"),
+    (2, "GPIO0"),
+    (3, "GPIO1"),
+    (4, "GPIO2"),
+    (5, "GPIO3"),
+    (6, "GPIO4"),
+    (7, "GPIO5"),
+    (8, "GPIO6"),
+    (9, "GPIO7"),
+    (10, "VCC"),
+    (11, "GPIO8"),
+    (12, "GPIO9"),
+    (13, "GPIO10"),
+    (14, "GPIO11"),
+    (15, "GPIO12"),
+    (16, "GPIO13"),
+    (17, "GPIO14"),
+    (18, "GPIO15"),
+    (19, "TESTEN"),
+    (20, "XIN"),
+    (21, "XOUT"),
+    (22, "VCC"),
+    (23, "DVDD"),
+    (24, "SWCLK"),
+    (25, "SWD"),
+    (26, "RUN"),
+    (27, "GPIO16"),
+    (28, "GPIO17"),
+    (29, "GPIO18"),
+    (30, "GPIO19"),
+    (31, "GPIO20"),
+    (32, "VCC"),
+    (33, "GPIO21"),
+    (34, "GPIO22"),
+    (35, "GPIO23"),
+    (36, "GPIO24"),
+    (37, "GPIO25"),
+    (38, "GPIO26/ADC0"),
+    (39, "GPIO27/ADC1"),
+    (40, "GPIO28/ADC2"),
+    (41, "GPIO29/ADC3"),
+    (42, "VCC"),
+    (43, "ADC_AVDD"),
+    (44, "VREG_VIN"),
+    (45, "VREG_VOUT"),
+    (46, "USB_DM"),
+    (47, "USB_DP"),
+    (48, "USB_VDD"),
+    (49, "VCC"),
+    (50, "VCC"),
+    (51, "QSPI_SIO3"),
+    (52, "QSPI_SCLK"),
+    (53, "QSPI_SIO0"),
+    (54, "QSPI_SIO2"),
+    (55, "QSPI_SIO1"),
+    (56, "QSPI_CSn")
+]
+class RP2040(QFN56):
+    source = {'BridgeTek': 'BT815Q'}
+    mfr = 'BT815Q'
+    def escape(self):
+        brd = self.board
+        for i,nm in RP2040pins:
+            self.pads[i].setname(nm)
+        for p in self.pads:
+            if p.name == "VCC":
+                p.w("o f .2 ").wire()
+        return []
+
+        banks = ([], [], [], [])
+        for i,p in enumerate(self.pads[1:]):
+            b = i // 14
+            if p.name != "VCC":
+                p.forward(1.5).wire()
+                banks[b].append(p)
+        [cu.extend2(b) for b in banks]
+        [t.wire() for t in self.pads]
+        rr = [self.board.enriver(bb, a).wire() for a,bb in zip([-45,-45,45,45], banks)]
+        rr[0].forward(0.4).left(90)
+        a = rr[0].join(rr[1], 1.0)
+        b = rr[2].join(rr[3].right(90)).forward(1)
+        cu.extend2(a.tt + b.tt)
+        r = a.join(b, 0.5).right(45).wire()
+        print(r)
+        return []
+        return r
 
 
 def addlabels(part):
@@ -313,14 +400,10 @@ class Protoboard:
         addlabels(mcu)
         self.common_mcu(mcu, brd.DC((20.6, 38)))
 
-    def mcu_pico(self, flush = False):
+    def mcu_pico(self):
         brd = self.brd
-        if not flush:
-            p = brd.DC((16, 67))
-        else:
-            p = brd.DC((16, 73.2))
-        mcu = Pico(p)
-        self.common_mcu(mcu, brd.DC((24, 24)))
+        mcu = Pico(brd.DC((16, 67)))
+        self.common_mcu(mcu, brd.DC((24, 20)))
 
     def mcu_rp2040(self):
         brd = self.brd
@@ -352,7 +435,7 @@ class Protoboard:
 
     logo_center = (50, 13)
 
-    def finish(self, mount_holes = True):
+    def finish(self):
         brd = self.brd
 
         if self.name:
@@ -362,12 +445,11 @@ class Protoboard:
 
         brd.outline()
 
-        if mount_holes:
-            for x in (4, 100 - 4):
-                for y in (4, 100 - 4):
-                    brd.hole((x, y), 2.7, 6)
+        for x in (4, 100 - 4):
+            for y in (4, 100 - 4):
+                brd.hole((x, y), 2.7, 6)
 
-        if 1:
+        if 0:
             brd.fill_any("GTL", "VCC")
             brd.fill_any("GBL", "GND")
 
@@ -383,9 +465,7 @@ class Protoboard:
         mcu = self.mcu
 
         for (nm, p) in mod_signals:
-            i = mcu.interface(nm)
-            du.via(i, p)
-            print(f"{i:5} {mod.__name__}.{p.name}")
+            du.via(mcu.interface(nm), p)
 
 def Module_i2c_pullups_0402(pb):
     brd = pb.brd
@@ -401,25 +481,10 @@ def Module_i2c_pullups_0402(pb):
 
 def Module_EDS(pb):
     brd = pb.brd
-    (sda0, scl0) = EDS(brd.DC((pb.lower_edge + 10, 11)).right(90)).escape()
+    (sda0, scl0) = EDS(brd.DC((pb.lower_edge + 9, 11)).right(90)).escape()
     pb.lower_edge += 20
     [s.w("o f 1 /") for s in (sda0, scl0)]
     return {"sda" : sda0, "scl" : scl0}.items()
-
-def Module_I2C(pb):
-    brd = pb.brd
-    p = brd.DC((pb.lower_edge + 10, 2))
-    pb.lower_edge += 20
-    conn = dip.SIL_o(p.copy().right(90), "4")
-    names = ['GND', 'VCC', 'SDA', 'SCL']
-    [c.setname(nm) for (c, nm) in zip(conn.pads, names)]
-    addlabels(conn)
-    conn.s("VCC").w("r 90 f 2").wire()
-    conn.s("GND").w("/ r 90 f 2").wire()
-    return (
-        ("sda", conn.s("SDA")),
-        ("scl", conn.s("SCL")),
-    )
 
 class GPS_NEO_6M(cu.Part):
     family = "U"
@@ -652,12 +717,11 @@ def Module_Serial(pb):
     p = brd.DC((pb.upper_edge + width / 2, 96))
     pb.upper_edge += width
     conn = dip.SIL_o(p.copy().left(90), "6")
-    names = ('GND', 'CTS', 'VCC', 'TX', 'RX', 'DTR')
+    names = ('GND', 'CTS', '3V3', 'TX', 'RX', 'DTR')
     [c.setname(nm) for (c, nm) in zip(conn.pads, names)]
     addlabels(conn)
-    conn.s("GND").mark()
-    conn.s("GND").through().thermal(1.3).wire()
-    conn.s("VCC").thermal(1.3).wire()
+    conn.s("GND").setname("GL2").thermal(1.3).wire(layer = "GBL")
+    conn.s("3V3").setname("GL3").thermal(1.3).wire()
     return (
             ("digital", conn.s("DTR")),
             ("rx",      conn.s("RX")),
@@ -678,11 +742,11 @@ def Module_Serial_Debug(pb):
     p = brd.DC((pb.upper_edge + width / 2, 96))
     pb.upper_edge += width
     conn = dip.SIL_o(p.copy().left(90), "6")
-    names = ['GND', 'SWDIO', 'VCC', 'TX', 'RX', 'SWCLK']
+    names = ['GND', 'SWDIO', '3V3', 'TX', 'RX', 'SWCLK']
     [c.setname(nm) for (c, nm) in zip(conn.pads, names)]
     addlabels(conn)
-    conn.s("GND").through().thermal(1.3).wire()
-    conn.s("VCC").thermal(1.3).wire()
+    conn.s("GND").setname("GL2").thermal(1.3).wire(layer = "GBL")
+    conn.s("3V3").setname("GL3").thermal(1.3).wire()
     return (
             ("SWCLK",   conn.s("SWCLK")),
             ("rx",      conn.s("RX")),
@@ -697,18 +761,17 @@ def Module_LCD240x240_breakout(pb):
     # 4 SDA
     # 5 RES
     # 6 DC
-    # 7 BLK
 
     brd = pb.brd
     width = cu.inches(0.6) + 3
     p = brd.DC((pb.upper_edge + width / 2, 80))
     pb.upper_edge += width
-    conn = dip.SIL_o(p.copy().left(90), "7")
+    conn = dip.SIL_o(p.copy().left(90), "6")
     h = 39
     conn.chamfered(p.copy().forward(-(39 / 2 - 1.6)), 28, 39)
-    [c.setname(nm) for (c, nm) in zip(conn.pads, "GND 3V3 SDL SDA RES DC BLK".split())]
-    conn.s("GND").through().thermal(1.3).wire()
-    conn.s("3V3").setname("VCC").thermal(1.3).wire()
+    [c.setname(nm) for (c, nm) in zip(conn.pads, "GND 3V3 SDL SDA RES DC".split())]
+    conn.s("GND").setname("GL2").thermal(1.3).wire(layer = "GBL")
+    conn.s("3V3").setname("GL3").thermal(1.3).wire()
     return (
             ("GP14", conn.s("SDL")),
             ("GP15", conn.s("SDA")),
@@ -722,18 +785,18 @@ class ST7789_12(cu.Part):
         dc.right(90)
         self.train(dc, 12, lambda: self.rpad(dc, .35, 2), 0.7)
 
-#  1 GND        GND
-#  2 LEDK       GND
-#  3 LEDA       LEDA
-#  4 VDD        VCC
-#  5 GND        GND
-#  6 GND        GND
-#  7 D/C        D/C
-#  8 CS         GND
-#  9 SCL        SCL
-# 10 SDA        SDA
-# 11 RESET      RESET
-# 12 GND        GND
+#  1 GND
+#  2 LEDK
+#  3 LEDA
+#  4 VDD
+#  5 GND
+#  6 GND
+#  7 D/C
+#  8 CS
+#  9 SCL
+# 10 SDA
+# 11 RESET
+# 12 GND
 
 
 def Module_LCD240x240(pb):
@@ -742,27 +805,15 @@ def Module_LCD240x240(pb):
     p = brd.DC((pb.upper_edge + width / 2 - 7.7 / 2, 70))
     pb.upper_edge += width
     c = ST7789_12(p.copy())
-    # https://www.aliexpress.us/item/3256803568692645.html
-    #                           12   11  10   9   8   7   6   5   4   3   2     1
-    #                               LEDK LEDA                 CS
-    for (p, nm) in zip(c.pads, "GND  GND LEDA  VCC GND GND D/C GND SCL SDA RESET GND".split()):
+    for (p, nm) in zip(c.pads, "GND LEDK LEDA VDD GND GND D/C CS SCL SDA RESET GND".split()):
         p.setname(nm)
-
     c.pads[11].copy().w("f 2").text("1")
     c.pads[ 0].copy().w("f 2").text("12")
     for (i,p) in enumerate(c.pads):
-        if p.name == "VCC":
-            p.w("f 2").wire()
-        elif p.name == "LEDA":
-            p.w("r 180 f 6 r 90 f 20").wire()
-            dc = p.copy().forward(3).right(90)
-            r0 = cu.R0402(dc, '4K7')
-            r0.pads[1].goto(p).wire()
-            r0.pads[0].w("o f 2").setname("VCC").wire()
-        else:
+        if p.name not in ("VDD", ):
             p.w(f"f {2+i%2} /")
-            if p.name == "GND":
-                p.forward(1).wire()
+        if p.name == "GND":
+            p.setname("GL2").forward(1).wire(layer = "GBL")
     return (
             ("GP14", c.s("SCL")),
             ("GP15", c.s("SDA")),
@@ -771,83 +822,6 @@ def Module_LCD240x240(pb):
     )
 
 # https://www.aliexpress.com/i/2251832118582843.html?gatewayAdapt=4itemAdapt
-
-# https://download.riverdi.com/ZIF0520DH-CF25/DS_ZIF0520DH-CF25.pdf
-
-class RibusHost(cu.Part):
-    family = "J"
-    def place(self, dc):
-        dc.right(90)
-        cc = dc.copy()
-        self.train(dc, 20, lambda: self.rpad(dc, .3, 1.2), 0.5)
-        for (i, dx) in ((0, 1), (19, -1)):
-            for dy in (-1, 1):
-                p = self.pads[i].copy()
-                p.goxy(0, dy * 0.6)           # End of pad
-                p.goxy(dx * 0.8, dy * 1.2)    # pad-to-foot gap
-                p.goxy(dx * 1, dy * 0.9)      # center of foot
-                self.rpad(p, 1.8, 2)
-        A = 19 * 0.5
-        B = A + 4.6
-        cc.left(90).goxy(.5 * 9.5, 3.4)
-        self.chamfered(cc, B, 5.8)
-
-def Module_Ribus(pb):
-    brd = pb.brd
-    width = 30
-    p = brd.DC((pb.upper_edge + width / 2, 50))
-    pb.upper_edge += width
-    c = RibusHost(p.copy().right(0))
-
-    names = (
-        'VCC',
-        'GND',
-        'SCLK',
-        'MISO',
-        'MOSI',
-        'CS',
-        'NC',
-        'PD',
-        'GPIO.0',
-        'DISP_AUDIO',
-        'GPIO.1',
-        'GPIO.2',
-        'DTR',
-        'RTS',
-        'RX',
-        'TX',
-        'BLVDD1',
-        'BLVDD2',
-        'GND',
-        'GND')
-
-    assert len(names) == 20
-
-    for (p, nm) in zip(c.pads, names):
-        p.setname(nm)
-
-    hookups = {
-        "PD"     : "GP8",
-        "CS"     : "GP9",
-        "SCLK"   : "GP10",
-        "MOSI"   : "GP11",
-        "MISO"   : "GP12",
-        "BLVDD2" : "VSYS",
-    }
-
-    c.pads[ 0].copy().w("f 2").text("1")
-    c.pads[19].copy().w("f 2").text("20")
-    for (i,p) in enumerate(c.pads):
-        if p.name == "VCC":
-            p.w("f 2").wire()
-        elif p.name == "GND":
-            p.w(f"r 180 f {2+i%2} /")
-            p.forward(1).wire()
-        elif p.name in hookups:
-            p.w(f"f {2+i%2} /")
-    c.s("BLVDD1").goto(c.s("BLVDD2")).wire()
-
-    return [(busname, c.s(myname)) for (myname, busname) in hookups.items()]
 
 def gen():
     brd = cu.Board(
@@ -964,7 +938,7 @@ def td2_a():
     nm = "td2_a"
     pb = Protoboard(nm)
     pb.mcu_pico()
-    # pb.add_module(Module_Serial_Debug)
+    pb.add_module(Module_Serial_Debug)
     pb.add_module(Module_LCD240x240_breakout)
     pb.add_module(Module_Serial)
     pb.finish()
@@ -993,26 +967,8 @@ def td2_c():
     pb.finish()
     pb.save(nm)
 
-def scanalyzer1():
-    # https://www.reddit.com/r/raspberrypipico/comments/xalach/measuring_vsys_on_pico_w/
-    nm = "scanalyzer1"
-    pb = Protoboard(nm)
-    pb.logo_center = (60, 70)
-    pb.mcu_pico(flush = True)
-    pb.add_module(Module_i2c_pullups_0402)
-    pb.add_module(Module_EDS)
-    pb.add_module(Module_I2C)
-    pb.add_module(Module_EDS)
-
-    pb.add_module(Module_Serial_Debug)
-    pb.add_module(Module_Ribus)
-
-    pb.finish(mount_holes = False)
-    pb.save(nm)
-
 
 if __name__ == "__main__":
     # large_clock()
-    td2_b()
+    td2_c()
     # remote_i2c()
-    # scanalyzer1()

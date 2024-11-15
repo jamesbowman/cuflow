@@ -42,7 +42,7 @@ class LibraryPart(cu.Part):
             elif c.tag == "smd":
                 (x, y, dx, dy) = [float(attr[t]) for t in "x y dx dy".split()]
                 p = dc.copy().goxy(x, y)
-                if attr['rot'] in ("R90", "R270"):
+                if attr.get('rot', None) in ("R90", "R270"):
                     (dx, dy) = (dy, dx)
                 p.rect(dx, dy)
                 p.setname(attr["name"])
@@ -52,6 +52,9 @@ class LibraryPart(cu.Part):
                     attr['diameter'] = float(attr['drill']) * 1.5
                 (x, y, diameter, drill) = [float(attr[t]) for t in "x y diameter drill".split()]
                 nm = attr["name"]
+                # Account for plating width on through-holes
+                drill += 0.1
+                diameter += 0.1
 
                 dc.push()
                 dc.goxy(x, y)

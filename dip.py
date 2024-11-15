@@ -6,35 +6,40 @@ T = cu.inches(0.1)    # tenth on an inch, used throughout
 class dip(cu.Part):
     N2 = None
     def place(self, dc):
+        self.dc = dc
         self.chamfered(dc, self.width - T, T * (self.N / 2) + 2)
         height = T * ((self.N // 2) - 1)
+        self.height = height
         if self.N2 is None:
             nps = [self.N // 2, self.N // 2]
         else:
             nps = self.N2
+        print(f"{nps=}")
         for np in nps:
             dc.push()
             dc.goxy(-self.width / 2, height / 2).left(180)
-            def gh():
-                dc.board.hole(dc.xy, .8)
-                p = dc.copy()
-                p.part = self.id
-                self.padfoot(p)
-                p.contact()
-                self.pads.append(dc.copy())
-            self.train(dc, np, gh, cu.inches(.1))
+            self.train(dc, np, self.gh, cu.inches(.1))
             dc.pop()
             dc.right(180)
+
+    def gh(self):
+        dc = self.dc
+        dc.board.hole(dc.xy, .8)
+        p = dc.copy()
+        p.part = self.id
+        self.padfoot(p)
+        p.contact()
+        self.pads.append(dc.copy())
 
     def padfoot(self, p):
         p.n_agon(0.8, 60)
 
 class PTH(cu.Part):
     r = .8
-    def gh(self, dc):
+    def gh(self, dc, plate = 1.0):
         dc.board.hole(dc.xy, self.r)
         p = dc.copy()
-        p.n_agon(self.r, 30)
+        p.n_agon(plate * self.r, 30)
         p.contact()
 
         p = dc.copy()
@@ -88,6 +93,7 @@ class Screw2(hdr):
     def escape(self):
         return
 
+
 class Res10W(hdr):
     family  = "R"
     width   = 55
@@ -130,6 +136,33 @@ class SIL_o(PTH):
         self.chamfered(dc, T, T * self.N)
         dc.forward(((self.N - 1) / 2) * T).left(180)
         self.train(dc, self.N, lambda: self.gh(dc), T)
+        [p.setname(str(i + 1)) for (i, p) in enumerate(self.pads)]
+
+class Screw1(SIL_o):
+    family  = "J"
+    width   = 5
+    r       = 2.0
+    N       = 1
+
+    def place(self, dc):
+        dc.forward(((self.N - 1) / 2) * T).left(180)
+        self.train(dc, self.N, lambda: self.gh(dc, 0.8), T)
+        [p.setname(str(i + 1)) for (i, p) in enumerate(self.pads)]
+
+    def escape(self):
+        return
+
+
+class Screw16(PTH):
+    family  = "J"
+    source = {'Digikey' : '277-1591-ND'}
+    r = 1.3
+    def place(self, dc):
+        self.N = 16
+        G = 5   # gap
+        self.chamfered(dc, 9, G * self.N)
+        dc.forward(((self.N - 1) / 2) * G).left(180)
+        self.train(dc, self.N, lambda: self.gh(dc), G)
         [p.setname(str(i + 1)) for (i, p) in enumerate(self.pads)]
 
 class DIP(PTH):

@@ -77,13 +77,13 @@ def text(x, y, s, scale = 1.0):
     o = sa.translate(o, -cx + x, -cy + y)
     return o.buffer(scale * 6 * .0254 / 2)
 
-def ctext(x, y, s):
+def ctext(x, y, s, scale = 1.0):
     o = chars(s)
-    o = sa.scale(o, sf, -sf, origin = (0,0))
+    o = sa.scale(o, sf * scale, -sf * scale, origin = (0,0))
     cx = o.envelope.centroid.x
     cy = o.envelope.centroid.y
     o = sa.translate(o, -cx + x, -cy + y)
-    return o.buffer(6 * .0254 / 2)
+    return o.buffer(scale * 6 * .0254 / 2)
 
 def ltext(x, y, s):
     o = chars(s)

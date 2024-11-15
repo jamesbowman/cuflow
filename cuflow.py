@@ -1592,7 +1592,8 @@ class USON8(Part):
         self.chamfered(dc, self.A, self.B)
         for _ in range(2):
             dc.push()
-            dc.goxy(self.A / 2, -0.8 * 1.5)
+            dc.goxy(-self.A / 2, 0.8 * 1.5)
+            dc.right(180)
             self.train(dc, self.N // 2, lambda: self.rpad(dc, 0.30, 1.00), 0.80)
             dc.pop()
             dc.right(180)

@@ -8,8 +8,14 @@ class EDS(cu.Part):
         self.train(dc, 4, lambda: self.rpad(dc, 2, 2), cu.inches(0.1))
     def escape(self):
         pp = self.pads
-        pp[0].setname("GL2").w("o f 1 -")
-        pp[1].setname("GL3").w("o f 1").wire()
+        if 0:
+            pp[0].setname("GL2").w("o f 1 -")
+            pp[1].setname("GL3").w("o f 1").wire()
+        else:
+            pp[0].setname("GND").w("o f 1 / f 1").wire()
+            pp[1].setname("VCC").w("o f 1").wire()
+            
+
         # pp[1].setname("GTL").w("i f 1").wire(layer = "GTL")
         # pp[2].w("i f 2").wire().via().setlayer("GBL")
         # pp[3].w("i f 2").wire().via().setlayer("GBL")

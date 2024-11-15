@@ -5,7 +5,7 @@ import eagle
 
 class USB(eagle.LibraryPart):
     libraryfile = "10118194-0001LF.lbr"
-    partname = "FRAMATOME_10118194-0001LF"
+    partname = "AMPHENOL_10118194-0001LF"
     family = "J"
 
     def setnames(self):
