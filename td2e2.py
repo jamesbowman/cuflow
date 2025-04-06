@@ -175,6 +175,42 @@ class SOT23_LDO(sot.SOT23):
     def hex_escape(self):
         self.hex_hookup(('GND', 'VCC', '5V'))
 
+class SOT23_5(cu.Part):
+    family = "U"
+    footprint = "SOT-23-5"
+    def place(self, dc):
+        self.chamfered(dc, 1.5, 2.9)
+
+        dc.push()
+        dc.goxy(-2.62 / 2, 0.95).right(180)
+        self.train(dc, 3, lambda: self.rpad(dc, 0.62, 1.22), 0.95)
+        dc.pop()
+
+        dc.push()
+        dc.goxy(2.62 / 2, -0.95)
+        self.train(dc, 2, lambda: self.rpad(dc, 0.62, 1.22), 2 * 0.95)
+        dc.pop()
+
+class LDO_23_5(SOT23_5):
+    source = {'LCSC': 'C81233'}
+    mfr = "AP2127N-3.3TRG1"
+
+    def hex_hookup(self, names):
+        for (p,nm) in zip(self.pads, names):
+            p.setname(nm) 
+            if nm == "GND":
+                p.w("i f 0.7 /").thermal(1)
+            elif nm == "VCC":
+                # p.w("o f 0.7")
+                p.thermal(1)
+            p.wire()
+        self.s("5V").w("o f 0.1")
+        self.s("CE").w("o f .4").goto(self.s("5V")).wire()
+        wire_ongrid(self.s("5V"))
+
+    def hex_escape(self):
+        self.hex_hookup(('5V', 'GND', 'CE', '', 'VCC'))
+
 #  1 GND        GND
 #  2 LEDK       GND
 #  3 LEDA       LEDA
@@ -362,7 +398,8 @@ def td2e():
     j3.pads[1].setname("GND").w("l 135 f 1.4 / f 1.2").wire()
     wire_ongrid(j3.pads[2].w("l 90 f .7"))
 
-    u3 = SOT23_LDO(brd.DC((7, 27.5)).right(180).left(90))
+    # u3 = SOT23_LDO(brd.DC((7, 27.5)).right(180).left(90))
+    u3 = LDO_23_5(brd.DC((6.5, 27.5)).right(180))
     u3.hex_escape()
 
     if 1:
