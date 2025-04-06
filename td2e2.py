@@ -4,10 +4,6 @@ import math
 import time
 
 import shapely.geometry as sg
-from shapely.strtree import STRtree
-from PIL import Image, ImageDraw, ImageFont
-
-import numpy as np
 
 import cuflow as cu
 import svgout
@@ -18,11 +14,8 @@ from dazzler import Dazzler
 from collections import defaultdict
 from rp2040 import RP2040
 
-import shapely.geometry as sg
-
-twenty_rgb = [
-(230, 25, 75), (60, 180, 75), (255, 225, 25), (0, 130, 200), (245, 130, 48), (145, 30, 180), (70, 240, 240), (240, 50, 230), (210, 245, 60), (250, 190, 212), (0, 128, 128), (220, 190, 255), (170, 110, 40), (255, 250, 200), (128, 0, 0), (170, 255, 195), (128, 128, 0), (255, 215, 180), (0, 0, 128), (128, 128, 128), (255, 255, 255), (0, 0, 0)
-]
+from hex import Hex, axial_direction_vectors
+from hexboard import HexBoard, river_ongrid, wire_ongrid
 
 used_pins = [
 # "SWCLK",    # Module_Serial_Debug.SWCLK
@@ -81,7 +74,7 @@ used_pins = [
 # "VCC",
 # "ADC_AVDD",
 # "VREG_VIN",
-# "VREG_VOUT",
+"VREG_VOUT",
 "USB_DM",
 "USB_DP",
 # "VCC",
@@ -94,63 +87,6 @@ used_pins = [
 "QSPI_SS_N",
 ]
 
-from hex import Hex, axial_direction_vectors
-
-def hexgrid(b, o):
-    b.layers['GTO'].polys = []
-    def pt(xy):
-        b.layers['GTO'].add(sg.Point(xy).buffer(.03))
-    if 0:
-        R = 60
-        for q in range(0, R):
-            for r in range(0, R):
-                (x, y) = Hex(q, r).to_plane()
-                pt((x, y))
-    else:
-        for h in o.neighborhood(38):
-            pt(h.to_plane())
-
-def hex_occ(brd, origin):
-    occ = []
-    metal = sg.MultiPolygon([po for (nm,po) in brd.layers['GTL'].polys]).buffer(0.0)
-    for h in origin.neighborhood(16):
-        pt = sg.Point(*h.to_plane()).buffer(0.2)
-        if pt.intersects(metal):
-            occ.append(tuple(h - origin))
-    return occ
-
-def hex_sigs(brd, origin, pp):
-    sigs = {}
-    for p in pp:
-        hh = Hex.from_xy(*p.xy)
-        rp = brd.DC(hh.to_plane())
-        assert rp.distance(p) < 0.010
-        print(f"{p.name:10}", hh - origin)
-        sigs[p.name] = tuple(hh - origin)
-    return sigs
-
-def best_forward(p):
-    hh = Hex.from_xy(*p.xy)
-    return hh.best_forward(p)
-
-def river_ongrid(rr):
-    print(f"{rr=}")
-    assert rr.tt[0].dir in (30, 90, 150, 210, 270, 330)
-    p = rr.tt[0]
-    (dx, dy) = best_forward(p)
-
-    rr.shimmy(-dx)
-    for t in rr.tt:
-        (dx, dy) = best_forward(t)
-        assert dx < 0.010
-        t.forward(dy).wire()
-    return rr
-
-def wire_ongrid(p):
-    (dx, dy) = best_forward(p)
-    p.goyx(dx, dy).wire()
-    p.dir = 30 + 60 * round((p.dir - 30) / 60)
-
 class HexRP2040(RP2040):
     def hex_escape(self):
         brd = self.board
@@ -161,16 +97,22 @@ class HexRP2040(RP2040):
         river_ongrid(cu.River(brd, banks[0][-4:-2]).w("f 0.8 r 60"))
         river_ongrid(cu.River(brd, banks[0][-2:]).w(""))
         river_ongrid(cu.River(brd, banks[1][:4 ]).right(30))
-        river_ongrid(cu.River(brd, banks[1][5:7]).w("f 0.52 l 30")).hex("l 5f").wire()
-        river_ongrid(cu.River(brd, banks[3][:2]).w("f 0.4 l 30"))
+        river_ongrid(cu.River(brd, banks[1][5:7]).w("f 0.52 l 30")).hex("").wire()
+        river_ongrid(cu.River(brd, banks[3][:1]).w("f 0.5 r 30"))
+        river_ongrid(cu.River(brd, banks[3][1:3]).w("f 0.4 l 30"))
         river_ongrid(cu.River(brd, banks[3][-6:]).left(30))
         for nm in ("XIN", ):
             wire_ongrid(self.s(nm))
         self.pads[0].w("/").thermal(1).wire()
 
 class HexW25Q128(cu.SOIC8):
-    source = {'LCSC': 'C6604692'}
-    mfr = 'W25Q64JVSSIQ'
+    source = {'LCSC': 'C131025'}
+    mfr = 'W25Q16JVSSIQ'
+    footprint = "SOIC-8-208mil"
+
+    def pnp_jlc(self):
+        return self.center.copy().right(90)
+
     def hex_escape(self):
         [c.setname(nm) for (c, nm) in zip(self.pads, "CS IO1 IO2 GND IO0 CLK IO3 VCC".split())]
 
@@ -188,21 +130,16 @@ class HexW25Q128(cu.SOIC8):
                 p.wire()
 
 
-def hex_c0402(brd, dc, origin):
-    u = cu.C0402(dc)
-    u.pads[0].w("o -")
-    u.pads[1].setname("VCC").w("o f 0.4").wire()
-    dump = {
-        'name': 'c0402',
-        'occ' : hex_occ(brd, origin),
-        'sigs' : {},
-    }
-    return dump
-
 class USB(eagle.LibraryPart):
     libraryfile = "10118194-0001LF.lbr"
     partname = "AMPHENOL_10118194-0001LF"
+    mfr = "AMPHENOL_10118194-0001LF"
+    footprint = "SMD"
+    source = {"LCSC": "C132563"}
     family = "J"
+
+    def pnp_jlc(self):
+        return self.center.copy().forward(1.3)
 
     def setnames(self):
         [p.setname(nm) for (p,nm) in zip(self.pads, ('5V', 'D-', 'D+', '', 'GND'))]
@@ -216,7 +153,14 @@ class USB(eagle.LibraryPart):
         wire_ongrid(self.s("5V").w("i"))
 
 class SOT23_LDO(sot.SOT23):
+    source = {'LCSC': 'C176954'}
+    mfr = "AP2127N-3.3TRG1"
+    footprint = "SOT-23"
     family = "U"
+
+    def pnp_jlc(self):
+        return self.center.copy().right(90)
+
     def hex_hookup(self, names):
         for (p,nm) in zip(self.pads, names):
             p.setname(nm) 
@@ -246,6 +190,8 @@ class SOT23_LDO(sot.SOT23):
 
 class ST7789_12(cu.Part):
     family = "U"
+    mfr = "LH133T-IG01"
+    inBOM = False
     def place(self, dc):
         dc.right(90)
         self.train(dc, 12, lambda: self.rpad(dc, .35, 2), 0.7)
@@ -254,14 +200,19 @@ class ST7789_12(cu.Part):
         for (p, nm) in zip(self.pads, "GND  GND LEDA  VCC GND GND D/C GND SCL SDA RESET GND".split()):
             p.setname(nm)
             if nm == "GND":
-                p.w("o f 1").wire()
+                p.w("o f 0.5").wire()
             elif nm == "VCC":
-                p.w("o f 1 / f 1").wire()
+                p.w("o f 5 / f 1").wire()
+            elif nm == "RESET":
+                wire_ongrid(p.w("o f 0.2"))
             else:
                 wire_ongrid(p.w("i f 0.2"))
 
 class SMT6(cu.Part):
     family = "J"
+    source = {"LCSC": "C5142239"}
+    mfr = "X6511FRS-06-C85D30"
+    footprint = "SMD"
     def place(self, dc):
         self.chamfered(dc.copy().forward(-8), 13, 8, idoffset = (-0.5, -2))
         dc.w(f"l 90 f {cu.inches(.25)} r 180")
@@ -273,7 +224,7 @@ class SMT6(cu.Part):
             p.setname(nm)
             p.copy().w("f 2.6").ctext(nm)
             if nm == "GND":
-                p.w("i f 1 / f 1").wire()
+                p.copy().w("o f 1 / f 1").wire()
             elif nm == "VCC":
                 p.w("o f 0.5").wire()
             elif nm in ("TX", "RX", "CTS"):
@@ -296,162 +247,17 @@ class SMD_3225_4P(cu.Part):
 
 class Osc_12MHz(SMD_3225_4P):
     source = {'LCSC': 'C454611'}
+    mfr = "TFOM12M4RHKCNT2T"
+    footprint = "SMD3225-4P"
+
+    def pnp_jlc(self):
+        return self.center.copy().right(90)
+
     def escape(self):
         self.s("GND").w("l 90 f 1.5 / f 1").wire()
         self.s("VDD").setname("VCC")
         self.s("VCC").w("o f 0.5").wire()
         wire_ongrid(self.s("CLK").w("o"))
-
-class ByteGrid:
-    def __init__(self, w, h):
-        (self.q0, self.r1) = Hex.from_xy(0, h)
-        (self.q1, _      ) = Hex.from_xy(w, 0)
-        self.valid = self.zeros(np.uint8)
-        for r in range(self.r1):
-            for q in range(self.q0, self.q1):
-                (x,y) = Hex(q, r).to_plane()
-                if (0 <= x < w) and (0 <= y < h):
-                    self.valid[q, r] = 1
-
-    def zeros(self, type):
-        return np.zeros([self.q1 - self.q0, self.r1], type)
-
-    def show(self):
-        for r in range(self.r1):
-            for q in range(self.q0, self.q1):
-                val = self.valid[q,r]
-                print(f"{val:2x} ", end = '')
-            print()
-    
-    def valids(self):
-        for r in range(self.r1):
-            for q in range(self.q0, self.q1):
-                if self.valid[q, r]:
-                    yield Hex(q, r)
-
-def shift_array(arr, shift_x, shift_y):
-    shifted_arr = np.zeros_like(arr)
-    rows, cols = arr.shape
-
-    if shift_x >= 0:
-        x_src_start = 0
-        x_src_end = rows - shift_x
-        x_dst_start = shift_x
-        x_dst_end = rows
-    else:
-        x_src_start = -shift_x
-        x_src_end = rows
-        x_dst_start = 0
-        x_dst_end = rows + shift_x
-
-    if shift_y >= 0:
-        y_src_start = 0
-        y_src_end = cols - shift_y
-        y_dst_start = shift_y
-        y_dst_end = cols
-    else:
-        y_src_start = -shift_y
-        y_src_end = cols
-        y_dst_start = 0
-        y_dst_end = cols + shift_y
-
-    shifted_arr[x_dst_start:x_dst_end, y_dst_start:y_dst_end] = \
-        arr[x_src_start:x_src_end, y_src_start:y_src_end]
-
-    return shifted_arr
-
-class HexBoard(cu.Board):
-    
-    def hex_setup(self):
-        (hd, _) = (Hex(1, 0).to_plane())    # hd is the center-center distance
-        self.hr = hd / 2                         # hr is the hex radius
-
-        self.gr = ByteGrid(30, 30)
-        self.blocked = {layer: self.layer_blocks(layer) for layer in ('GTL', 'GBL')}
-        self.routes = []
-
-    def layer_blocks(self, nm):
-        layer_poly = sg.MultiPolygon([p for (nm, p) in self.layers[nm].polys]).buffer(0)
-        blocked = self.gr.zeros(np.uint8) | (self.gr.valid == 0)
-        vv = list(self.gr.valids())
-        hexes = [sg.Point(h.to_plane()).buffer(self.hr) for h in vv]
-        s = STRtree(hexes)
-        result = s.query_nearest(layer_poly)
-        for i in result:
-            h = vv[i]
-            blocked[h.q, h.r] = 1
-        return blocked
-
-    def hex_route(self, a, b):
-        layer = a.layer
-        assert b.layer == a.layer
-        a = Hex.from_xy(*a.xy)
-        b = Hex.from_xy(*b.xy)
-
-        wavefront = set([tuple(a)])
-        dirs = [Hex(dq,dr) for (dq, dr) in axial_direction_vectors]
-
-        valid = {(h.q, h.r) for h in self.gr.valids()}
-        blocked = self.blocked[layer].copy()
-        blocked[b.q, b.r] = 0
-        distance = self.gr.zeros(np.uint8)
-
-        i = 1
-        while tuple(b) not in wavefront:
-            wavefront2 = set()
-            for p in wavefront:
-                h = Hex(*p)
-                for d in dirs:
-                    n = h + d
-                    if tuple(n) in valid and not blocked[n.q, n.r]:
-                        wavefront2.add(tuple(n))
-                        blocked[n.q, n.r] = 1
-                        distance[n.q, n.r] = i
-            assert wavefront2 != wavefront, f"Signal failed to route"
-            wavefront = wavefront2
-            # print(f"{i=} {wavefront=}")
-
-            i += 1
-        
-        route = [b]
-        p = b
-        while distance[p.q, p.r] != 1:
-            n = distance[p.q, p.r]
-            assert n != 0
-            for d in dirs:
-                if distance[p.q + d.q, p.r + d.r] == (n - 1):
-                    p = p + d
-                    route.append(p)
-                    self.blocked[layer][p.q, p.r] = 1
-                    break
-        route.append(a)
-        self.routes.append((layer, route))
-
-    def hex_render(self):
-        (hd, _) = (Hex(1, 0).to_plane())    # hd is the center-center distance
-        hr = hd / 2                         # hr is the hex radius
-
-        ppmm = 25   # pixels per mm
-        im = Image.new("RGB", (30 * ppmm, 30 * ppmm), 'black')
-        dr = ImageDraw.Draw(im)
-        def xf(xy):
-            (x, y) = xy
-            return (x * ppmm, (30  - y) * ppmm)
-
-        for (nm, p) in self.layers['GTL'].polys:
-            pts = [xf(p) for p in p.exterior.coords]
-            dr.polygon(pts, fill = (60, 60, 160))
-
-        for h in self.gr.valids():
-            if not self.blocked['GTL'][h.q, h.r]:
-                dr.circle(xf(h.to_plane()), outline = (110, 110, 110), radius = hd * ppmm / 2)
-
-        if 0:
-            for color,(layer, r) in zip(twenty_rgb, self.routes):
-                for e in r:
-                    dr.circle(xf(e.to_plane()), fill = color, radius = hd * ppmm / 2)
-
-        im.save("out.png")
 
 def td2e():
     w = .4/3   # .127 is JLCPCB minimum
@@ -467,21 +273,20 @@ def td2e():
 
     brd.outline()
 
-    o = 1.5
+    o = 2
     for x in (o, 30 - o):
         for y in (o, 30 - o):
-            brd.hole((x, y), 1, 1.5)
+            brd.hole((x, y), 2, 2.5, stencil_alignment = True)
 
-    for xy in ((2, 9), (30 - 2, 9)):
-        dc = brd.DC(xy)
-        dc.rect(1, 8)
-        slot = dc.poly().buffer(0.5)
-        brd.keepouts.append(slot.buffer(.2))
-        brd.layers['GML'].route(slot)
-
+    if 0:
+        for xy in ((2, 9), (30 - 2, 9)):
+            dc = brd.DC(xy)
+            dc.rect(1, 8)
+            slot = dc.poly().buffer(0.5)
+            brd.keepouts.append(slot.buffer(.2))
+            brd.layers['GML'].route(slot)
 
     origin =  Hex.from_xy(21, 20)
-    # hexgrid(brd, origin)
     xy = origin.to_plane()
     dc = brd.DC(xy)
 
@@ -528,7 +333,8 @@ def td2e():
         j2.pads[0].setname("GND").w("/ f 1.2").wire()
         wire_ongrid(j2.pads[1].w("f 1"))
 
-    j3 = dip.SIL(brd.DC((23.5, 28)).right(90), "3")
+    j3 = dip.SIL(brd.DC((28, 19.5)).right(180), "3")
+    j3.inBOM = False
     names = ('SWCLK', '0', 'SWD')
     for (p, nm) in zip(j3.pads, names):
         p.setname(nm)
@@ -541,39 +347,61 @@ def td2e():
     u3.hex_escape()
 
     if 1:
-        x1 = ST7789_12(brd.DC((11, 5)).setlayer('GBL'))
+        
+        pinxy = (6.27, 11.15)       # Careful measurement of center of L pin
+        lcdsz = (26.16, 29.28)      # Module size
+        x = (30 - lcdsz[0]) / 2 + pinxy[0]
+        y = (30 - lcdsz[1]) / 2 + pinxy[1]
+        x1 = ST7789_12(brd.DC((x, y)).right(0).setlayer('GBL'))
         x1.hex_escape()
+        p = brd.DC((15, 15)).setlayer("GBO")
+        p.copy().rect(*lcdsz).wire()
+        p.goxy(lcdsz[0] / 2, -lcdsz[1] / 2).mark()
+        h0 = p.copy().goxy(-(10.3 + 1), 9.13)
+        brd.layers['GBO'].add(sg.Point(h0.xy).buffer(0.5))
+        h0.goxy(-10, 0)
+        brd.layers['GBO'].add(sg.Point(h0.xy).buffer(0.5))
 
     if 1:
         # GND is on *right*, viewed from this side
         x2 = SMT6(brd.DC((15, 10)))
         x2.hex_escape()
+        x2.inBOM = False
 
-    def cap(p, val = '10nF'):
+    def ucap(p, val = '100nF'):
         cn = cu.C0402_nolabel(p, val)
         cn.pads[0].setname("GND").w("o f .5 / f .6").wire()
+        return cn
+    def cap(p, val = '100nF'):
+        cn = ucap(p, val)
         cn.pads[1].setname("VCC").w("o f .3").wire()
+    def hcap(p, val = '100nF'):
+        cn = ucap(p, val)
+        wire_ongrid(cn.pads[1].w("o f .2"))
+        return cn
     if 1:
         cap(brd.DC((9, 14)))
-        cap(brd.DC((23, 25.5)).right(180))
-        cap(brd.DC((25, 24.0)).right(180))
+        cap(brd.DC((26.5, 25.6)).right(180))
+        cap(brd.DC((26.5, 24.1)).right(180))
         cap(brd.DC((25, 11)).left(90))
         cap(brd.DC((15, 16.5)).left(60))
 
-        cap(brd.DC((6, 23.6)).left(90), '1uF')
-        p = brd.DC((8, 23.6)).left(90)
-        cn = cu.C0402_nolabel(p, '1uF')
-        cn.pads[0].setname("GND").w("o f .5 / f .6").wire()
-        wire_ongrid(cn.pads[1].w("o f .3"))
+        cap(brd.DC((6, 24.5)).left(0), '1uF')
+        cn = hcap(brd.DC((6, 23.0)), '1uF')
+
+        ci0 = hcap(brd.DC((22, 28)).left(180), '1uF')
+        ci = hcap(brd.DC((22, 26.5)).left(180), '1uF')
+        u1.s("VREG_VOUT").hex("r 5 f").wire()
 
     if 1:
-        y1 = Osc_12MHz(brd.DC((27.5, 16)).right(180))
+        y1 = Osc_12MHz(brd.DC((27.5, 12)).right(180))
         y1.escape()
 
     if 1:
         # ST7789_12 backlight power
-        r1 = cu.R0402(brd.DC((5, 3)).left(90))
-        r2 = cu.R0402(brd.DC((5, 8)).left(90))
+        r1 = cu.R0402(brd.DC((5, 3)).left(90), "7.5")
+        r2 = cu.R0402(brd.DC((5, 8)).left(90), "7.5")
+        r2.inBOM = False
 
         r1.pads[1].setname("VCC").w("o f 1").wire()
         wire_ongrid(r1.pads[0].w("o / f .4"))
@@ -581,6 +409,7 @@ def td2e():
         wire_ongrid(r2.pads[1].w("o f .4"))
 
         PWM = u1.s("GPIO0")
+        PWM.hex("/ f").wire()
         u1.s("GPIO1").hex("<< f").wire()
 
     if 1:
@@ -591,80 +420,99 @@ def td2e():
         for p in r3.pads + r4.pads:
             wire_ongrid(p.w("o f 0"))
 
-    # Move these for VCC fill clearance
-    u1.s("USB_DM").hex("6f").wire()
-    u1.s("USB_DP").hex("7f").wire()
-
-    SDL = u1.s("GPIO14")
-    SDA = u1.s("GPIO15")
-    RES = u1.s("GPIO11")
-    DC  = u1.s("GPIO10")
-    SDL.hex("3 f / f").wire()
-    SDA.hex("1f l / r").wire()
-    DC .hex("f / f").wire()
-    RES.hex("3l / < f").wire()
-
-    u1.s("GPIO8").hex("3f / f").wire()
-    x2.s("TX").hex("3f / f").wire()
-
-    t0 = time.monotonic()
-    brd.hex_setup()
-    t1 = time.monotonic()
-    print("Starting route")
-
-    brd.hex_route(j1.s("5V"), u3.s("5V"))
-    brd.hex_route(cn.pads[1], u3.s("5V"))
-
     if 1:
-        brd.hex_route(u2.s("CS"), u1.s("QSPI_SS_N"))
-        brd.hex_route(u2.s("IO1"), u1.s("QSPI_SD1"))
-        brd.hex_route(u2.s("IO2"), u1.s("QSPI_SD2"))
-        brd.hex_route(u2.s("IO0"), u1.s("QSPI_SD0"))
-        brd.hex_route(u2.s("CLK"), u1.s("QSPI_SCLK"))
-        brd.hex_route(u2.s("IO3"), u1.s("QSPI_SD3"))
-    if 0:
-        brd.hex_route(j2.pads[1], u2.s("CS"))
+        # Move these for VCC fill clearance
+        u1.s("USB_DM").hex("6f").wire()
+        u1.s("USB_DP").hex("7f").wire()
 
-    brd.hex_route(j1.s("D-"), r3.pads[0])
-    brd.hex_route(j1.s("D+"), r4.pads[0])
-    brd.hex_route(u1.s("USB_DM"), r3.pads[1])
-    brd.hex_route(u1.s("USB_DP"), r4.pads[1])
+        SDL = u1.s("GPIO14")
+        SDA = u1.s("GPIO15")
+        RES = u1.s("GPIO11")
+        DC  = u1.s("GPIO10")
+        SDL.hex("3 f / f").wire()
+        SDA.hex("1f l / r").wire()
+        DC .hex("f / f").wire()
+        RES.hex("3l / < f").wire()
+        def note(p, nm):
+            return
+            dc = p.copy()
+            dc.dir = 0
+            dc.text(nm, scale = 0.2)
+        note(SDL, "SDL")
+        note(SDA, "SDA")
+        note(RES, "RES")
+        note(DC, "DC")
 
-    brd.hex_route(SDL, x1.s("SCL"))
-    brd.hex_route(SDA, x1.s("SDA"))
-    brd.hex_route(RES, x1.s("RESET"))
-    brd.hex_route(DC,  x1.s("D/C"))
-    brd.hex_route(r1.pads[0], x1.s("LEDA"))
-    brd.hex_route(r1.pads[0], r2.pads[0])
+        u1.s("GPIO8").hex("3f / f").wire()
+        x2.s("TX").hex("3f r f l 4f / f").wire()
 
+        t0 = time.monotonic()
+        brd.hex_setup()
+        t1 = time.monotonic()
+        print("Starting route")
 
-    brd.hex_route(u1.s("GPIO8"), x2.s("TX"))
-    brd.hex_route(u1.s("GPIO9"), x2.s("RX"))
-    brd.hex_route(u1.s("GPIO13"), x2.s("CTS"))
-    brd.hex_route(u1.s("GPIO12"), x2.s("DTR"))
+        brd.hex_route(j1.s("5V"), u3.s("5V"))
+        brd.hex_route(cn.pads[1], u3.s("5V"))
+        brd.hex_route(ci0.pads[1], ci.pads[1])
+        brd.hex_route(ci.pads[1], u1.s("VREG_VOUT"))
 
-    brd.hex_route(u1.s("XIN"), y1.s("CLK"))
+        if 1:
+            brd.hex_route(u2.s("CS"), u1.s("QSPI_SS_N"))
+            brd.hex_route(u2.s("IO1"), u1.s("QSPI_SD1"))
+            brd.hex_route(u2.s("IO2"), u1.s("QSPI_SD2"))
+            brd.hex_route(u2.s("IO0"), u1.s("QSPI_SD0"))
+            brd.hex_route(u2.s("CLK"), u1.s("QSPI_SCLK"))
+            brd.hex_route(u2.s("IO3"), u1.s("QSPI_SD3"))
+        if 0:
+            brd.hex_route(j2.pads[1], u2.s("CS"))
 
-    brd.hex_route(u1.s("SWD"), j3.s("SWD"))
-    brd.hex_route(u1.s("SWCLK"), j3.s("SWCLK"))
+        brd.hex_route(j1.s("D-"), r3.pads[0])
+        brd.hex_route(j1.s("D+"), r4.pads[0])
+        brd.hex_route(u1.s("USB_DM"), r3.pads[1])
+        brd.hex_route(u1.s("USB_DP"), r4.pads[1])
 
-    brd.hex_route(PWM, r2.pads[1])
+        for nm in "SCL SDA RESET D/C".split():
+            note(x1.s(nm), nm)
 
-    t2 = time.monotonic()
-    print(f"Hex setup:   {t1-t0:.3f} s")
-    print(f"Hex route:   {t2-t1:.3f} s")
+        if 1:
+            brd.hex_route(SDL, x1.s("SCL"))
+            brd.hex_route(SDA, x1.s("SDA"))
+            brd.hex_route(DC,  x1.s("D/C"))
+            brd.hex_route(RES, x1.s("RESET"))
+        if 1:
+            brd.hex_route(r1.pads[0], x1.s("LEDA"))
+            brd.hex_route(r1.pads[0], r2.pads[0])
 
-    brd.hex_render()
+        note(u1.s("GPIO8"), "TX")
 
-    for (layer, r) in brd.routes:
-        d = brd.DC(r[0].to_plane()).setlayer(layer)
-        for p in r[1:]:
-            d.path.append(p.to_plane())
-        d.wire()
+        if 1:
+            brd.hex_route(u1.s("GPIO8"), x2.s("TX"))
+            brd.hex_route(u1.s("GPIO9"), x2.s("RX"))
+            brd.hex_route(u1.s("GPIO13"), x2.s("CTS"))
+            brd.hex_route(u1.s("GPIO12"), x2.s("DTR"))
+
+        brd.hex_route(u1.s("XIN"), y1.s("CLK"))
+
+        brd.hex_route(u1.s("SWD"), j3.s("SWD"))
+        brd.hex_route(u1.s("SWCLK"), j3.s("SWCLK"))
+
+        r2.pads[1].hex("f / f")
+        brd.hex_route(PWM, r2.pads[1])
+
+        # Hack, rescue a ground island
+        x2.s("GND").w("l 180 f 0.5 r 90 f 1.2 / f 1").wire()
+
+        t2 = time.monotonic()
+        print(f"Hex setup:   {t1-t0:.3f} s")
+        print(f"Hex route:   {t2-t1:.3f} s")
+
+        brd.hex_render()
+        brd.wire_routes()
 
     if 1:
         brd.fill_any("GTL", "VCC")
         brd.fill_any("GBL", "GND")
+
 
     brd.save("td2e2")
     print("Saved")
