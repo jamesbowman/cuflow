@@ -540,6 +540,11 @@ class Draw(Turtle):
         (x, y) = self.xy
         self.board.layers['GTO'].add(hershey.ltext(x, y, s))
 
+    def rtext(self, s, scale = 1.0):
+        (x, y) = self.xy
+        self.board.layers['GTO'].add(hershey.rtext(x, y, s, scale = scale))
+        return self
+
     def through(self):
         self.wire()
         dst = {'GTL': 'GBL', 'GBL': 'GTL'}[self.layer]

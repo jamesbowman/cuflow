@@ -357,7 +357,7 @@ def td2e():
     names = ('SWCLK', '0', 'SWD')
     for (p, nm) in zip(j3.pads, names):
         p.setname(nm)
-        p.copy().w("l 90 f 1.6").ctext(nm)
+        p.copy().w("l 90 f 0.7").rtext(nm)
     wire_ongrid(j3.pads[0].w("l 90 f .7"))
     j3.pads[1].setname("GND").w("l 135 f 1.4 / f 1.2").wire()
     wire_ongrid(j3.pads[2].w("l 90 f .7"))
