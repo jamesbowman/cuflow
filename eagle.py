@@ -41,6 +41,7 @@ class LibraryPart(cu.Part):
                 dc.board.hole(p.xy, 2 * radius)
             elif c.tag == "smd":
                 (x, y, dx, dy) = [float(attr[t]) for t in "x y dx dy".split()]
+                print((x, y, dx, dy))
                 p = dc.copy().goxy(x, y)
                 if attr.get('rot', None) in ("R90", "R270"):
                     (dx, dy) = (dy, dx)
@@ -53,8 +54,8 @@ class LibraryPart(cu.Part):
                 (x, y, diameter, drill) = [float(attr[t]) for t in "x y diameter drill".split()]
                 nm = attr["name"]
                 # Account for plating width on through-holes
-                drill += 0.1
-                diameter += 0.1
+                (drill, diameter) = self.adjust_drills(drill, diameter)
+                # Should be 0.85, 0.65
 
                 dc.push()
                 dc.goxy(x, y)
@@ -77,8 +78,14 @@ class LibraryPart(cu.Part):
                 dc.pop()
         if ls["20"]:
             g = so.linemerge(ls["20"])
-            brd.layers['GML'].add(g)
+            # self.board.layers['GML'].add(g)
         if self.use_silk and ls["21"]:
             g = so.linemerge(ls["21"]).buffer(self.board.silk / 2)
             self.board.layers['GTO'].add(g)
 
+    def adjust_drills(self, drill, diameter):
+        if (drill, diameter) == (0.55, 0.75):
+            return (0.90, 1.10)
+        if (drill, diameter) == (0.6, 0.8):
+            return (0.7, 0.9)
+        return (drill, diameter)

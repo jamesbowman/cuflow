@@ -139,3 +139,4 @@ class Hex:
 
     def __eq__(self, other):
         return (self.q, self.r) == (other.q, other.r)
+

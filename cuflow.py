@@ -288,6 +288,10 @@ class Draw(Turtle):
 
         self.forward(abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1) - d)
 
+    def straight(self, other):
+        self.path.append(other.xy)
+        return self
+
     def seek(self, other):
         # Return position of other in our frame as (x, y) so that
         #     forward(y)
@@ -853,13 +857,15 @@ class Board:
         g = self.boundary(1.1 * sr).buffer(sr)
         self.layers['GTO'].add(g.buffer(0))
 
-    def hole(self, xy, inner, outer = None):
+    def hole(self, xy, inner, outer = None, stencil_alignment = False):
         self.drill(xy, inner)
         if outer is not None:
             g = sg.LinearRing(sg.Point(xy).buffer(outer / 2).exterior).buffer(self.silk / 2)
             self.layers['GTO'].add(g)
             # self.layers['GTP'].add(sg.Point(xy).buffer(.2))
         self.keepouts.append(sg.Point(xy).buffer(inner / 2 + 0.5))
+        if stencil_alignment:
+            self.layers['GTP'].add(sg.Point(xy).buffer(inner / 2))
 
     def drill(self, xy, diam):
         self.holes[diam].append(xy)
@@ -963,6 +969,17 @@ class Board:
                         (x, y) = c.xy
                         note = p.footprint + "-" + p.mfr + p.val
                         cs.writerow([p.id, flt(x), flt(y), str(int(c.dir)), "Top", note])
+        with open(fn + "-jlcpcb-pnp.csv", "wt") as f:
+            cs = csv.writer(f)
+            cs.writerow(["Designator", "Mid X", "Mid Y","Layer","Rotation"])
+            def flt(x): return "{:.3f}".format(x)
+            for f,pp in self.parts.items():
+                for p in pp:
+                    if p.inBOM:
+                        c = p.pnp_jlc()
+                        (x, y) = c.xy
+                        angle = int(360 - c.dir) % 360
+                        cs.writerow([p.id, flt(x) + "mm", flt(y) + "mm", "Top", str(angle)])
 
     def bom(self, fn):
         parts = defaultdict(list)
@@ -989,6 +1006,17 @@ class Board:
                     mfr,
                     footprint,
                     vendor,
+                    vendor_c])
+        with open(fn + "-jlcpcb-bom.csv", "wt") as f:
+            c = csv.writer(f)
+            c.writerow(["Comment","Designator","Footprint","JLCPCB Part #"])
+            for attr in sorted(parts):
+                (f, mfr, footprint, vendor, vendor_c) = attr
+                pp = parts[attr]
+                c.writerow([
+                    mfr,
+                    ",".join(pp),
+                    footprint,
                     vendor_c])
 
     def postscript(self, fn):
@@ -1173,6 +1201,9 @@ class Part:
         self.place(dc)
         if source is not None:
             self.source = source
+
+    def pnp_jlc(self):
+        return self.center
 
     def text(self, dc, s):
         (x, y) = dc.xy

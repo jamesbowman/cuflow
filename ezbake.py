@@ -256,7 +256,7 @@ class Distributor(cu.Part):
             self.pads.append(dc.copy().left(90))
         self.train(dc, N, w, self.gap)
         self.rails = [p.copy().right(180) for p in self.pads]
-        self.othernames = [] # ["VH"]
+        self.othernames = ["VH"]
 
     def escape(self, n):
         return self.pads
@@ -1012,7 +1012,7 @@ def scanalyzer1():
 
 
 if __name__ == "__main__":
-    # large_clock()
-    td2_b()
+    large_clock()
+    # td2_b()
     # remote_i2c()
     # scanalyzer1()

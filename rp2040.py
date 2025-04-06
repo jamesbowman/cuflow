@@ -62,7 +62,7 @@ RP2040pins = [
     (20, "XIN"),
     (21, "XOUT"),
     (22, "IOVDD"),
-    (23, "DVDD"),
+    (23, "DVDD1"),
     (24, "SWCLK"),
     (25, "SWD"),
     (26, "RUN"),
@@ -89,7 +89,7 @@ RP2040pins = [
     (47, "USB_DP"),
     (48, "USB_VDD"),
     (49, "IOVDD"),
-    (50, "DVDD"),
+    (50, "DVDD2"),
     (51, "QSPI_SD3"),
     (52, "QSPI_SCLK"),
     (53, "QSPI_SD0"),
@@ -99,15 +99,16 @@ RP2040pins = [
 ]
 
 class RP2040(QFN56):
-    source = {'BridgeTek': 'BT815Q'}
-    mfr = 'BT815Q'
+    source = {'LCSC': 'C2040'}
+    mfr = 'RP2040'
+    footprint = "LQFN-56(7x7)"
     def escape(self, used_pins):
         brd = self.board
         for i,nm in RP2040pins:
             self.pads[i].setname(nm)
         for p in self.pads:
             nm = p.name
-            if nm in ("IOVDD", "DVDD", "USB_VDD", "RUN"):
+            if nm in ("IOVDD", "VREG_VIN", "USB_VDD", "RUN", "ADC_AVDD"):
                 if False and nm in ("IOVDD", ):
                     r = cu.C0402(p.copy().w("f 3 l 90"), '.1nF')
                     p.goto(r.pads[0])
@@ -116,7 +117,11 @@ class RP2040(QFN56):
                     p.w("o f .3 ")
                 p.setname("VCC").wire()
 
-        self.s("VREG_VOUT").w("i f .1").goto(self.s("VREG_VIN")).wire()
+        vreg_vout = self.s("VREG_VOUT").copy()
+        vreg_vout.w("i f .3").wire()
+        vreg_vout.copy().goto(self.s("DVDD2"), False).wire()
+        vreg_vout.w("f 0.6 l 90 f 0.2 r 90 f 4.4").goto(self.s("DVDD1")).wire()
+
         self.s("TESTEN").w("i f 2")
 
         banks = ([], [], [], [])

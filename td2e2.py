@@ -400,17 +400,9 @@ def td2e():
     if 1:
         # ST7789_12 backlight power
         r1 = cu.R0402(brd.DC((5, 3)).left(90), "7.5")
-        r2 = cu.R0402(brd.DC((5, 8)).left(90), "7.5")
-        r2.inBOM = False
 
         r1.pads[1].setname("VCC").w("o f 1").wire()
         wire_ongrid(r1.pads[0].w("o / f .4"))
-        wire_ongrid(r2.pads[0].w("o / f .4"))
-        wire_ongrid(r2.pads[1].w("o f .4"))
-
-        PWM = u1.s("GPIO0")
-        PWM.hex("/ f").wire()
-        u1.s("GPIO1").hex("<< f").wire()
 
     if 1:
         h = Hex.from_xy(12, 23.5)
@@ -481,7 +473,6 @@ def td2e():
             brd.hex_route(RES, x1.s("RESET"))
         if 1:
             brd.hex_route(r1.pads[0], x1.s("LEDA"))
-            brd.hex_route(r1.pads[0], r2.pads[0])
 
         note(u1.s("GPIO8"), "TX")
 
@@ -495,9 +486,6 @@ def td2e():
 
         brd.hex_route(u1.s("SWD"), j3.s("SWD"))
         brd.hex_route(u1.s("SWCLK"), j3.s("SWCLK"))
-
-        r2.pads[1].hex("f / f")
-        brd.hex_route(PWM, r2.pads[1])
 
         # Hack, rescue a ground island
         x2.s("GND").w("l 180 f 0.5 r 90 f 1.2 / f 1").wire()

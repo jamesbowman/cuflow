@@ -14,7 +14,6 @@ class dip(cu.Part):
             nps = [self.N // 2, self.N // 2]
         else:
             nps = self.N2
-        print(f"{nps=}")
         for np in nps:
             dc.push()
             dc.goxy(-self.width / 2, height / 2).left(180)
