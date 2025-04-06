@@ -222,7 +222,7 @@ class SMT6(cu.Part):
         names = ('GND', 'CTS', 'VCC', 'TX', 'RX', 'DTR')[::-1]
         for (p, nm) in zip(self.pads, names):
             p.setname(nm)
-            p.copy().w("f 2.6").ctext(nm)
+            p.copy().w("r 180 f 2.6").ctext(nm, scale = 1.1)
             if nm == "GND":
                 p.copy().w("o f 1 / f 1").wire()
             elif nm == "VCC":
