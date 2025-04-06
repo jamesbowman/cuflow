@@ -443,9 +443,9 @@ class Draw(Turtle):
         for n in ly:
             self.board.layers[n].add(g, self.name)
 
-    def contact(self):
+    def contact(self, layers = ('GTL', 'GTS', 'GBL', 'GBS')):
         g = sg.Polygon(self.path)
-        for n in ('GTL', 'GTS', 'GBL', 'GBS'):
+        for n in layers:
             self.board.layers[n].add(g, self.name)
 
     def silk(self):

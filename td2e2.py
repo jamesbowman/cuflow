@@ -259,6 +259,25 @@ class Osc_12MHz(SMD_3225_4P):
         self.s("VCC").w("o f 0.5").wire()
         wire_ongrid(self.s("CLK").w("o"))
 
+class pogo_pads(dip.PTH):
+    family  = "J"
+    def place(self, dc):
+        T = 25.4 / 10
+        self.r = 0.6
+        self.N = int(self.val)
+        dc.forward(((self.N - 1) / 2) * T).left(180)
+        self.train(dc, self.N, lambda: self.gh(dc), T)
+        [p.setname(str(i + 1)) for (i, p) in enumerate(self.pads)]
+
+    def gh(self, dc, plate = 1.0):
+        p = dc.copy()
+        p.n_agon(plate * self.r, 30)
+        p.contact(('GTL', ))
+
+        p = dc.copy()
+        p.part = self.id
+        self.pads.append(p)
+
 def td2e():
     w = .4/3   # .127 is JLCPCB minimum
     w = 0.127
@@ -333,14 +352,14 @@ def td2e():
         j2.pads[0].setname("GND").w("/ f 1.2").wire()
         wire_ongrid(j2.pads[1].w("f 1"))
 
-    j3 = dip.SIL(brd.DC((28, 19.5)).right(180), "3")
+    j3 = pogo_pads(brd.DC((28, 19.5)).right(180), "3")
     j3.inBOM = False
     names = ('SWCLK', '0', 'SWD')
     for (p, nm) in zip(j3.pads, names):
         p.setname(nm)
         p.copy().w("l 90 f 1.6").ctext(nm)
     wire_ongrid(j3.pads[0].w("l 90 f .7"))
-    j3.pads[1].setname("GND").w("/ f 1.2").wire()
+    j3.pads[1].setname("GND").w("l 135 f 1.4 / f 1.2").wire()
     wire_ongrid(j3.pads[2].w("l 90 f .7"))
 
     u3 = SOT23_LDO(brd.DC((7, 27.5)).right(180).left(90))
