@@ -179,6 +179,10 @@ class SOT23_LDO(sot.SOT23):
 class SOT23_5(cu.Part):
     family = "U"
     footprint = "SOT-23-5"
+
+    def pnp_jlc(self):
+        return self.center.copy().right(90)
+
     def place(self, dc):
         self.chamfered(dc, 1.5, 2.9)
 
