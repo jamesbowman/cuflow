@@ -450,7 +450,7 @@ def td2e():
         ci = hcap(brd.DC((22, 26.5)).left(180), '1uF')
         u1.s("VREG_VOUT").hex("r 5 f").wire()
 
-        cx = cu.C0603(brd.DC((6, 5)).left(90), '10 uF')
+        cx = cu.C0603(brd.DC((6, 5)).left(90), '10 uF, 16V')
         cx.pads[0].setname("GND").w("o f .5 / f .6").wire()
         cx.pads[1].setname("VCC").w("o f 1").wire()
 
@@ -567,7 +567,8 @@ def td2e():
         transpose(Image.Transpose.ROTATE_90)
     )
     brd.logo(2.2, 15, logo_line, .29)
-    brd.DC((26, 6)).ctext("(C) EXCAMERA", scale = 1.0)
+    brd.DC((25.5, 6.4)).ctext("(C) EXCAMERA", scale = 1.1)
+    brd.DC((25.5, 5.0)).ctext("LABS 2025", scale = 1.1)
 
 
     brd.save("td2e2")
