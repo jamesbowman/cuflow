@@ -1,1 +1,2 @@
-zip $1.zip $1.TXT $1.GBL $1.GBS $1.GML $1.GTL $1.GTO $1.GTP $1.GTS ${1}*csv
+zip $1.zip $1.TXT $1.GBO $1.GBL $1.GBS $1.GML $1.GTL $1.GTO $1.GTP $1.GTS ${1}*csv
+zip $1-stencil.zip $1.GTP
