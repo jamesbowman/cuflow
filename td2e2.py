@@ -450,13 +450,17 @@ def td2e():
         ci = hcap(brd.DC((22, 26.5)).left(180), '1uF')
         u1.s("VREG_VOUT").hex("r 5 f").wire()
 
+        cx = cu.C0603(brd.DC((6, 5)).left(90), '10 uF')
+        cx.pads[0].setname("GND").w("o f .5 / f .6").wire()
+        cx.pads[1].setname("VCC").w("o f 1").wire()
+
     if 1:
         y1 = Osc_12MHz(brd.DC((27.5, 12)).right(180))
         y1.escape()
 
     if 1:
         # ST7789_12 backlight power
-        r1 = cu.R0402(brd.DC((5, 3)).left(90), "7.5")
+        r1 = cu.R0402(brd.DC((6, 11)).right(90), "7.5")
 
         r1.pads[1].setname("VCC").w("o f 1").wire()
         wire_ongrid(r1.pads[0].w("o / f .4"))
