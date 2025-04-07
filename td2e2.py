@@ -4,6 +4,7 @@ import math
 import time
 
 import shapely.geometry as sg
+from PIL import Image
 
 import cuflow as cu
 import svgout
@@ -556,6 +557,13 @@ def td2e():
     if 1:
         brd.fill_any("GTL", "VCC")
         brd.fill_any("GBL", "GND")
+
+    logo_line = (
+        Image.open("../td2/marketing/logo_pcb.png").convert("L").
+        transpose(Image.Transpose.ROTATE_90)
+    )
+    brd.logo(2.2, 15, logo_line, .29)
+    brd.DC((26, 6)).ctext("(C) EXCAMERA", scale = 1.0)
 
 
     brd.save("td2e2")
