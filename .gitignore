@@ -18,3 +18,7 @@ __pycache__
 *.gtl.pov
 *.gto.pov
 *.sub.pov
+*.gts.pov
+tags
+out.png
+0
