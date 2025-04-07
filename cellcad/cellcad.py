@@ -20,6 +20,7 @@ twenty_hex = [
 ]
 
 N = 65536
+S = 32768
 a = window.Int16Array.new(2 * N)
 
 a_color = window.Uint32Array.new(N)
@@ -51,7 +52,7 @@ void main(void){
 }
 """
 
-frag_shader = """#version 300 es
+frag_shader_dot = """#version 300 es
 
 precision mediump float;
 in  vec4 color;
@@ -70,6 +71,18 @@ void main()
 }
 """
 
+frag_shader_0 = """#version 300 es
+
+precision mediump float;
+in  vec4 color;
+out vec4 fragColor;
+
+void main()
+{
+    fragColor = color;
+}
+"""
+
 def createShader(type, source):
     shader = gl.createShader(type)
     gl.shaderSource(shader, source)
@@ -81,23 +94,21 @@ def createShader(type, source):
         assert 0
     return shader
 
-if 1:
-    if 0:
-        vertShader = gl.createShader(gl.VERTEX_SHADER)
-        gl.shaderSource(vertShader, vx_shader)
-        gl.compileShader(vertShader)
-    else:
-        vertShader = createShader(gl.VERTEX_SHADER, vx_shader)
-
-    fragShader = createShader(gl.FRAGMENT_SHADER, frag_shader)
-
+def createProg(vx, fr):
     prog = gl.createProgram()
-    gl.attachShader(prog, vertShader)
-    gl.attachShader(prog, fragShader)
+    gl.attachShader(prog, vx)
+    gl.attachShader(prog, fr)
     gl.linkProgram(prog)
+    return prog
+
+vertShader = createShader(gl.VERTEX_SHADER, vx_shader)
+
+prog_0 = createProg(vertShader, createShader(gl.FRAGMENT_SHADER, frag_shader_0))
+prog_dot = createProg(vertShader, createShader(gl.FRAGMENT_SHADER, frag_shader_dot))
+
+def update_arrays(prog):
     gl.useProgram(prog)
 
-def update_arrays():
     vertexBuf = gl.createBuffer()
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuf)
     gl.bufferData(gl.ARRAY_BUFFER, a, gl.STATIC_DRAW)
@@ -115,23 +126,23 @@ def update_arrays():
     gl.enableVertexAttribArray(color)
 
 class Part:
-    def __init__(self, nm, hex):
-        self.nm = nm
+    def __init__(self, hex):
+        self.nm = hex["name"]
         self.hex = hex
         self.o = Hex(-15, 15)
+        self.rot = 0
     def draw(self, mark):
         self.covered = set()
         self.named = {}
         obj = self.hex
         for qr in obj["occ"]:
-            h = self.o + Hex(*qr)
+            h = self.o + Hex(*qr).rot(self.rot)
             mark(h, 0x606060)
             self.covered.add(h)
         for i,(nm,qr) in enumerate(obj["sigs"].items()):
-            h = self.o + Hex(*qr)
+            h = self.o + Hex(*qr).rot(self.rot)
             mark(h, twenty_hex[i])
             self.named[h] = f"{self.nm}.{nm}"
-            print(i, nm, twenty_hex[i])
 
     def tooltip(self, h):
         if h in self.named:
@@ -140,12 +151,12 @@ class Part:
             return self.nm
         return None
 
-
 class Board:
     def __init__(self):
         self.parts = set()
         self.wires = {}
         self.alloc = 0
+        self.str_alloc = S
         self.drag_start = None
 
     def mark(self, h, c):
@@ -162,21 +173,41 @@ class Board:
 
     def move_part(self, p, o):
         p.o = o
+        self.redraw_part(p)
+
+    def redraw_part(self, p):
         a = self.alloc
         self.alloc = p.a0
         p.draw(self.mark)
         self.alloc = a
 
+    def add_string(self, hh, c):
+        self.str_alloc = S
+        for (h0,h1) in zip(hh, hh[1:]):
+            i = self.str_alloc
+            a[2*i+0] = h0.q
+            a[2*i+1] = h0.r
+            a[2*i+2] = h1.q
+            a[2*i+3] = h1.r
+            a_color[i+0] = c
+            a_color[i+1] = c
+            self.str_alloc += 2
+
     def redraw(self):
         gl.viewport(0,0,canvas.width,canvas.height)
-        update_arrays()
 
         gl.clearColor(0, .1, 0, 1)
         gl.clear(gl.COLOR_BUFFER_BIT)
         gl.disable(gl.DEPTH_TEST);
+
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         gl.enable(gl.BLEND);
+        update_arrays(prog_dot)
         gl.drawArrays(gl.POINTS, 0, self.alloc)
+
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.useProgram(prog_0)
+        gl.drawArrays(gl.LINES, S, self.str_alloc - S)
 
     def under(self, h):
         for p in self.parts:
@@ -191,7 +222,17 @@ class Board:
                 return tt
         return None
         
+    def on_keypress(self, event):
+        event.preventDefault()
+        p = self.under(self.cursor)
+        if p is not None:
+            if event.key == "r":
+                p.rot += 1
+                self.redraw_part(p)
+                self.redraw()
+
     def on_mouse_move(self, event):
+        canvas.focus()
         event.preventDefault()
         rect = canvas.getBoundingClientRect()
         x = event.x - rect.left
@@ -204,6 +245,7 @@ class Board:
         (tx, ty) = ((x - cx) / f, -(y - cy) / f)
 
         h = Hex.from_xy(tx, ty)
+        self.cursor = h
 
         tooltip = document['tooltip']
 
@@ -218,7 +260,6 @@ class Board:
 
         if event.buttons:
             if self.drag_start is None:
-                print("DRAG START")
                 p = self.under(h)
                 if p is not None:
                     self.drag_start = (h,p)
@@ -230,22 +271,16 @@ class Board:
                 self.redraw()
         else:
             self.drag_start = None
-
-        return
-        # self.mark(h, 0x008080)
-        p = self.parts['rp2040']
-        p.o = h
-        self.move_part(p, o)
-        self.redraw()
+            path = Hex(0,0).hop(h)
+            self.add_string(path, 0x0000ff)
+            self.redraw()
 
 board = Board()
-
-canvas.bind('mousemove', board.on_mouse_move)
 
 def on_complete(req):
     if req.status == 200 or req.status == 0:
         obj = json.loads(req.text)
-        p = Part('rp2040', obj)
+        p = Part(obj)
         board.add_part(p)
         board.redraw()
     else:
@@ -259,5 +294,8 @@ def adjust_canvas_size(*args):
 
     board.redraw()
 
+canvas.attrs["tabindex"] = "0"
+canvas.bind('mousemove', board.on_mouse_move)
+canvas.bind('keypress', board.on_keypress)
 window.bind('resize', adjust_canvas_size)
-ajax.get('c0402-hex.json', oncomplete=on_complete)
+ajax.get('rp2040-hex.json', oncomplete=on_complete)

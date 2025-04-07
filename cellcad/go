@@ -17,7 +17,6 @@ if [ -x "$(command -v xdotool)" ]; then
     xdotool windowactivate $WID
     xdotool mousemove --window $WID 300 300
     xdotool key 'ctrl+r'
-    echo REFRESHED
   done
   xdotool windowactivate $CUR_WID
 fi
