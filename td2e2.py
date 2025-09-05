@@ -30,7 +30,7 @@ used_pins = [
 "GPIO12",   # Module_Serial.DTR
 "GPIO9",    # Module_Serial.RX
 "GPIO8",    # Module_Serial.TX
-"GPIO13",   # Module_Serial.CTS
+"GPIO13",   # Module_Serial.RTS
 
 "GPIO0",
 "GPIO1",
@@ -260,7 +260,7 @@ class SMT6(cu.Part):
         self.train(dc, 6, lambda: self.rpad(dc, 1.2, 3), 2.54)
 
     def hex_escape(self):
-        names = ('GND', 'CTS', 'VCC', 'TX', 'RX', 'DTR')[::-1]
+        names = ('GND', 'RTS', 'VCC', 'TX', 'RX', 'DTR')[::-1]
         for (p, nm) in zip(self.pads, names):
             p.setname(nm)
             p.copy().w("r 180 f 2.6").ctext(nm, scale = 1.1)
@@ -268,7 +268,7 @@ class SMT6(cu.Part):
                 p.copy().w("o f 1 / f 1").wire()
             elif nm == "VCC":
                 p.w("o f 0.5").wire()
-            elif nm in ("TX", "RX", "CTS"):
+            elif nm in ("TX", "RX", "RTS"):
                 wire_ongrid(p.w("i"))
             else:
                 wire_ongrid(p.w("o"))
@@ -312,6 +312,9 @@ class pogo_pads(dip.PTH):
 
     def gh(self, dc, plate = 1.0):
         p = dc.copy()
+        self.roundpad(p, 2 * plate * self.r)
+        return
+
         p.n_agon(plate * self.r, 30)
         p.contact(('GTL', ))
 
@@ -374,7 +377,7 @@ def td2e():
             "GPIO8"     : "TX",
             "GPIO0"     : "PWM0",
             "GPIO1"     : "PWM1",
-            "GPIO13"    : "CTS",
+            "GPIO13"    : "RTS",
         }
         for nm in nick:
             dc = u1.s(nm).copy()
@@ -544,7 +547,7 @@ def td2e():
         if 1:
             brd.hex_route(u1.s("GPIO8"), x2.s("TX"))
             brd.hex_route(u1.s("GPIO9"), x2.s("RX"))
-            brd.hex_route(u1.s("GPIO13"), x2.s("CTS"))
+            brd.hex_route(u1.s("GPIO13"), x2.s("RTS"))
             brd.hex_route(u1.s("GPIO12"), x2.s("DTR"))
 
         brd.hex_route(u1.s("XIN"), y1.s("CLK"))
@@ -573,7 +576,6 @@ def td2e():
     brd.logo(2.2, 15, logo_line, .29)
     brd.DC((25.5, 6.4)).ctext("(C) EXCAMERA", scale = 1.1)
     brd.DC((25.5, 5.0)).ctext("LABS 2025", scale = 1.1)
-
 
     brd.save("td2e2")
     print("Saved")
