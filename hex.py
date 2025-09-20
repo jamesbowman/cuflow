@@ -14,8 +14,16 @@ if 0:
     height = 0.4
     size = F * height
 else:
+    # Horizontal spacing is 'size' apart
+    # vertical spacing is 'height' apart
     size = 0.4
     height = size / F
+
+def setsize(s):
+    global size, height
+    size = s
+    height = s / F
+    print(f"{height=} {size=}")
 
 class Hex:
 
@@ -37,6 +45,17 @@ class Hex:
         (x, y) = self.to_grid()
         x += 0.5 * (y & 1)
         return (x * height, y * size)
+
+    def hexagon(self):
+        (x, y) = self.to_plane()
+        xo = height / 2
+        yo = size / 3
+        return [
+            (x - xo, y - yo),
+            (x, y - 2*yo),
+            (x + xo, y - yo),
+            (x + xo, y + yo),
+        ]
 
     def neighbors(self):
         yield(self)
@@ -66,6 +85,10 @@ class Hex:
         q = col - (row - (row&1)) // 2
         r = row
         return cls(q, r)
+
+    @classmethod
+    def from_dc(cls, dc):
+        return self.from_xy(dc.x, dc.y)
 
     def best_forward(self, p):
         brd = p.board
@@ -140,3 +163,22 @@ class Hex:
     def __eq__(self, other):
         return (self.q, self.r) == (other.q, other.r)
 
+def inrect(xy0, xy1):
+    (x0, y0) = xy0
+    (x1, y1) = xy1
+    h0 = Hex.from_xy(x0, y0)
+    h1 = Hex.from_xy(x1, y0)
+    h2 = Hex.from_xy(x0, y1)
+    qw = h1.q - h0.q
+
+    h = h0
+    for i in range(9999):
+        if (i & 1) == 0:
+            h.r += 1
+        else:
+            h.r += 1
+            h.q -= 1
+        if h.r == h2.r:
+            break
+        for q in range(h.q, h.q + qw):
+            yield Hex(q, h.r)

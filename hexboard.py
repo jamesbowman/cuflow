@@ -197,4 +197,5 @@ def wire_ongrid(p):
     else:
         p.goyx(dx, dy).wire()
     p.dir = 30 + 60 * round((p.dir - 30) / 60)
+    return p
 
