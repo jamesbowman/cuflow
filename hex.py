@@ -25,6 +25,26 @@ def setsize(s):
     height = s / F
     print(f"{height=} {size=}")
 
+def cube_round(q, r, s):
+    Iq = int(round(q))
+    Ir = int(round(r))
+    Is = int(round(s))
+
+    q_diff = abs(Iq - q)
+    r_diff = abs(Ir - r)
+    s_diff = abs(Is - s)
+
+    if q_diff > r_diff and q_diff > s_diff:
+        Iq = -Ir-Is
+    elif r_diff > s_diff:
+        Ir = -Iq-Is
+    else:
+        Is = -Iq-Ir
+
+    h = Hex(Iq, Ir)
+    assert h.s == Is
+    return h
+
 class Hex:
 
     def __init__(self, q, r):
@@ -78,17 +98,30 @@ class Hex:
     def __repr__(self):
         return f"<Hex q={self.q}, r={self.r} s={self.s}>"
 
+    def distance(self, b):
+        vec = self - b
+        return (abs(vec.q) + abs(vec.r) + abs(vec.s)) // 2
+
     @classmethod
     def from_xy(cls, x, y):
         col = int(round((x) / height - 0.25))
         row = int(round(y / size))
-        q = col - (row - (row&1)) // 2
+        q = col - (row - (row & 1)) // 2
         r = row
         return cls(q, r)
 
     @classmethod
     def from_dc(cls, dc):
         return self.from_xy(dc.x, dc.y)
+
+    @classmethod
+    def from_xy_fine(cls, x, y):
+        h = cls.from_xy(x, y)
+        def dist(h):
+            (x1, y1) = h.to_plane()
+            return (x - x1) ** 2 + (y - y1) ** 2
+        bydist = {dist(h): h for h in h.neighborhood(2)}
+        return bydist[min(bydist)]
 
     def best_forward(self, p):
         brd = p.board
@@ -162,6 +195,24 @@ class Hex:
 
     def __eq__(self, other):
         return (self.q, self.r) == (other.q, other.r)
+
+
+    def line(self, b):
+
+        def lerp(a, b, t):
+            return a + (b - a) * t
+
+        def cube_lerp(a, b, t):
+            return (lerp(a.q, b.q, t),
+                    lerp(a.r, b.r, t),
+                    lerp(a.s, b.s, t))
+
+        N = self.distance(b)
+        results = []
+        for i in range(N):
+            results.append(cube_round(*cube_lerp(self, b, 1.0/N * i)))
+        results.append(b)
+        return results
 
 def inrect(xy0, xy1):
     (x0, y0) = xy0

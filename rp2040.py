@@ -102,6 +102,9 @@ class RP2040(QFN56):
     source = {'LCSC': 'C2040'}
     mfr = 'RP2040'
     footprint = "LQFN-56(7x7)"
+    def setnames(self):
+        for i,nm in RP2040pins:
+            self.pads[i].setname(nm)
     def escape(self, used_pins):
         brd = self.board
         for i,nm in RP2040pins:

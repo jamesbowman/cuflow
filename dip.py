@@ -1,6 +1,8 @@
 import math
 import cuflow as cu
 
+import shapely.geometry as sg
+
 T = cu.inches(0.1)    # tenth on an inch, used throughout
 
 class dip(cu.Part):
@@ -28,7 +30,10 @@ class dip(cu.Part):
         p.part = self.id
         self.padfoot(p)
         p.contact()
-        self.pads.append(dc.copy())
+
+        ac = dc.copy()
+        ac.boundary = p.boundary
+        self.pads.append(ac)
 
     def padfoot(self, p):
         p.n_agon(0.8, 60)
@@ -39,9 +44,11 @@ class PTH(cu.Part):
         dc.board.hole(dc.xy, self.r)
         p = dc.copy()
         p.n_agon(plate * self.r, 30)
+        po = sg.Polygon(p.path)
         p.contact()
 
         p = dc.copy()
+        p.boundary = po
         p.part = self.id
         self.pads.append(p)
 

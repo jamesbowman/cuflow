@@ -111,6 +111,10 @@ class Layer:
         else:
             [renderpoly(po) for po in surface.geoms]
 
+    def capture(self, xy0):
+        pp = self.preview()
+        return sa.translate(pp, xoff = -xy0[0], yoff = -xy0[1])
+
 class OutlineLayer:
     def __init__(self, desc):
         self.lines = []
@@ -391,12 +395,16 @@ class Draw(Turtle):
             self.forward(half_edge)
         self.pop()
 
+    def hole(self, d, ko = 0.5):
+        self.board.hole(self.xy, d, ko = ko)
+
     def stadium(self, r, n, l):
         # Like n_agon, but with a stretched section, l
         ea = 360 / n
         self.push()
         half_angle = math.pi / n
         half_edge = r * math.tan(half_angle)
+        self.left(90).forward(l/2).right(90)
         self.forward(r)
         self.right(90)
 
@@ -407,6 +415,8 @@ class Draw(Turtle):
                 self.forward(half_edge)
                 self.right(ea)
                 self.forward(half_edge)
+        self.boundary = self.poly()
+        self.board.layers['GML'].route(self.poly())
         self.pop()
 
     def thermal(self, d):
@@ -466,7 +476,7 @@ class Draw(Turtle):
 
     def via(self, connect = None):
         g = sg.Point(self.xy).buffer(self.board.via / 2)
-        for n in ('GTL', 'GL2', 'GL3', 'GBL'):
+        for n in {'GTL', 'GL2', 'GL3', 'GBL'} - {connect}:
             self.board.layers[n].add(g, connect)
         if connect is not None:
             self.board.layers[connect].connected.append(g)
@@ -862,13 +872,13 @@ class Board:
         g = self.boundary(1.1 * sr).buffer(sr)
         self.layers['GTO'].add(g.buffer(0))
 
-    def hole(self, xy, inner, outer = None, stencil_alignment = False):
+    def hole(self, xy, inner, outer = None, stencil_alignment = False, ko = 0.5):
         self.drill(xy, inner)
         if outer is not None:
             g = sg.LinearRing(sg.Point(xy).buffer(outer / 2).exterior).buffer(self.silk / 2)
             self.layers['GTO'].add(g)
             # self.layers['GTP'].add(sg.Point(xy).buffer(.2))
-        self.keepouts.append(sg.Point(xy).buffer(inner / 2 + 0.5))
+        self.keepouts.append(sg.Point(xy).buffer(inner / 2 + ko))
         if stencil_alignment:
             self.layers['GTP'].add(sg.Point(xy).buffer(inner / 2))
 
@@ -1264,6 +1274,7 @@ class Part:
         dc.pad()
         p = dc.copy()
         p.part = self.id
+        p.boundary = sg.Polygon(dc.path)
         self.pads.append(p)
 
     def rpad(self, dc, w, h):
@@ -1359,6 +1370,10 @@ class D0603(C0603):
 
 class R0402(C0402):
     family = "R"
+
+class R0402_nolabel(R0402):
+    def label(self, dc):
+        pass
 
 # Taken from:
 # https://www.analog.com/media/en/package-pcb-resources/package/pkg_pdf/ltc-legacy-qfn/QFN_64_05-08-1705.pdf

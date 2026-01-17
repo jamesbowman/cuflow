@@ -15,6 +15,7 @@ from dazzler import Dazzler
 from collections import defaultdict
 from rp2040 import RP2040
 
+import hex
 from hex import Hex, axial_direction_vectors
 from hexboard import HexBoard, river_ongrid, wire_ongrid
 
@@ -131,7 +132,7 @@ class HexW25Q128(cu.SOIC8):
                 p.wire()
 
 
-class USB(eagle.LibraryPart):
+class USBmicro(eagle.LibraryPart):
     libraryfile = "10118194-0001LF.lbr"
     partname = "AMPHENOL_10118194-0001LF"
     mfr = "AMPHENOL_10118194-0001LF"
@@ -152,6 +153,39 @@ class USB(eagle.LibraryPart):
             p = self.s(nm)
             wire_ongrid(p.w("o f 0.1"))
         wire_ongrid(self.s("5V").w("i"))
+
+class USBC(cu.Part):
+    source = {'LCSC': 'C2927038'}   # Also C2765186 (better datasheet)
+    family = "J"
+
+    def pnp_jlc(self):
+        return self.center.copy().right(90)
+
+    def place(self, dc):
+        self.chamfered(dc.copy().forward(7.35 / 2), 8.94, 7.35)
+
+        dc.mark()
+
+        holes = dc.copy().forward(6.28)
+        for d in (-1, 1):
+            holes.copy().goxy(d * 5.78 / 2, 0).hole(0.65, ko = 0.13)
+
+        p = holes.copy().goxy(0, 1.07)
+        a = p.copy().goxy(3.50 / 2, 0)
+        self.train(a.left(90), 8, lambda: self.rpad(a, 0.3, 1.1), 0.5)
+        a = p.copy().goxy(6.4 / 2, 0)
+        self.train(a.left(90), 2, lambda: self.rpad(a, 0.6, 1.1), 0.8)
+        a = p.copy().goxy(-4.8 / 2, 0)
+        self.train(a.left(90), 2, lambda: self.rpad(a, 0.6, 1.1), 0.8)
+
+        baseline = dc.copy().goxy(0, 2.6)
+        baseline.mark()
+
+        for d in (-1, 1):
+            p = baseline.copy().goxy(d * 8.65 / 2, 0)
+            p.left(90).mark().stadium(0.3, 60, 1.8 - 0.6)
+            p = baseline.copy().goxy(d * 8.65 / 2, 4.2)
+            p.left(90).stadium(0.3, 60, 2.1 - 0.6)
 
 class SOT23_LDO(sot.SOT23):
     source = {'LCSC': 'C176954'}
@@ -322,6 +356,13 @@ class pogo_pads(dip.PTH):
         p.part = self.id
         self.pads.append(p)
 
+def hexgrid(b, o):
+    b.layers['GTO'].polys = []
+    def ln(xys):
+        b.layers['GBO'].add(sg.LineString(xys).buffer(.01))
+    for h in hex.inrect((0, 0), b.size):
+        ln(h.hexagon())
+
 def td2e():
     w = .4/3   # .127 is JLCPCB minimum
     w = 0.127
@@ -388,8 +429,13 @@ def td2e():
         u2 = HexW25Q128(brd.DC(Hex.from_xy(9, 17.5).to_plane()).right(180))
         u2.hex_escape()
 
-    j1 = USB(brd.DC((15, 28.5)).right(180))
-    j1.hex_escape()
+    if 1:
+        j1 = USBmicro(brd.DC((15, 28.5)).right(180))
+        j1.hex_escape()
+        HAVEUSB = 1
+    else:
+        j1 = USBC(brd.DC((14, 31.0)).right(180))
+        HAVEUSB = 0
 
     if 0:
         j2 = dip.SIL(brd.DC((1, 18)), "2")
@@ -511,10 +557,12 @@ def td2e():
         t1 = time.monotonic()
         print("Starting route")
 
-        brd.hex_route(j1.s("5V"), u3.s("5V"))
+        if HAVEUSB:
+            brd.hex_route(j1.s("5V"), u3.s("5V"))
         brd.hex_route(cn.pads[1], u3.s("5V"))
         brd.hex_route(ci0.pads[1], ci.pads[1])
-        brd.hex_route(ci.pads[1], u1.s("VREG_VOUT"))
+        if HAVEUSB:
+            brd.hex_route(ci.pads[1], u1.s("VREG_VOUT"))
 
         if 1:
             brd.hex_route(u2.s("CS"), u1.s("QSPI_SS_N"))
@@ -526,9 +574,11 @@ def td2e():
         if 0:
             brd.hex_route(j2.pads[1], u2.s("CS"))
 
-        brd.hex_route(j1.s("D-"), r3.pads[0])
-        brd.hex_route(j1.s("D+"), r4.pads[0])
-        brd.hex_route(u1.s("USB_DM"), r3.pads[1])
+        if HAVEUSB:
+            brd.hex_route(j1.s("D-"), r3.pads[0])
+            brd.hex_route(j1.s("D+"), r4.pads[0])
+        if HAVEUSB:
+            brd.hex_route(u1.s("USB_DM"), r3.pads[1])
         brd.hex_route(u1.s("USB_DP"), r4.pads[1])
 
         for nm in "SCL SDA RESET D/C".split():
@@ -552,8 +602,9 @@ def td2e():
 
         brd.hex_route(u1.s("XIN"), y1.s("CLK"))
 
-        brd.hex_route(u1.s("SWD"), j3.s("SWD"))
-        brd.hex_route(u1.s("SWCLK"), j3.s("SWCLK"))
+        if HAVEUSB:
+            brd.hex_route(u1.s("SWD"), j3.s("SWD"))
+            brd.hex_route(u1.s("SWCLK"), j3.s("SWCLK"))
 
         # Hack, rescue a ground island
         x2.s("GND").w("l 180 f 0.5 r 90 f 1.2 / f 1").wire()
@@ -576,6 +627,8 @@ def td2e():
     brd.logo(2.2, 15, logo_line, .29)
     brd.DC((25.5, 6.4)).ctext("(C) EXCAMERA", scale = 1.1)
     brd.DC((25.5, 5.0)).ctext("LABS 2025", scale = 1.1)
+
+    # hexgrid(brd, origin)
 
     brd.save("td2e2")
     print("Saved")

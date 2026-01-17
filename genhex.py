@@ -107,7 +107,7 @@ class HexRP2040(RP2040):
             wire_ongrid(self.s(nm))
         self.pads[0].w("/").thermal(1).wire()
 
-class HexW25Q128(cu.SOIC8):
+class W25Q128(cu.SOIC8):
     source = {'LCSC': 'C131025'}
     mfr = 'W25Q16JVSSIQ'
     footprint = "SOIC-8-208mil"
@@ -115,21 +115,8 @@ class HexW25Q128(cu.SOIC8):
     def pnp_jlc(self):
         return self.center.copy().right(90)
 
-    def hex_escape(self):
+    def setnames(self):
         [c.setname(nm) for (c, nm) in zip(self.pads, "CS IO1 IO2 GND IO0 CLK IO3 VCC".split())]
-
-        # bootsel = self.s("CS").copy().w("i l 90 f 3 r 90").wire()
-
-        for p in self.pads:
-            if p.name == "GND":
-                p.w("i f 1").wire().copy().w("/ f 1").wire()
-            elif p.name == "VCC":
-                p.w("i f 1").wire()
-            else:
-                # p.copy().w("o f 0.5").ctext(p.name, scale = 0.4)
-                p.w("o f .1")
-                wire_ongrid(p)
-                p.wire()
 
 
 class USB(eagle.LibraryPart):
@@ -259,20 +246,12 @@ class SMT6(cu.Part):
         self.chamfered(dc.copy().forward(-8), 13, 8, idoffset = (-0.5, -2))
         dc.w(f"l 90 f {cu.inches(.25)} r 180")
         self.train(dc, 6, lambda: self.rpad(dc, 1.2, 3), 2.54)
-
-    def hex_escape(self):
         names = ('GND', 'RTS', 'VCC', 'TX', 'RX', 'DTR')[::-1]
         for (p, nm) in zip(self.pads, names):
             p.setname(nm)
             p.copy().w("r 180 f 2.6").ctext(nm, scale = 1.1)
-            if nm == "GND":
-                p.copy().w("o f 1 / f 1").wire()
-            elif nm == "VCC":
-                p.w("o f 0.5").wire()
-            elif nm in ("TX", "RX", "RTS"):
-                wire_ongrid(p.w("i"))
-            else:
-                wire_ongrid(p.w("o"))
+        self.s("GND").w("o -")
+        self.s("VCC").w("o -")
 
 class SMD_3225_4P(cu.Part):
     family = "Y"
@@ -285,7 +264,7 @@ class SMD_3225_4P(cu.Part):
             self.train(dc, 2, lambda: self.rpad(dc, 1.2, 0.95), 2.20)
             dc.pop()
             dc.right(180)
-        [p.setname(nm) for p,nm in zip(self.pads, ["", "GND", "CLK", "VDD"])]
+        [p.setname(nm) for p,nm in zip(self.pads, ["DNC", "GND", "CLK", "VDD"])]
 
 class Osc_12MHz(SMD_3225_4P):
     source = {'LCSC': 'C454611'}
@@ -327,7 +306,7 @@ class QFN20(cu.Part):
     # EFM8BB2 datasheet, figure 9.2 "QFN20 Land Pattern"
     family = "U"
     def place(self, dc):
-        self.chamfered(dc, 3, 3)
+        self.chamfered(dc, 3, 3, drawid = False)
 
         C1 = 3.1
         C3 = 2.5
@@ -384,46 +363,6 @@ class EFM8BB2(QFN20):
         for (p,nm) in zip(self.pads, names):
             p.setname(nm)
 
-    def escape1(self):
-        self.setnames()
-
-        banks = ([], [], [], [])
-        for i,p in enumerate(self.pads[1:]):
-            b = i // 5
-            if p.name == "VCC":
-                p.forward(0.5).wire()
-            elif p.name != "GND":
-                p.forward(0.5).wire()
-                banks[b].append(p)
-        [cu.extend2(b) for b in banks]
-        [t.wire() for t in self.pads]
-        r0 = brd.enriver90(banks[0], -90).right(90).wire()
-        r1 = brd.enriver90(banks[1], 90).wire()
-        r0.join(r1).wire()
-
-        return (r0, )
-
-    def escape2(self):
-        banks = ([], [], [], [])
-        for i,p in enumerate(self.pads[1:]):
-            b = i // 5
-            if p.name == "GND":
-                p.copy().w("i f 1").wire()
-                p.w("o -")
-            elif p.name != "VCC":
-                p.forward(1.5).wire()
-                banks[b].append(p)
-        self.s("VCC").w("o f 0.8 / r 45 f 2 +").wire()
-        [cu.extend2(b) for b in banks]
-        [t.wire() for t in self.pads]
-        rr = [self.board.enriver(bb, a).wire() for a,bb in zip([-45,-45,45,45], banks)]
-        rr[0].forward(0.4).left(90)
-        a = rr[0].join(rr[1], 1.0)
-        b = rr[2].join(rr[3].right(90)).forward(1)
-        cu.extend2(a.tt + b.tt)
-        r = a.join(b, 0.5).wire()
-        return r
-
 class NeoPixel5050(cu.Part):
     family = "U"
     def place(self, dc):
@@ -442,6 +381,39 @@ class NeoPixel5050(cu.Part):
     def escape(self):
         self.s("GND").w("l 45 f 3 /").thermal(1).wire()
         self.s("VCC").thermal(1).wire()
+
+class USBC(cu.Part):
+    source = {'LCSC': 'C2927038'}   # Also C2765186 (better datasheet)
+    family = "J"
+
+    def pnp_jlc(self):
+        return self.center.copy().right(90)
+
+    def place(self, dc):
+        self.chamfered(dc.copy().forward(7.35 / 2), 8.94, 7.35)
+
+        dc.mark()
+
+        holes = dc.copy().forward(6.28)
+        for d in (-1, 1):
+            holes.copy().goxy(d * 5.78 / 2, 0).hole(0.65, ko = 0.13)
+
+        p = holes.copy().goxy(0, 1.07)
+        a = p.copy().goxy(3.50 / 2, 0)
+        self.train(a.left(90), 8, lambda: self.rpad(a, 0.3, 1.1), 0.5)
+        a = p.copy().goxy(6.4 / 2, 0)
+        self.train(a.left(90), 2, lambda: self.rpad(a, 0.6, 1.1), 0.8)
+        a = p.copy().goxy(-4.8 / 2, 0)
+        self.train(a.left(90), 2, lambda: self.rpad(a, 0.6, 1.1), 0.8)
+
+        baseline = dc.copy().goxy(0, 2.6)
+        baseline.mark()
+
+        for d in (-1, 1):
+            p = baseline.copy().goxy(d * 8.65 / 2, 0)
+            p.left(90).mark().stadium(0.3, 60, 1.8 - 0.6)
+            p = baseline.copy().goxy(d * 8.65 / 2, 4.2)
+            p.left(90).stadium(0.3, 60, 2.1 - 0.6)
 
 def pt(b, h):
     b.layers['GTO'].add(sg.Point(h.to_plane()).buffer(.05))
@@ -530,13 +502,14 @@ class Pico(dip.dip):
             pad.setname(nm)
 
 class HexPart:
+    lockpos = None
     def pads(self):
         return self.part.pads
 
 class Hex_R0402(HexPart):
     nm = "R0402"
     def __init__(self, c):
-        self.part = cu.R0402_nolabel(c)
+        self.part = cu.R0402_nolabel(c.right(90))
         self.part.pads[0].name = "1"
         self.part.pads[1].name = "2"
 
@@ -545,6 +518,13 @@ class Hex_EFM8BB2(HexPart):
     def __init__(self, c):
         self.part = EFM8BB2(c.copy().right(30))
         self.part.setnames()
+        self.part.s("VCC").w("o +")
+        c.via('GL2')
+
+        for i,p in enumerate(self.part.pads[1:]):
+            if p.name == "GND":
+                p.w("i f 1").wire()
+
     def pads(self):
         return self.part.pads[1:]
 
@@ -558,6 +538,52 @@ class Hex_Pico(HexPart):
     def __init__(self, c):
         self.part = Pico(c.copy())
 
+class Hex_RP2040(HexPart):
+    nm = "RP2040"
+    def __init__(self, c):
+        self.part = RP2040(c.copy().right(30))
+        self.part.setnames()
+        for i,p in enumerate(self.part.pads[1:]):
+            print(p.name)
+            if p.name in ("IOVDD", "VREG_VIN", "USB_VDD", "RUN"):
+                p.w("i +")
+                p.setname("VCC")
+        self.part.s("ADC_AVDD").w("o +").setname("VCC")
+
+class Hex_Osc(HexPart):
+    nm = "Osc12MHz"
+    def __init__(self, c):
+        self.part = Osc_12MHz(c.copy().right(30))
+        self.part.s("VDD").setname("VCC")
+        self.part.s("VCC").w("i +")
+        self.part.s("GND").w("i -")
+
+class Hex_W25Q128(HexPart):
+    nm = "W25Q128"
+    def __init__(self, c):
+        self.part = W25Q128(c.copy().right(30))
+        self.part.setnames()
+        self.part.s("VCC").w("i +")
+        self.part.s("GND").w("i -")
+
+class Hex_USBC(HexPart):
+    nm = "USBC"
+    def __init__(self, c):
+        self.part = USBC(c.copy().right(180))
+
+class Hex_SMT6(HexPart):
+    nm = "SMT6"
+    def __init__(self, c):
+        brd = c.board
+        self.lock_to(15, 10, c)
+        self.part = SMT6(c.copy())
+    def lock_to(self, x, y, c):
+        self.lockpos = (x, y)
+        h = hex.Hex.from_xy(x, y)
+        (xh, yh) = h.to_plane()
+        print("corrected", x - xh, y - yh)
+        c.goxy(x - xh, y - yh)
+
 def genhex():
     hex.setsize(0.3)
     w = 0.1
@@ -566,7 +592,13 @@ def genhex():
         Hex_SIL4,
         Hex_Pico,
         Hex_EFM8BB2,
+        Hex_RP2040,
+        Hex_Osc,
+        Hex_W25Q128,
+        Hex_USBC,
+        Hex_SMT6
     ]
+    # parts = parts[-1:]
 
     for fpart in parts:
         brd = HexBoard(
@@ -590,39 +622,37 @@ def genhex():
 
         padlist = {}
         for p in part.pads():
-            if 0:
-                cells = allcells
-            else:
-                print(p.boundary.bounds)
+            if p.name not in ("VCC", "GND", "DNC"):
                 x0,y0,x1,y1 = p.boundary.bounds
                 e = hex.size * 2
                 cells = list(hex.inrect((x0 - e, y0 - e), (x1 + e, y1 + e)))
-            connected = [c for c in cells if within(c, p.boundary)]
-            touching = [c for c in cells if touches(c, p.boundary)]
-            if connected == []:
-                p.w("o")
-                wire_ongrid(p).wire()
-                connected = [hex.Hex.from_xy(*p.xy)]
-            for h in connected:
-                pt(brd, h)
-            padlist[p.name] = {
-                'connected' : connected,
-                'touching' : touching
-            }
+                connected = [c - origin for c in cells if within(c, p.boundary)]
+                touching = [c - origin for c in cells if touches(c, p.boundary)]
+                if connected == []:
+                    p.w("o")
+                    wire_ongrid(p).wire()
+                    connected = [hex.Hex.from_xy(*p.xy) - origin]
+                for h in connected:
+                    pt(brd, h + origin)
+                padlist[p.name] = {
+                    'connected' : connected,
+                    'touching' : touching
+                }
 
-        ob = {
+        layers = [l for l in "GTS GTP GTO GTL".split()]
+
+        ob = {l:brd.layers[l].capture(c.xy) for l in layers}
+        ob.update({
             'hex.size' : hex.size,
-            'GTS' : brd.layers['GTS'].capture(c.xy),
-            'GTP' : brd.layers['GTP'].capture(c.xy),
-            'GTO' : brd.layers['GTO'].capture(c.xy),
-            'GTL' : brd.layers['GTL'].capture(c.xy),
+            'lockpos' : part.lockpos,
+            'family' : part.part.family,
             'padlist' : padlist,
-        }
+        })
         with open(f"{part.nm}.pickle", "wb") as f:
             pickle.dump(ob, f)
 
-    hexgrid(brd, origin)
-    brd.save("hex-r0402")
+    # hexgrid(brd, origin)
+    brd.save("hexpreview")
     print("Saved")
 
 if __name__ == "__main__":

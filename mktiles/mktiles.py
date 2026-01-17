@@ -20,41 +20,69 @@ def polygon(ctx, pts):
 
 SCALE = 100     # pixels per mm
 
-def make_internal():
-    F = math.sin(math.pi / 3)
-    d = 0.3 / F
-    d = 0.4
+class Make_internals:
+    def __init__(self):
+        F = math.sin(math.pi / 3)
+        self.d = 0.3 / F
+        self.d = 0.4
 
-    W = int(SCALE * d)
-    H = int(SCALE * d)
+        W = int(SCALE * self.d)
+        H = int(SCALE * self.d)
 
-    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, W, H)
-    ctx = cairo.Context(surf)
-    ctx.translate(W/2.0, H/2.0)
-    ctx.scale(SCALE, -SCALE)
+        self.xys = []
+        for i in range(6):
+            th = i * (2 * math.pi) / 6
+            x = (self.d / 2) * math.sin(th)
+            y = (self.d / 2) * math.cos(th)
+            self.xys.append((x, y))
 
-    xys = []
-    for i in range(4):
-        th = i * (2 * math.pi) / 6
-        x = (d / 2) * math.sin(th)
-        y = (d / 2) * math.cos(th)
-        xys.append((x, y))
+        for nm in ("blank", "solid", "circle"):
+            surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, W, H)
+            ctx = cairo.Context(surf)
+            ctx.translate(W/2.0, H/2.0)
+            ctx.scale(SCALE, -SCALE)
 
-    ctx.move_to(*xys[0])
-    for p in xys[1:]:
-        ctx.line_to(*p)
-    # ctx.close_path()
+            eval(f"self.{nm}")(ctx)
 
-    ctx.set_source_rgb(.4, .4, .3)
-    ctx.set_line_width(0.01)
-    ctx.stroke()
+            surf.write_to_png(f"_{nm}.png")
 
-    surf.write_to_png(f"_blank.png")
+    def blank(self, ctx):
+        ctx.move_to(*self.xys[0])
+        for p in self.xys[1:4]:
+            ctx.line_to(*p)
+        # ctx.close_path()
+
+        ctx.set_source_rgb(.4, .4, .3)
+        ctx.set_line_width(0.01)
+        ctx.stroke()
+
+    def solid(self, ctx):
+        ctx.move_to(*self.xys[0])
+        for p in self.xys[1:]:
+            ctx.line_to(*p)
+        ctx.close_path()
+
+        ctx.set_source_rgba(1, 1, 1, .2)
+        ctx.fill_preserve()
+        ctx.set_source_rgb(1,1,1)
+        ctx.set_line_width(0.01)
+        ctx.stroke()
+
+    def circle(self, ctx):
+        ctx.set_source_rgb(1, 1, 1)
+        ctx.set_line_width(4)
+        x = y = 0
+        r = self.d / 8
+        ctx.arc(x, y, r, 0, 2*math.pi)  # center, radius, start, end
+        ctx.fill()
     
 def make_part(fn):
     basename = fn[3:-7]
     print(f"{basename=}")
     part = pickle.load(open(fn, "rb"))
+    with open(f"{basename}.ref", "wt") as f:
+        for padname in sorted(part['padlist'].keys()):
+            f.write(f"{basename}.{padname}\n")
 
     geom = empty
     for k in part.keys():
@@ -92,6 +120,6 @@ def make_part(fn):
 
 for fn in sys.argv[1:]:
     if fn == "internal":
-        make_internal()
+        Make_internals()
     else:
         make_part(fn)
