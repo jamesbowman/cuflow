@@ -1,0 +1,8 @@
+set -e
+
+python mktiles.py internal
+# qiv _blank.png ; exit
+# python mktiles.py ../RP2040.pickle; exit
+make
+# rm -f *pickle
+python hexstatic.py
