@@ -690,6 +690,62 @@ def Module_Serial_Debug(pb):
             ("SWDIO",   conn.s("SWDIO")),
     )
 
+def Module_spiq_pwr(pb):
+    # 1 GND
+    # 2 GND
+    # 3 3V3
+    # 4 3V3
+    # 5 5V
+    # 6 5V
+
+    brd = pb.brd
+    width = cu.inches(0.6) + 2
+    p = brd.DC((pb.upper_edge + width / 2, 96))
+    pb.upper_edge += width
+    conn = dip.SIL_o(p.copy().left(90), "6")
+    names = ['GND', 'GND', 'VCC', 'VCC', '5V', '5V']
+    [c.setname(nm) for (c, nm) in zip(conn.pads, names)]
+    addlabels(conn)
+    for p in conn.pads:
+        print(p.name)
+        if p.name == "GND":
+            p.through().thermal(1.3).wire()
+        if p.name == "VCC":
+            p.thermal(1.3).wire()
+
+    return (
+            ("VSYS",   conn.s("5V")),
+    )
+
+def Module_spiq_ios(pb):
+    # 1 SCK
+    # 2 MISO
+    # 3 MOSI
+    # 4 IO2
+    # 5 IO3
+    # 6 CS
+    # 6 A
+    # 6 B
+
+    brd = pb.brd
+    width = cu.inches(0.8) + 2
+    p = brd.DC((pb.upper_edge + width / 2, 96))
+    pb.upper_edge += width
+    conn = dip.SIL_o(p.copy().left(90), "8")
+    names = ["SCK", "MISO", "MOSI", "IO2", "IO3", "CS", "A", "B"]
+    [c.setname(nm) for (c, nm) in zip(conn.pads, names)]
+    addlabels(conn)
+    return (
+            ("GP2",   conn.s("SCK")),
+            ("GP3",   conn.s("MISO")),
+            ("GP4",   conn.s("MOSI")),
+            ("GP5",   conn.s("IO2")),
+            ("GP6",   conn.s("IO3")),
+            ("GP7",   conn.s("CS")),
+            ("GP8",   conn.s("A")),
+            ("GP9",   conn.s("B")),
+    )
+
 def Module_LCD240x240_breakout(pb):
     # 1 GND
     # 2 VCC
@@ -738,23 +794,37 @@ class ST7789_12(cu.Part):
 
 def Module_LCD240x240(pb):
     brd = pb.brd
-    width = 23.4
-    p = brd.DC((pb.upper_edge + width / 2 - 7.7 / 2, 70))
+    width = 30
+    p = brd.DC((pb.upper_edge + width / 2, 56))
+    pb.upper_edge -= 10
+
+    p.copy().mark()
+
+    h = 37.4
+    dc = p.copy()
+    dc.goxy(-width / 2, -10.9)
+    for x in (0, width):
+        for y in (0, h):
+            brd.hole((dc.xy[0] + x, dc.xy[1] + y), 2.5)
+    dc.newpath()
+    dc.forward(h).right(90).forward(width).right(90).forward(h).right(90).forward(width)
+    dc.silk()
+
     pb.upper_edge += width
-    c = ST7789_12(p.copy())
+    c = ST7789_12(p.right(180).copy().goxy(-7.7 / 2, 0))
     # https://www.aliexpress.us/item/3256803568692645.html
-    #                           12   11  10   9   8   7   6   5   4   3   2     1
-    #                               LEDK LEDA                 CS
+    #                           12   11  10     9   8   7   6   5   4   3   2     1
+    #                               LEDK LEDA      CS
     for (p, nm) in zip(c.pads, "GND  GND LEDA  VCC GND GND D/C GND SCL SDA RESET GND".split()):
         p.setname(nm)
 
-    c.pads[11].copy().w("f 2").text("1")
-    c.pads[ 0].copy().w("f 2").text("12")
+    c.pads[11].copy().w("f 2").text("12")
+    c.pads[ 0].copy().w("f 2").text("1")
     for (i,p) in enumerate(c.pads):
         if p.name == "VCC":
             p.w("f 2").wire()
         elif p.name == "LEDA":
-            p.w("r 180 f 6 r 90 f 20").wire()
+            p.w("r 180 f 2 l 90 f 16").wire()
             dc = p.copy().forward(3).right(90)
             r0 = cu.R0402(dc, '4K7')
             r0.pads[1].goto(p).wire()
@@ -1010,9 +1080,21 @@ def scanalyzer1():
     pb.finish(mount_holes = False)
     pb.save(nm)
 
+def spiq_1():
+    nm = "spiq_1"
+    pb = Protoboard(nm)
+    pb.mcu_pico(flush = True)
+
+    pb.add_module(Module_LCD240x240)
+    pb.add_module(Module_spiq_pwr)
+    pb.add_module(Module_spiq_ios)
+
+    pb.finish(mount_holes = False)
+    pb.save(nm)
 
 if __name__ == "__main__":
-    large_clock()
+    # large_clock()
     # td2_b()
+    spiq_1()
     # remote_i2c()
     # scanalyzer1()
