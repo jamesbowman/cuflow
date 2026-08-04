@@ -690,6 +690,51 @@ def Module_Serial_Debug(pb):
             ("SWDIO",   conn.s("SWDIO")),
     )
 
+class VSSOP10(cu.Part):
+    family = "U"
+    N = 10
+    def place(self, dc):
+        self.chamfered(dc, 3, 3)
+        P = self.N // 2
+        e = 0.5
+        for _ in range(2):
+            dc.push()
+            dc.forward(e * (P - 1) / 2)
+            dc.left(90)
+            dc.forward(4.4 / 2)
+            dc.left(90)
+            self.train(dc, P, lambda: self.rpad(dc, 0.3, 1.45), e)
+            dc.pop()
+            dc.right(180)
+
+class INA226(VSSOP10):
+    pass
+
+class R1206(cu.Part):
+    family = "R"
+    footprint = "1206"
+    source = {"LCSC": "C22464903"}
+    def place(self, dc):
+        # Pads on either side
+        for d in (-90, 90):
+            dc.push()
+            dc.right(d)
+            dc.forward(3.20 / 2)
+            dc.rect(1.6, 1)
+            self.pad(dc)
+            dc.pop()
+
+        # Silk outline of the package
+        dc.rect(3.2, 1.6)
+        dc.silko()
+
+        dc.push()
+        dc.right(90)
+        dc.forward(2.65)
+        self.label(dc)
+        dc.pop()
+
+
 def Module_spiq_pwr(pb):
     # 1 GND
     # 2 GND
@@ -703,18 +748,53 @@ def Module_spiq_pwr(pb):
     p = brd.DC((pb.upper_edge + width / 2, 96))
     pb.upper_edge += width
     conn = dip.SIL_o(p.copy().left(90), "6")
-    names = ['GND', 'GND', 'VCC', 'VCC', '5V', '5V']
+
+    p.forward(-8)
+    ina226 = INA226(p)
+    shunt = R1206(p.copy().goxy(6, 1).right(90))
+
+    names = "A1 A0 Alert SDA SCL VCC GND VBUS IN- IN+".split()
+    [c.setname(nm) for (c, nm) in zip(ina226.pads, names)]
+
+    ina226.s("A0").goto(ina226.s("A1")).wire()
+    ina226.s("A1").setname("GND").w("o f 1 /").wire().thermal(1.3).wire()
+    ina226.s("GND").w("i f 1 /").wire().thermal(1.3).wire()
+    ina226.s("VCC").w("o f 0.5").wire()
+    ina226.s("VBUS").goto(ina226.s("IN-")).wire()
+    ina226.s("IN+").goto(shunt.pads[0]).wire()
+    ina226.s("IN-").goto(shunt.pads[1], twist = True).wire()
+    ina226.s("SDA").w("o f 3")
+    ina226.s("SCL").w("o f 1")
+
+    def pullup(p):
+        dc = p.copy().forward(2).right(90)
+        r0 = cu.R0402(dc, '4K7')
+        r0.pads[1].goto(p).wire()
+        r0.pads[0].w("o f 2").setname("VCC").wire()
+    pullup(ina226.s("SDA").copy().left(90))
+    pullup(ina226.s("SCL").copy().left(90))
+
+    ina226.s("SDA").w("/")
+    ina226.s("SCL").w("/")
+
+    supply = shunt.pads[1]
+    supply.w("f 3 /")
+
+    names = ['GND', 'GND', 'VCC', 'VCC', '5Va', '5Vb']
     [c.setname(nm) for (c, nm) in zip(conn.pads, names)]
     addlabels(conn)
     for p in conn.pads:
-        print(p.name)
         if p.name == "GND":
             p.through().thermal(1.3).wire()
         if p.name == "VCC":
             p.thermal(1.3).wire()
+    conn.s("5Va").goto(conn.s("5Vb")).wire()
+    conn.s("5Vb").goto(shunt.pads[0]).wire()
 
     return (
-            ("VSYS",   conn.s("5V")),
+            ("VSYS",   supply),
+            ("GP21",   ina226.s("SDA")),
+            ("GP22",   ina226.s("SCL")),
     )
 
 def Module_spiq_ios(pb):
