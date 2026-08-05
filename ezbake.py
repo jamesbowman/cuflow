@@ -145,9 +145,10 @@ class Pico(dip.dip):
             "GND",
             "SWDIO",
         ]
-        for pad,nm in zip(self.pads, pnames):
+        for pin,(pad,nm) in enumerate(zip(self.pads, pnames), 1):
             pad.right(90)
-            pad.copy().w("f 5").text(nm)
+            label_offset = 2.2 if 24 <= pin <= 40 else 5
+            pad.copy().forward(label_offset).text(nm)
             # p = pad.copy().w("l 45 f 2 r 45 f 5 r 45 f 2").wire()
             # dc.board.hole(p.xy, .8)
             # p.n_agon(0.8, 60)
@@ -816,8 +817,8 @@ def Module_spiq_ios(pb):
     # 4 IO2
     # 5 IO3
     # 6 CS
-    # 6 A
-    # 6 B
+    # 7 A
+    # 8 B
 
     brd = pb.brd
     width = cu.inches(0.8) + 2
