@@ -801,8 +801,8 @@ def Module_spiq_pwr(pb):
 
     return (
             ("VSYS",   supply),
-            ("GP21",   ina226.s("SDA")),
-            ("GP22",   ina226.s("SCL")),
+            ("GP20",   ina226.s("SDA")),
+            ("GP21",   ina226.s("SCL")),
     )
 
 def Module_spiq_ios(pb):
