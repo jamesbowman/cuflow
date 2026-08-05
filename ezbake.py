@@ -167,16 +167,24 @@ class Pico(dip.dip):
         n = 15
         pivot = pp[n].copy().left(180)  # bottom left pad
         w = pivot.distance(pp[n + 1])
+        pad_extent = 0.8 + (1.7 / 2)
+        outward = {"GP12", "GP13", "GP14", "GP15", "GP16", "GP17", "GP18"}
 
         order = pp[0:n+1][::-1] + pp[n+1:30][::-1]
         for i,p in enumerate(order):
             dst = pivot.copy().forward((w / 2) - (c * len(order) / 2) + c * i)
-            p.left(180).forward(0.5 + c + (n - abs(i - n)) * c).right(90)
+            stagger = (n - abs(i - n)) * c
+            if p.name in outward:
+                p.forward(pad_extent + c + stagger)
+                p.dir = 180
+            else:
+                p.left(180).forward(0.5 + c + stagger).right(90)
             p.goto(self.board.DC((p.xy[0], pivot.xy[1])))
-        for p in pp:
+        for p in order + [self.s("SWCLK"), self.s("SWDIO")]:
             p.dir = 180
             p.forward(3).wire()
-        return pp[:n+1][::-1] + [self.s("SWCLK"), self.s("SWDIO")] + pp[n+1:n+15][::-1]
+        left = pp[12:n+1] + pp[:12][::-1]
+        return left + [self.s("SWCLK"), self.s("SWDIO")] + pp[n+1:n+15][::-1]
         return (pp[:n][::-1] + [pp[30], pp[32]] + pp[n:30])
 
     def interface(self, name):
@@ -256,7 +264,7 @@ class Distributor(cu.Part):
             self.pads.append(dc.copy().left(90))
         self.train(dc, N, w, self.gap)
         self.rails = [p.copy().right(180) for p in self.pads]
-        self.othernames = ["VH"]
+        self.othernames = []
 
     def escape(self, n):
         return self.pads
