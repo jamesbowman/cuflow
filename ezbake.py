@@ -764,6 +764,10 @@ def Module_spiq_pwr(pb):
     names = "A1 A0 Alert SDA SCL VCC GND VBUS IN- IN+".split()
     [c.setname(nm) for (c, nm) in zip(ina226.pads, names)]
 
+    bypass = cu.C0402(p.copy().goxy(4, -2.1), '100nF')
+    bypass.pads[0].setname("VCC").goto(ina226.s("VCC")).wire()
+    bypass.pads[1].setname("GND").goto(ina226.s("GND")).wire()
+
     ina226.s("A0").goto(ina226.s("A1")).wire()
     ina226.s("A1").setname("GND").w("o f 1 /").wire().thermal(1.3).wire()
     ina226.s("GND").w("i f 1 /").wire().thermal(1.3).wire()
