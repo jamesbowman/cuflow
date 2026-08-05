@@ -238,13 +238,11 @@ class QFN56(cu.Part):
 
 
 def addlabels(part):
-    shift = 3
     for pad in part.pads:
         nm = pad.name
         if nm is not None:
             p = pad.copy().right(90)
-            p.copy().forward(shift).text(nm)
-            shift = {3:4, 4:3}[shift]
+            p.copy().forward(2.5).rtext(nm, scale = 1.5, angle = 90)
 
 class SD(eagle.LibraryPart):
     libraryfile = "x.lbrSD_TF_holder.lbr"

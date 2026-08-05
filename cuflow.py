@@ -536,24 +536,28 @@ class Draw(Turtle):
         self.path.append(other.xy)
         return self.wire()
 
-    def text(self, s, scale = 1.0):
+    def _place_text(self, geometry, angle):
         (x, y) = self.xy
-        self.board.layers['GTO'].add(hershey.text(x, y, s, scale = scale))
+        if angle:
+            geometry = sa.rotate(geometry, angle, origin = (x, y))
+        self.board.layers['GTO'].add(geometry)
         return self
 
-    def ctext(self, s, scale = 1.0):
+    def text(self, s, scale = 1.0, angle = 0):
         (x, y) = self.xy
-        self.board.layers['GTO'].add(hershey.ctext(x, y, s, scale = scale))
-        return self
+        return self._place_text(hershey.text(x, y, s, scale = scale), angle)
+
+    def ctext(self, s, scale = 1.0, angle = 0):
+        (x, y) = self.xy
+        return self._place_text(hershey.ctext(x, y, s, scale = scale), angle)
 
     def ltext(self, s):
         (x, y) = self.xy
         self.board.layers['GTO'].add(hershey.ltext(x, y, s))
 
-    def rtext(self, s, scale = 1.0):
+    def rtext(self, s, scale = 1.0, angle = 0):
         (x, y) = self.xy
-        self.board.layers['GTO'].add(hershey.rtext(x, y, s, scale = scale))
-        return self
+        return self._place_text(hershey.rtext(x, y, s, scale = scale), angle)
 
     def through(self):
         self.wire()
