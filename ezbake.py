@@ -829,8 +829,8 @@ def Module_spiq_ios(pb):
     addlabels(conn)
     return (
             ("GP2",   conn.s("SCK")),
-            ("GP3",   conn.s("MISO")),
-            ("GP4",   conn.s("MOSI")),
+            ("GP4",   conn.s("MISO")),
+            ("GP3",   conn.s("MOSI")),
             ("GP5",   conn.s("IO2")),
             ("GP6",   conn.s("IO3")),
             ("GP7",   conn.s("CS")),
