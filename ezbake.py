@@ -242,7 +242,8 @@ def addlabels(part):
         nm = pad.name
         if nm is not None:
             p = pad.copy().right(90)
-            p.copy().forward(2.5).rtext(nm, scale = 1.5, angle = 90)
+            label = {'5Va': '5V', '5Vb': '5V'}.get(nm, nm)
+            p.copy().forward(2.5).rtext(label, scale = 1.5, angle = 90)
 
 class SD(eagle.LibraryPart):
     libraryfile = "x.lbrSD_TF_holder.lbr"
