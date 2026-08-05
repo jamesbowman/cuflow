@@ -914,7 +914,7 @@ def Module_LCD240x240(pb):
         elif p.name == "LEDA":
             p.w("r 180 f 2 l 90 f 16").wire()
             dc = p.copy().forward(3).right(90)
-            r0 = cu.R0402(dc, '4K7')
+            r0 = cu.R0402(dc, '7.5')
             r0.pads[1].goto(p).wire()
             r0.pads[0].w("o f 2").setname("VCC").wire()
         else:
