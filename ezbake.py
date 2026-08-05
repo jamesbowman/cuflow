@@ -776,7 +776,7 @@ def Module_spiq_pwr(pb):
     ina226.s("IN+").goto(shunt.pads[0]).wire()
     ina226.s("IN-").goto(shunt.pads[1], twist = True).wire()
     ina226.s("SDA").w("o f 3")
-    ina226.s("SCL").w("o f 1")
+    ina226.s("SCL").w("o f 1 l 90 f .1 r 90")
 
     def pullup(p):
         dc = p.copy().forward(2).right(90)
