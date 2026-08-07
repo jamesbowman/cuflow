@@ -887,7 +887,7 @@ class ST7789_12(cu.Part):
 def Module_LCD240x240(pb):
     brd = pb.brd
     width = 30
-    p = brd.DC((pb.upper_edge + width / 2, 56))
+    p = brd.DC((pb.upper_edge + width / 2, 54.5))
     pb.upper_edge -= 10
 
     p.copy().mark()
@@ -904,6 +904,9 @@ def Module_LCD240x240(pb):
 
     pb.upper_edge += width
     c = ST7789_12(p.right(180).copy().goxy(-7.7 / 2, 0))
+    x = (c.pads[0].xy[0] + c.pads[-1].xy[0]) / 2
+    y = (c.pads[0].xy[1] + c.pads[-1].xy[1]) / 2
+    brd.DC((x - 6, y), 90).forward(12).silk()
     # https://www.aliexpress.us/item/3256803568692645.html
     #                           12   11  10     9   8   7   6   5   4   3   2     1
     #                               LEDK LEDA      CS
