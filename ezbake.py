@@ -163,7 +163,8 @@ class Pico(dip.dip):
         }
 
     def escape(self):
-        pp = [p for p in self.pads if p.name not in ("GND", "VCC")]
+        debug = [self.s("SWCLK"), self.s("SWDIO")]
+        pp = [p for p in self.pads if p.name not in ("GND", "VCC", "VSYS", "SWCLK", "SWDIO")]
         c = self.board.c
         n = 15
         pivot = pp[n].copy().left(180)  # bottom left pad
@@ -171,7 +172,8 @@ class Pico(dip.dip):
         pad_extent = 0.8 + (1.7 / 2)
         outward = {"GP12", "GP13", "GP14", "GP15", "GP16", "GP17", "GP18"}
 
-        order = pp[0:n+1][::-1] + pp[n+1:30][::-1]
+        right = pp[n+1:][::-1]
+        order = pp[0:n+1][::-1] + right
         for i,p in enumerate(order):
             dst = pivot.copy().forward((w / 2) - (c * len(order) / 2) + c * i)
             stagger = (n - abs(i - n)) * c
@@ -181,11 +183,11 @@ class Pico(dip.dip):
             else:
                 p.left(180).forward(0.5 + c + stagger).right(90)
             p.goto(self.board.DC((p.xy[0], pivot.xy[1])))
-        for p in order + [self.s("SWCLK"), self.s("SWDIO")]:
+        for p in order + debug:
             p.dir = 180
             p.forward(3).wire()
         left = pp[12:n+1] + pp[:12][::-1]
-        return left + [self.s("SWCLK"), self.s("SWDIO")] + pp[n+1:n+15][::-1]
+        return left + debug + right
         return (pp[:n][::-1] + [pp[30], pp[32]] + pp[n:30])
 
     def interface(self, name):
@@ -789,7 +791,7 @@ def Module_spiq_pwr(pb):
     ina226.s("SDA").w("/")
     ina226.s("SCL").w("/")
 
-    supply = shunt.pads[1]
+    supply = shunt.pads[1].setname("VBUS")
     supply.w("f 3 /")
 
     names = ['GND', 'GND', 'VCC', 'VCC', '5Va', '5Vb']
@@ -804,7 +806,7 @@ def Module_spiq_pwr(pb):
     conn.s("5Vb").goto(shunt.pads[0]).wire()
 
     return (
-            ("VSYS",   supply),
+            ("VBUS",   supply),
             ("GP20",   ina226.s("SDA")),
             ("GP21",   ina226.s("SCL")),
     )
