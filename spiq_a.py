@@ -4,7 +4,6 @@ import math
 import time
 
 import shapely.geometry as sg
-from PIL import Image
 
 import cuflow as cu
 import svgout
@@ -19,15 +18,13 @@ import hex
 from hex import Hex, axial_direction_vectors
 from hexboard import HexBoard, river_ongrid, wire_ongrid
 
+DO_ROUTING = 0
+
 used_pins = [
 # "SWCLK",    # Module_Serial_Debug.SWCLK
 # "GPIO1",    # Module_Serial_Debug.RX
 # "GPIO0",    # Module_Serial_Debug.TX
 # "SWD",      # Module_Serial_Debug.SWDIO
-"GPIO14",   # Module_LCD240x240_breakout.SDL
-"GPIO15",   # Module_LCD240x240_breakout.SDA
-"GPIO11",   # Module_LCD240x240_breakout.RES
-"GPIO10",   # Module_LCD240x240_breakout.DC
 "GPIO12",   # Module_Serial.DTR
 "GPIO9",    # Module_Serial.RX
 "GPIO8",    # Module_Serial.TX
@@ -44,19 +41,17 @@ used_pins = [
 # "VCC",
 # "GPIO8",
 # "GPIO9",
-# "GPIO10",       # LCD
-# "GPIO11",       # LCD
+# "GPIO10",
+# "GPIO11",
 # "GPIO12",
 # "GPIO13",
-# "GPIO14",       # LCD
-# "GPIO15",       # LCD
+# "GPIO14",
+# "GPIO15",
 # "TESTEN",
 "XIN",
 # "XOUT",
 # "VCC",
 # "DVDD",
-"SWCLK",
-"SWD",
 # "RUN",
 # "GPIO16",
 # "GPIO17",
@@ -250,39 +245,6 @@ class LDO_23_5(SOT23_5):
     def hex_escape(self):
         self.hex_hookup(('5V', 'GND', 'CE', '', 'VCC'))
 
-#  1 GND        GND
-#  2 LEDK       GND
-#  3 LEDA       LEDA
-#  4 VDD        VCC
-#  5 GND        GND
-#  6 GND        GND
-#  7 D/C        D/C
-#  8 CS         GND
-#  9 SCL        SCL
-# 10 SDA        SDA
-# 11 RESET      RESET
-# 12 GND        GND
-
-class ST7789_12(cu.Part):
-    family = "U"
-    mfr = "LH133T-IG01"
-    inBOM = False
-    def place(self, dc):
-        dc.right(90)
-        self.train(dc, 12, lambda: self.rpad(dc, .35, 2), 0.7)
-
-    def hex_escape(self):
-        for (p, nm) in zip(self.pads, "GND  GND LEDA  VCC GND GND D/C GND SCL SDA RESET GND".split()):
-            p.setname(nm)
-            if nm == "GND":
-                p.w("o f 0.5").wire()
-            elif nm == "VCC":
-                p.w("o f 5 / f 1").wire()
-            elif nm == "RESET":
-                wire_ongrid(p.w("o f 0.2"))
-            else:
-                wire_ongrid(p.w("i f 0.2"))
-
 class SMT6(cu.Part):
     family = "J"
     source = {"LCSC": "C5142239"}
@@ -334,28 +296,6 @@ class Osc_12MHz(SMD_3225_4P):
         self.s("VCC").w("o f 0.5").wire()
         wire_ongrid(self.s("CLK").w("o"))
 
-class pogo_pads(dip.PTH):
-    family  = "J"
-    def place(self, dc):
-        T = 25.4 / 10
-        self.r = 0.6
-        self.N = int(self.val)
-        dc.forward(((self.N - 1) / 2) * T).left(180)
-        self.train(dc, self.N, lambda: self.gh(dc), T)
-        [p.setname(str(i + 1)) for (i, p) in enumerate(self.pads)]
-
-    def gh(self, dc, plate = 1.0):
-        p = dc.copy()
-        self.roundpad(p, 2 * plate * self.r)
-        return
-
-        p.n_agon(plate * self.r, 30)
-        p.contact(('GTL', ))
-
-        p = dc.copy()
-        p.part = self.id
-        self.pads.append(p)
-
 def hexgrid(b, o):
     b.layers['GTO'].polys = []
     def ln(xys):
@@ -377,11 +317,6 @@ def spiq_a():
 
     brd.outline()
 
-    o = 2
-    for x in (o, 30 - o):
-        for y in (o, 30 - o):
-            brd.hole((x, y), 2, 2.5, stencil_alignment = True)
-
     if 0:
         for xy in ((2, 9), (30 - 2, 9)):
             dc = brd.DC(xy)
@@ -396,7 +331,8 @@ def spiq_a():
 
     if 1:
         u1 = HexRP2040(dc.left(60))
-        u1.hex_escape()
+        if DO_ROUTING:
+            u1.hex_escape()
 
     if 0:
         nick = {
@@ -409,10 +345,6 @@ def spiq_a():
             "USB_DP"    : "D+",
             "USB_DM"    : "D-",
             "XIN"       : "XIN",
-            "GPIO14"    : "SDL",
-            "GPIO15"    : "SDA",
-            "GPIO11"    : "RES",
-            "GPIO10"    : "DC",
             "GPIO12"    : "DTR",
             "GPIO9"     : "RX",
             "GPIO8"     : "TX",
@@ -427,11 +359,13 @@ def spiq_a():
 
     if 1:
         u2 = HexW25Q128(brd.DC(Hex.from_xy(9, 17.5).to_plane()).right(180))
-        u2.hex_escape()
+        if DO_ROUTING:
+            u2.hex_escape()
 
     if 1:
         j1 = USBmicro(brd.DC((15, 28.5)).right(180))
-        j1.hex_escape()
+        if DO_ROUTING:
+            j1.hex_escape()
         HAVEUSB = 1
     else:
         j1 = USBC(brd.DC((14, 31.0)).right(180))
@@ -439,55 +373,38 @@ def spiq_a():
 
     if 0:
         j2 = dip.SIL(brd.DC((1, 18)), "2")
-        j2.pads[0].setname("GND").w("/ f 1.2").wire()
-        wire_ongrid(j2.pads[1].w("f 1"))
-
-    j3 = pogo_pads(brd.DC((28, 19.5)).right(180), "3")
-    j3.inBOM = False
-    names = ('SWCLK', '0', 'SWD')
-    for (p, nm) in zip(j3.pads, names):
-        p.setname(nm)
-        p.copy().w("l 90 f 0.7").rtext(nm)
-    wire_ongrid(j3.pads[0].w("l 90 f .7"))
-    j3.pads[1].setname("GND").w("l 135 f 1.4 / f 1.2").wire()
-    wire_ongrid(j3.pads[2].w("l 90 f .7"))
+        j2.pads[0].setname("GND")
+        if DO_ROUTING:
+            j2.pads[0].w("/ f 1.2").wire()
+            wire_ongrid(j2.pads[1].w("f 1"))
 
     # u3 = SOT23_LDO(brd.DC((7, 27.5)).right(180).left(90))
     u3 = LDO_23_5(brd.DC((6.5, 27.5)).right(180))
-    u3.hex_escape()
-
-    if 1:
-        
-        pinxy = (6.27, 11.15)       # Careful measurement of center of L pin
-        lcdsz = (26.16, 29.28)      # Module size
-        x = (30 - lcdsz[0]) / 2 + pinxy[0]
-        y = (30 - lcdsz[1]) / 2 + pinxy[1]
-        x1 = ST7789_12(brd.DC((x, y)).right(0).setlayer('GBL'))
-        x1.hex_escape()
-        p = brd.DC((15, 15)).setlayer("GBO")
-        p.copy().rect(*lcdsz).wire()
-        p.goxy(lcdsz[0] / 2, -lcdsz[1] / 2).mark()
-        h0 = p.copy().goxy(-(10.3 + 1), 9.13)
-        brd.layers['GBO'].add(sg.Point(h0.xy).buffer(0.5))
-        h0.goxy(-10, 0)
-        brd.layers['GBO'].add(sg.Point(h0.xy).buffer(0.5))
+    if DO_ROUTING:
+        u3.hex_escape()
 
     if 1:
         # GND is on *right*, viewed from this side
         x2 = SMT6(brd.DC((15, 10)))
-        x2.hex_escape()
+        if DO_ROUTING:
+            x2.hex_escape()
         x2.inBOM = False
 
     def ucap(p, val = '100nF'):
         cn = cu.C0402_nolabel(p, val)
-        cn.pads[0].setname("GND").w("o f .5 / f .6").wire()
+        cn.pads[0].setname("GND")
+        if DO_ROUTING:
+            cn.pads[0].w("o f .5 / f .6").wire()
         return cn
     def cap(p, val = '100nF'):
         cn = ucap(p, val)
-        cn.pads[1].setname("VCC").w("o f .3").wire()
+        cn.pads[1].setname("VCC")
+        if DO_ROUTING:
+            cn.pads[1].w("o f .3").wire()
     def hcap(p, val = '100nF'):
         cn = ucap(p, val)
-        wire_ongrid(cn.pads[1].w("o f .2"))
+        if DO_ROUTING:
+            wire_ongrid(cn.pads[1].w("o f .2"))
         return cn
     if 1:
         cap(brd.DC((9, 14)))
@@ -501,53 +418,33 @@ def spiq_a():
 
         ci0 = hcap(brd.DC((22, 28)).left(180), '1uF')
         ci = hcap(brd.DC((22, 26.5)).left(180), '1uF')
-        u1.s("VREG_VOUT").hex("r 5 f").wire()
-
-        cx = cu.C0603(brd.DC((6, 5)).left(90), '10 uF, 16V')
-        cx.pads[0].setname("GND").w("o f .5 / f .6").wire()
-        cx.pads[1].setname("VCC").w("o f 1").wire()
+        if DO_ROUTING:
+            u1.s("VREG_VOUT").hex("r 5 f").wire()
 
     if 1:
         y1 = Osc_12MHz(brd.DC((27.5, 12)).right(180))
-        y1.escape()
-
-    if 1:
-        # ST7789_12 backlight power
-        r1 = cu.R0402(brd.DC((6, 11)).right(90), "7.5")
-
-        r1.pads[1].setname("VCC").w("o f 1").wire()
-        wire_ongrid(r1.pads[0].w("o / f .4"))
+        if DO_ROUTING:
+            y1.escape()
 
     if 1:
         h = Hex.from_xy(12, 23.5)
         r3 = cu.R0402(brd.DC(h.to_plane()), "270")
         h += Hex(0, -3)
         r4 = cu.R0402(brd.DC(h.to_plane()), "270")
-        for p in r3.pads + r4.pads:
-            wire_ongrid(p.w("o f 0"))
+        if DO_ROUTING:
+            for p in r3.pads + r4.pads:
+                wire_ongrid(p.w("o f 0"))
 
-    if 1:
+    if DO_ROUTING:
         # Move these for VCC fill clearance
         u1.s("USB_DM").hex("6f").wire()
         u1.s("USB_DP").hex("7f").wire()
 
-        SDL = u1.s("GPIO14")
-        SDA = u1.s("GPIO15")
-        RES = u1.s("GPIO11")
-        DC  = u1.s("GPIO10")
-        SDL.hex("3 f / f").wire()
-        SDA.hex("1f l / r").wire()
-        DC .hex("f / f").wire()
-        RES.hex("3l / < f").wire()
         def note(p, nm):
             return
             dc = p.copy()
             dc.dir = 0
             dc.text(nm, scale = 0.2)
-        note(SDL, "SDL")
-        note(SDA, "SDA")
-        note(RES, "RES")
-        note(DC, "DC")
 
         u1.s("GPIO8").hex("3f / f").wire()
         x2.s("TX").hex("3f r f l 4f / f").wire()
@@ -581,17 +478,6 @@ def spiq_a():
             brd.hex_route(u1.s("USB_DM"), r3.pads[1])
         brd.hex_route(u1.s("USB_DP"), r4.pads[1])
 
-        for nm in "SCL SDA RESET D/C".split():
-            note(x1.s(nm), nm)
-
-        if 1:
-            brd.hex_route(SDL, x1.s("SCL"))
-            brd.hex_route(SDA, x1.s("SDA"))
-            brd.hex_route(DC,  x1.s("D/C"))
-            brd.hex_route(RES, x1.s("RESET"))
-        if 1:
-            brd.hex_route(r1.pads[0], x1.s("LEDA"))
-
         note(u1.s("GPIO8"), "TX")
 
         if 1:
@@ -601,10 +487,6 @@ def spiq_a():
             brd.hex_route(u1.s("GPIO12"), x2.s("DTR"))
 
         brd.hex_route(u1.s("XIN"), y1.s("CLK"))
-
-        if HAVEUSB:
-            brd.hex_route(u1.s("SWD"), j3.s("SWD"))
-            brd.hex_route(u1.s("SWCLK"), j3.s("SWCLK"))
 
         # Hack, rescue a ground island
         x2.s("GND").w("l 180 f 0.5 r 90 f 1.2 / f 1").wire()
@@ -616,17 +498,13 @@ def spiq_a():
         brd.hex_render()
         brd.wire_routes()
 
-    if 1:
+    if DO_ROUTING:
         brd.fill_any("GTL", "VCC")
         brd.fill_any("GBL", "GND")
 
-    logo_line = (
-        Image.open("../td2/marketing/logo_pcb.png").convert("L").
-        transpose(Image.Transpose.ROTATE_90)
-    )
-    brd.logo(2.2, 15, logo_line, .29)
-    brd.DC((25.5, 6.4)).ctext("(C) EXCAMERA", scale = 1.1)
-    brd.DC((25.5, 5.0)).ctext("LABS 2025", scale = 1.1)
+    if 0:
+        brd.DC((25.5, 6.4)).ctext("(C) EXCAMERA", scale = 1.1)
+        brd.DC((25.5, 5.0)).ctext("LABS 2025", scale = 1.1)
 
     # hexgrid(brd, origin)
 
