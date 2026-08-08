@@ -788,10 +788,18 @@ def Module_spiq_pwr(pb):
     pullup(ina226.s("SDA").copy().left(90))
     pullup(ina226.s("SCL").copy().left(90))
 
+    divider_high = cu.R0402(p.copy().goxy(9, -2).left(90), '10K')
+    divider_low = cu.R0402(p.copy().goxy(9, -6.2).right(90), '10K')
+
     ina226.s("SDA").w("/")
     ina226.s("SCL").w("/")
 
     supply = shunt.pads[1].setname("VBUS")
+    divider_high.pads[1].setname("VBUS").goto(supply).wire()
+    p = divider_high.pads[0].setname("VBUS_SENSE").w("o f 1").wire()
+    sense = p.copy().w("/ r 90 f 2").wire()
+    divider_low.pads[0].setname("VBUS_SENSE").goto(p).wire()
+    divider_low.pads[1].setname("GND").w("o f .5 /").wire().thermal(1.3).wire()
     supply.w("f 3 /")
 
     names = ['GND', 'GND', 'VCC', 'VCC', '5Va', '5Vb']
@@ -809,6 +817,7 @@ def Module_spiq_pwr(pb):
             ("VBUS",   supply),
             ("GP20",   ina226.s("SDA")),
             ("GP21",   ina226.s("SCL")),
+            ("GP26",   sense),
     )
 
 def Module_spiq_ios(pb):
