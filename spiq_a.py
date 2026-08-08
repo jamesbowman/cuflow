@@ -364,14 +364,9 @@ def spiq_a():
         if DO_ROUTING:
             u2.hex_escape()
 
-    if 1:
-        j1 = USBmicro(layout_dc((15, 28.5)).right(180))
-        if DO_ROUTING:
-            j1.hex_escape()
-        HAVEUSB = 1
-    else:
-        j1 = USBC(layout_dc((14, 31.0)).right(180))
-        HAVEUSB = 0
+    # Match the legacy SPIDriver's 6.25 mm top-edge offset.
+    j1 = USBC(brd.DC((0, brd.size[1] - 6.25)).right(90))
+    HAVEUSB = 0
 
     j2 = PZ254RS(brd.DC((50.0, 38.65)), 6)
     for p, nm in zip(j2.pads, ("GND", "GND", "VCC", "VCC", "5V", "5V")):
