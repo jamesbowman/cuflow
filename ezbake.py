@@ -239,13 +239,13 @@ class QFN56(cu.Part):
 
 
 
-def addlabels(part):
+def addlabels(part, angle = 90):
     for pad in part.pads:
         nm = pad.name
         if nm is not None:
             p = pad.copy().right(90)
             label = {'5Va': '5V', '5Vb': '5V'}.get(nm, nm)
-            p.copy().forward(2.5).rtext(label, scale = 1.5, angle = 90)
+            p.copy().forward(2.5).rtext(label, scale = 1.5, angle = angle)
 
 class SD(eagle.LibraryPart):
     libraryfile = "x.lbrSD_TF_holder.lbr"
@@ -675,7 +675,7 @@ def Module_Serial(pb):
             ("digital", conn.s("CTS")),
     )
 
-def Module_Serial_Debug(pb):
+def Module_Serial_Debug(pb, center = None, rotation = 0):
     # 1 SWCLK
     # 2 RX
     # 3 TX
@@ -684,13 +684,15 @@ def Module_Serial_Debug(pb):
     # 6 GND
 
     brd = pb.brd
-    width = cu.inches(0.6) + 2
-    p = brd.DC((pb.upper_edge + width / 2, 96))
-    pb.upper_edge += width
-    conn = dip.SIL_o(p.copy().left(90), "6")
+    if center is None:
+        width = cu.inches(0.6) + 2
+        center = (pb.upper_edge + width / 2, 96)
+        pb.upper_edge += width
+    p = brd.DC(center)
+    conn = dip.SIL_o(p.copy().left(90).right(rotation), "6")
     names = ['GND', 'SWDIO', 'VCC', 'TX', 'RX', 'SWCLK']
     [c.setname(nm) for (c, nm) in zip(conn.pads, names)]
-    addlabels(conn)
+    addlabels(conn, angle = (90 + rotation) % 360)
     conn.s("GND").through().thermal(1.3).wire()
     conn.s("VCC").thermal(1.3).wire()
     return (
@@ -1186,14 +1188,16 @@ def scanalyzer1():
     pb.finish(mount_holes = False)
     pb.save(nm)
 
-def spiq_1():
-    nm = "spiq_1"
+def spiq_2():
+    nm = "spiq_2"
     pb = Protoboard(nm)
+    pb.logo_center = (83, 13)
     pb.mcu_pico(flush = True)
 
     pb.add_module(Module_LCD240x240)
     pb.add_module(Module_spiq_pwr)
     pb.add_module(Module_spiq_ios)
+    pb.add_module(Module_Serial_Debug, (56, 4), 180)
 
     pb.finish(mount_holes = False)
     pb.save(nm)
@@ -1201,6 +1205,6 @@ def spiq_1():
 if __name__ == "__main__":
     # large_clock()
     # td2_b()
-    spiq_1()
+    spiq_2()
     # remote_i2c()
     # scanalyzer1()
