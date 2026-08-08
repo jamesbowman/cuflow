@@ -7,7 +7,6 @@ import shapely.geometry as sg
 
 import cuflow as cu
 import svgout
-import dip
 import sot
 import eagle
 from dazzler import Dazzler
@@ -25,10 +24,6 @@ used_pins = [
 # "GPIO1",    # Module_Serial_Debug.RX
 # "GPIO0",    # Module_Serial_Debug.TX
 # "SWD",      # Module_Serial_Debug.SWDIO
-"GPIO12",   # Module_Serial.DTR
-"GPIO9",    # Module_Serial.RX
-"GPIO8",    # Module_Serial.TX
-"GPIO13",   # Module_Serial.RTS
 
 "GPIO0",
 "GPIO1",
@@ -182,6 +177,32 @@ class USBC(cu.Part):
             p = baseline.copy().goxy(d * 8.65 / 2, 4.2)
             p.left(90).stadium(0.3, 60, 2.1 - 0.6)
 
+
+class PZ254RS(cu.Part):
+    family = "J"
+    footprint = "PZ254RS-11-NP-01"
+    pitch = 2.54
+    body_width = 2.5
+    pad_width = 1.02
+    pad_length = 2.3
+
+    def place(self, dc):
+        self.N = int(self.val)
+        assert 2 <= self.N <= 40
+        self.mfr = f"PZ254RS-11-{self.N:02d}P-01"
+        self.val = ""
+
+        self.chamfered(dc, self.body_width, self.N * self.pitch)
+        pins = dc.copy().forward((self.N - 1) * self.pitch / 2).left(180)
+
+        def pin():
+            self.rpad(pins, self.pad_width, self.pad_length)
+
+        self.train(pins, self.N, pin, self.pitch)
+        for i, p in enumerate(self.pads, 1):
+            p.setname(str(i))
+
+
 class SOT23_LDO(sot.SOT23):
     source = {'LCSC': 'C176954'}
     mfr = "AP2127N-3.3TRG1"
@@ -245,30 +266,6 @@ class LDO_23_5(SOT23_5):
     def hex_escape(self):
         self.hex_hookup(('5V', 'GND', 'CE', '', 'VCC'))
 
-class SMT6(cu.Part):
-    family = "J"
-    source = {"LCSC": "C5142239"}
-    mfr = "X6511FRS-06-C85D30"
-    footprint = "SMD"
-    def place(self, dc):
-        self.chamfered(dc.copy().forward(-8), 13, 8, idoffset = (-0.5, -2))
-        dc.w(f"l 90 f {cu.inches(.25)} r 180")
-        self.train(dc, 6, lambda: self.rpad(dc, 1.2, 3), 2.54)
-
-    def hex_escape(self):
-        names = ('GND', 'RTS', 'VCC', 'TX', 'RX', 'DTR')[::-1]
-        for (p, nm) in zip(self.pads, names):
-            p.setname(nm)
-            p.copy().w("r 180 f 2.6").ctext(nm, scale = 1.1)
-            if nm == "GND":
-                p.copy().w("o f 1 / f 1").wire()
-            elif nm == "VCC":
-                p.w("o f 0.5").wire()
-            elif nm in ("TX", "RX", "RTS"):
-                wire_ongrid(p.w("i"))
-            else:
-                wire_ongrid(p.w("o"))
-
 class SMD_3225_4P(cu.Part):
     family = "Y"
     def place(self, dc):
@@ -307,7 +304,7 @@ def spiq_a():
     w = .4/3   # .127 is JLCPCB minimum
     w = 0.127
     brd = HexBoard(
-        (30, 30),
+        (61, 49),
         trace = w,
         space = .4 - w,
         via_hole = 0.3,
@@ -315,17 +312,25 @@ def spiq_a():
         via_space = cu.mil(5),
         silk = cu.mil(5))
 
-    brd.outline()
+    layout_offset = Hex(-12, 24)
+    layout_dx, layout_dy = layout_offset.to_plane()
+
+    def layout_xy(xy):
+        x, y = xy
+        return (x + layout_dx, y + layout_dy)
+
+    def layout_dc(xy):
+        return brd.DC(layout_xy(xy))
 
     if 0:
         for xy in ((2, 9), (30 - 2, 9)):
-            dc = brd.DC(xy)
+            dc = layout_dc(xy)
             dc.rect(1, 8)
             slot = dc.poly().buffer(0.5)
             brd.keepouts.append(slot.buffer(.2))
             brd.layers['GML'].route(slot)
 
-    origin =  Hex.from_xy(21, 20)
+    origin = Hex.from_xy(21, 20) + layout_offset
     xy = origin.to_plane()
     dc = brd.DC(xy)
 
@@ -345,12 +350,8 @@ def spiq_a():
             "USB_DP"    : "D+",
             "USB_DM"    : "D-",
             "XIN"       : "XIN",
-            "GPIO12"    : "DTR",
-            "GPIO9"     : "RX",
-            "GPIO8"     : "TX",
             "GPIO0"     : "PWM0",
             "GPIO1"     : "PWM1",
-            "GPIO13"    : "RTS",
         }
         for nm in nick:
             dc = u1.s(nm).copy()
@@ -358,37 +359,55 @@ def spiq_a():
             dc.text(nick[nm], scale = 0.2)
 
     if 1:
-        u2 = HexW25Q128(brd.DC(Hex.from_xy(9, 17.5).to_plane()).right(180))
+        h = Hex.from_xy(9, 17.5) + layout_offset
+        u2 = HexW25Q128(brd.DC(h.to_plane()).right(180))
         if DO_ROUTING:
             u2.hex_escape()
 
     if 1:
-        j1 = USBmicro(brd.DC((15, 28.5)).right(180))
+        j1 = USBmicro(layout_dc((15, 28.5)).right(180))
         if DO_ROUTING:
             j1.hex_escape()
         HAVEUSB = 1
     else:
-        j1 = USBC(brd.DC((14, 31.0)).right(180))
+        j1 = USBC(layout_dc((14, 31.0)).right(180))
         HAVEUSB = 0
 
-    if 0:
-        j2 = dip.SIL(brd.DC((1, 18)), "2")
-        j2.pads[0].setname("GND")
-        if DO_ROUTING:
-            j2.pads[0].w("/ f 1.2").wire()
-            wire_ongrid(j2.pads[1].w("f 1"))
+    j2 = PZ254RS(brd.DC((50.0, 38.65)), 6)
+    for p, nm in zip(j2.pads, ("GND", "GND", "VCC", "VCC", "5V", "5V")):
+        p.setname(nm)
+    label_x = j2.center.xy[0] + 7.1
+    pair_centers = []
+    for pair, label in zip((j2.pads[0:2], j2.pads[2:4], j2.pads[4:6]),
+                           ("GND", "3.3 V", "5V")):
+        y = sum(p.xy[1] for p in pair) / 2
+        pair_centers.append(y)
+        brd.DC((label_x, y)).ctext(label, scale = 1.32)
+    bar_ys = [pair_centers[0] + j2.pitch]
+    bar_ys += [(a + b) / 2 for a, b in zip(pair_centers, pair_centers[1:])]
+    bar_ys.append(pair_centers[-1] - j2.pitch)
+    bar_width = 0.4
+    bar_length = 6.3
+    half_line = (bar_length - bar_width) / 2
+    for y in bar_ys:
+        line = sg.LineString(((label_x - half_line, y),
+                              (label_x + half_line, y)))
+        brd.layers["GTO"].add(line.buffer(bar_width / 2))
 
-    # u3 = SOT23_LDO(brd.DC((7, 27.5)).right(180).left(90))
-    u3 = LDO_23_5(brd.DC((6.5, 27.5)).right(180))
+    j2_top = j2.center.xy[1] + j2.N * j2.pitch / 2
+    edge_clearance = brd.size[1] - j2_top
+    j3_pins = 8
+    j3_y = edge_clearance + j3_pins * j2.pitch / 2
+    j3 = PZ254RS(brd.DC((j2.center.xy[0], j3_y)), j3_pins)
+    j3_names = ["SCK", "MOSI", "MISO", "IO2", "IO3", "CS", "A", "B"]
+    for p, nm in zip(j3.pads, j3_names):
+        p.setname(nm)
+        brd.DC((label_x, p.xy[1])).ctext(nm, scale = 1.32)
+
+    # u3 = SOT23_LDO(layout_dc((7, 27.5)).right(180).left(90))
+    u3 = LDO_23_5(layout_dc((6.5, 27.5)).right(180))
     if DO_ROUTING:
         u3.hex_escape()
-
-    if 1:
-        # GND is on *right*, viewed from this side
-        x2 = SMT6(brd.DC((15, 10)))
-        if DO_ROUTING:
-            x2.hex_escape()
-        x2.inBOM = False
 
     def ucap(p, val = '100nF'):
         cn = cu.C0402_nolabel(p, val)
@@ -407,27 +426,27 @@ def spiq_a():
             wire_ongrid(cn.pads[1].w("o f .2"))
         return cn
     if 1:
-        cap(brd.DC((9, 14)))
-        cap(brd.DC((26.5, 25.6)).right(180))
-        cap(brd.DC((26.5, 24.1)).right(180))
-        cap(brd.DC((25, 11)).left(90))
-        cap(brd.DC((15, 16.5)).left(60))
+        cap(layout_dc((9, 14)))
+        cap(layout_dc((26.5, 25.6)).right(180))
+        cap(layout_dc((26.5, 24.1)).right(180))
+        cap(layout_dc((25, 11)).left(90))
+        cap(layout_dc((15, 16.5)).left(60))
 
-        cap(brd.DC((6, 24.5)).left(0), '1uF')
-        cn = hcap(brd.DC((6, 23.0)), '1uF')
+        cap(layout_dc((6, 24.5)).left(0), '1uF')
+        cn = hcap(layout_dc((6, 23.0)), '1uF')
 
-        ci0 = hcap(brd.DC((22, 28)).left(180), '1uF')
-        ci = hcap(brd.DC((22, 26.5)).left(180), '1uF')
+        ci0 = hcap(layout_dc((22, 28)).left(180), '1uF')
+        ci = hcap(layout_dc((22, 26.5)).left(180), '1uF')
         if DO_ROUTING:
             u1.s("VREG_VOUT").hex("r 5 f").wire()
 
     if 1:
-        y1 = Osc_12MHz(brd.DC((27.5, 12)).right(180))
+        y1 = Osc_12MHz(layout_dc((27.5, 12)).right(180))
         if DO_ROUTING:
             y1.escape()
 
     if 1:
-        h = Hex.from_xy(12, 23.5)
+        h = Hex.from_xy(12, 23.5) + layout_offset
         r3 = cu.R0402(brd.DC(h.to_plane()), "270")
         h += Hex(0, -3)
         r4 = cu.R0402(brd.DC(h.to_plane()), "270")
@@ -439,15 +458,6 @@ def spiq_a():
         # Move these for VCC fill clearance
         u1.s("USB_DM").hex("6f").wire()
         u1.s("USB_DP").hex("7f").wire()
-
-        def note(p, nm):
-            return
-            dc = p.copy()
-            dc.dir = 0
-            dc.text(nm, scale = 0.2)
-
-        u1.s("GPIO8").hex("3f / f").wire()
-        x2.s("TX").hex("3f r f l 4f / f").wire()
 
         t0 = time.monotonic()
         brd.hex_setup()
@@ -468,9 +478,6 @@ def spiq_a():
             brd.hex_route(u2.s("IO0"), u1.s("QSPI_SD0"))
             brd.hex_route(u2.s("CLK"), u1.s("QSPI_SCLK"))
             brd.hex_route(u2.s("IO3"), u1.s("QSPI_SD3"))
-        if 0:
-            brd.hex_route(j2.pads[1], u2.s("CS"))
-
         if HAVEUSB:
             brd.hex_route(j1.s("D-"), r3.pads[0])
             brd.hex_route(j1.s("D+"), r4.pads[0])
@@ -478,18 +485,7 @@ def spiq_a():
             brd.hex_route(u1.s("USB_DM"), r3.pads[1])
         brd.hex_route(u1.s("USB_DP"), r4.pads[1])
 
-        note(u1.s("GPIO8"), "TX")
-
-        if 1:
-            brd.hex_route(u1.s("GPIO8"), x2.s("TX"))
-            brd.hex_route(u1.s("GPIO9"), x2.s("RX"))
-            brd.hex_route(u1.s("GPIO13"), x2.s("RTS"))
-            brd.hex_route(u1.s("GPIO12"), x2.s("DTR"))
-
         brd.hex_route(u1.s("XIN"), y1.s("CLK"))
-
-        # Hack, rescue a ground island
-        x2.s("GND").w("l 180 f 0.5 r 90 f 1.2 / f 1").wire()
 
         t2 = time.monotonic()
         print(f"Hex setup:   {t1-t0:.3f} s")
@@ -498,13 +494,15 @@ def spiq_a():
         brd.hex_render()
         brd.wire_routes()
 
+    brd.outline()
+
     if DO_ROUTING:
         brd.fill_any("GTL", "VCC")
         brd.fill_any("GBL", "GND")
 
     if 0:
-        brd.DC((25.5, 6.4)).ctext("(C) EXCAMERA", scale = 1.1)
-        brd.DC((25.5, 5.0)).ctext("LABS 2025", scale = 1.1)
+        layout_dc((25.5, 6.4)).ctext("(C) EXCAMERA", scale = 1.1)
+        layout_dc((25.5, 5.0)).ctext("LABS 2025", scale = 1.1)
 
     # hexgrid(brd, origin)
 
