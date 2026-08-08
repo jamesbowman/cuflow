@@ -822,8 +822,8 @@ def Module_spiq_pwr(pb):
 
 def Module_spiq_ios(pb):
     # 1 SCK
-    # 2 MISO
-    # 3 MOSI
+    # 2 MOSI
+    # 3 MISO
     # 4 IO2
     # 5 IO3
     # 6 CS
@@ -835,13 +835,13 @@ def Module_spiq_ios(pb):
     p = brd.DC((pb.upper_edge + width / 2, 96))
     pb.upper_edge += width
     conn = dip.SIL_o(p.copy().left(90), "8")
-    names = ["SCK", "MISO", "MOSI", "IO2", "IO3", "CS", "A", "B"]
+    names = ["SCK", "MOSI", "MISO", "IO2", "IO3", "CS", "A", "B"]
     [c.setname(nm) for (c, nm) in zip(conn.pads, names)]
     addlabels(conn)
     return (
             ("GP2",   conn.s("SCK")),
-            ("GP4",   conn.s("MISO")),
             ("GP3",   conn.s("MOSI")),
+            ("GP4",   conn.s("MISO")),
             ("GP5",   conn.s("IO2")),
             ("GP6",   conn.s("IO3")),
             ("GP7",   conn.s("CS")),
