@@ -860,6 +860,7 @@ class Board:
         ]
         self.layers = {id : Layer(desc) for (id, desc) in layers}
         self.layers['GML'] = OutlineLayer('Mechanical')
+        self.layers['AIR'] = OutlineLayer('Airwires')
         self.layer_extensions = {
             'GL2': 'G2L',
             'GL3': 'G3L',

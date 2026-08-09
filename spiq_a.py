@@ -2,6 +2,7 @@ import sys
 import json
 import math
 import time
+from pathlib import Path
 
 import shapely.geometry as sg
 
@@ -27,21 +28,21 @@ used_pins = [
 
 "GPIO0",
 "GPIO1",
-# "GPIO2",
-# "GPIO3",
-# "GPIO4",
-# "GPIO5",
-# "GPIO6",
-# "GPIO7",
+"GPIO2",
+"GPIO3",
+"GPIO4",
+"GPIO5",
+"GPIO6",
+"GPIO7",
 # "VCC",
-# "GPIO8",
-# "GPIO9",
-# "GPIO10",
-# "GPIO11",
+"GPIO8",
+"GPIO9",
+"GPIO10",
+"GPIO11",
 # "GPIO12",
 # "GPIO13",
-# "GPIO14",
-# "GPIO15",
+"GPIO14",
+"GPIO15",
 # "TESTEN",
 "XIN",
 # "XOUT",
@@ -52,9 +53,9 @@ used_pins = [
 # "GPIO17",
 # "GPIO18",
 # "GPIO19",
-# "GPIO20",
+"GPIO20",
 # "VCC",
-# "GPIO21",
+"GPIO21",
 # "GPIO22",
 # "GPIO23",
 # "GPIO24",
@@ -85,14 +86,23 @@ class HexRP2040(RP2040):
 
         banks = self.escape(used_pins)
 
-        river_ongrid(cu.River(brd, banks[0][0:2]).w("f .5"))
-        river_ongrid(cu.River(brd, banks[0][-4:-2]).w("f 0.8 r 60"))
-        river_ongrid(cu.River(brd, banks[0][-2:]).w(""))
-        river_ongrid(cu.River(brd, banks[1][:4 ]).right(30))
-        river_ongrid(cu.River(brd, banks[1][5:7]).w("f 0.52 l 30")).hex("").wire()
-        river_ongrid(cu.River(brd, banks[3][:1]).w("f 0.5 r 30"))
-        river_ongrid(cu.River(brd, banks[3][1:3]).w("f 0.4 l 30"))
-        river_ongrid(cu.River(brd, banks[3][-6:]).left(30))
+        by_name = {pad.name: pad for bank in banks for pad in bank}
+
+        def river(names):
+            return cu.River(brd, [by_name[name] for name in names])
+
+        river_ongrid(river(("GPIO0", "GPIO1")).w("f .5"))
+        river_ongrid(river(tuple(f"GPIO{i}" for i in range(2, 10)))
+                     .w("f 0.8 r 60"))
+        river_ongrid(river(("GPIO10", "GPIO11")))
+        river_ongrid(river(("GPIO14", "GPIO15")).right(30))
+        river_ongrid(river(("SWCLK", "SWD")).w("f 0.52 l 30")).wire()
+        river_ongrid(river(("GPIO20", "GPIO21")))
+        river_ongrid(river(("VREG_VOUT",)).w("f 0.5 r 30"))
+        river_ongrid(river(("USB_DM", "USB_DP")).w("f 0.4 l 30"))
+        river_ongrid(river((
+            "QSPI_SD3", "QSPI_SCLK", "QSPI_SD0",
+            "QSPI_SD2", "QSPI_SD1", "QSPI_SS_N")).left(30))
         for nm in ("XIN", ):
             wire_ongrid(self.s(nm))
         self.pads[0].w("/").thermal(1).wire()
@@ -348,17 +358,7 @@ class INA226(VSSOP10):
             pad.setname(name)
 
     def hex_escape(self):
-        shunt = self.shunt
-        self.s("A0").goto(self.s("A1")).wire()
-        self.s("A1").setname("GND").w("o f 1 /").wire()
-        self.s("GND").w("i f 1 /").wire()
-        self.s("VCC").w("o f 0.5").wire()
-        self.s("VBUS").goto(self.s("IN-")).wire()
-        self.s("IN+").goto(shunt.s("5V")).wire()
-        self.s("IN-").goto(shunt.s("VBUS"), twist=True).wire()
-        for resistor, signal in zip(self.i2c_pullups, ("SDA", "SCL")):
-            resistor.s(signal).goto(self.s(signal)).wire()
-            resistor.s("VCC").goto(self.s("VCC")).wire()
+        pass
 
 
 class R1206(cu.Part):
@@ -454,8 +454,6 @@ def spiq_a():
 
     if 1:
         u1 = HexRP2040(dc.left(60))
-        if DO_ROUTING:
-            u1.hex_escape()
 
     if 0:
         nick = {
@@ -479,8 +477,6 @@ def spiq_a():
     if 1:
         h = Hex.from_xy(9, 17.5) + layout_offset
         u2 = HexW25Q128(brd.DC(h.to_plane()).right(180))
-        if DO_ROUTING:
-            u2.hex_escape()
 
     # Match the legacy SPIDriver's 6.25 mm top-edge offset.
     j1 = USBC(brd.DC((0, brd.size[1] - 6.25)).right(90))
@@ -521,8 +517,6 @@ def spiq_a():
     serial_debug = Module_Serial_Debug(
         brd.DC((brd.size[0] / 2, brd.size[1] / 2))
         .setlayer("GBL").right(90), 6)
-    if DO_ROUTING:
-        serial_debug.hex_escape()
 
     j2_bottom = j2.center.xy[1] - j2.N * j2.pitch / 2
     j3_top = j3.center.xy[1] + j3.N * j3.pitch / 2
@@ -543,12 +537,6 @@ def spiq_a():
         resistor.pads[0].setname("VCC")
         resistor.pads[1].setname(signal)
         i2c_pullups.append(resistor)
-
-    ina226.shunt = shunt
-    ina226.i2c_pullups = i2c_pullups
-    if DO_ROUTING:
-        ldo_ap2127.hex_escape()
-        ina226.hex_escape()
 
     def ucap(p, val = '100nF'):
         cn = cu.C0402_nolabel(p, val)
@@ -587,8 +575,6 @@ def spiq_a():
 
     if 1:
         y1 = Osc_12MHz(layout_dc((27.5, 12)).right(180))
-        if DO_ROUTING:
-            y1.hex_escape()
 
     if 1:
         h = Hex.from_xy(12, 23.5) + layout_offset
@@ -598,6 +584,10 @@ def spiq_a():
         if DO_ROUTING:
             for p in r3.pads + r4.pads:
                 wire_ongrid(p.w("o f 0"))
+
+    for parts in brd.parts.values():
+        for part in parts:
+            part.hex_escape()
 
     if DO_ROUTING:
         # Move these for VCC fill clearance
@@ -642,6 +632,53 @@ def spiq_a():
 
         brd.hex_render()
         brd.wire_routes()
+
+    pinout_modules = {
+        "Module_LCD240x240": lcd,
+        "Module_spiq_pwr": ina226,
+        "Module_spiq_ios": j3,
+    }
+
+    def add_airwire(source, target):
+        brd.layers["AIR"].add(sg.LineString((source.xy, target.xy)))
+
+    pinout_path = Path(__file__).with_name("spiq_a.pinout")
+    for line in pinout_path.read_text().splitlines():
+        source_name, target_name = line.split()
+        module_name, target_pin = target_name.rsplit(".", 1)
+        if target_pin == "None":
+            continue
+        source_pin = "GPIO" + source_name.removeprefix("GP")
+        source = u1.s(source_pin)
+        target = pinout_modules[module_name].s(target_pin)
+        add_airwire(source, target)
+
+    qspi_airwires = (
+        ("QSPI_SS_N", "CS"),
+        ("QSPI_SD1", "IO1"),
+        ("QSPI_SD2", "IO2"),
+        ("QSPI_SD0", "IO0"),
+        ("QSPI_SCLK", "CLK"),
+        ("QSPI_SD3", "IO3"),
+    )
+    for rp2040_pin, flash_pin in qspi_airwires:
+        add_airwire(u1.s(rp2040_pin), u2.s(flash_pin))
+    add_airwire(u1.s("XIN"), y1.s("CLK"))
+
+    sda_pullup, scl_pullup = i2c_pullups
+    current_measurement_airwires = (
+        (ina226.s("A0"), ina226.s("A1")),
+        (ina226.s("A1"), ina226.s("GND")),
+        (ina226.s("VBUS"), ina226.s("IN-")),
+        (ina226.s("IN+"), shunt.s("5V")),
+        (ina226.s("IN-"), shunt.s("VBUS")),
+        (ina226.s("SDA"), sda_pullup.s("SDA")),
+        (ina226.s("SCL"), scl_pullup.s("SCL")),
+        (ina226.s("VCC"), sda_pullup.s("VCC")),
+        (sda_pullup.s("VCC"), scl_pullup.s("VCC")),
+    )
+    for source, target in current_measurement_airwires:
+        add_airwire(source, target)
 
     brd.outline()
     brd.fill()
