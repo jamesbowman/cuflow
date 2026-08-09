@@ -239,6 +239,48 @@ class LDO_1117_3V3(cu.SOT223):
         for p, nm in zip(self.pads, ("VCC", "GND", "VCC", "5V")):
             p.setname(nm)
 
+
+class SOT23_5(cu.Part):
+    family = "U"
+    footprint = "SOT-23-5"
+
+    def pnp_jlc(self):
+        return self.center.copy().right(90)
+
+    def place(self, dc):
+        self.chamfered(dc, 1.5, 2.9)
+
+        dc.push()
+        dc.goxy(-2.62 / 2, 0.95).right(180)
+        self.train(dc, 3, lambda: self.rpad(dc, 0.62, 1.22), 0.95)
+        dc.pop()
+
+        dc.push()
+        dc.goxy(2.62 / 2, -0.95)
+        self.train(dc, 2, lambda: self.rpad(dc, 0.62, 1.22), 2 * 0.95)
+        dc.pop()
+
+
+class LDO_23_5(SOT23_5):
+    source = {'LCSC': 'C81233'}
+    mfr = "AP2127N-3.3TRG1"
+
+    def hex_hookup(self, names):
+        for p, nm in zip(self.pads, names):
+            p.setname(nm)
+            if nm == "GND":
+                p.w("i f 0.7 /").thermal(1)
+            elif nm == "VCC":
+                p.thermal(1)
+            p.wire()
+        self.s("5V").w("o f 0.1")
+        self.s("CE").w("o f .4").goto(self.s("5V")).wire()
+        wire_ongrid(self.s("5V"))
+
+    def hex_escape(self):
+        self.hex_hookup(("5V", "GND", "CE", "", "VCC"))
+
+
 class SMD_3225_4P(cu.Part):
     family = "Y"
     def place(self, dc):
@@ -377,7 +419,11 @@ def spiq_a():
     j2_bottom = j2.center.xy[1] - j2.N * j2.pitch / 2
     j3_top = j3.center.xy[1] + j3.N * j3.pitch / 2
     ldo_y = (j2_bottom + j3_top) / 2
-    u3 = LDO_1117_3V3(brd.DC((j2.center.xy[0] + 4, ldo_y)).right(90))
+    ldo_1117 = LDO_1117_3V3(
+        brd.DC((j2.center.xy[0] + 4, ldo_y)).right(90))
+    ldo_ap2127 = LDO_23_5(layout_dc((6.5, 27.5)).right(180))
+    if DO_ROUTING:
+        ldo_ap2127.hex_escape()
 
     def ucap(p, val = '100nF'):
         cn = cu.C0402_nolabel(p, val)
