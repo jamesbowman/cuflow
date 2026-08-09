@@ -1918,8 +1918,9 @@ class HDMI(Part):
 class SOT223(Part):
     family = "U"
     footprint = "SOT223"
+    drawid = True
     def place(self, dc):
-        self.chamfered(dc, 6.30, 3.30)
+        self.chamfered(dc, 6.30, 3.30, drawid = self.drawid)
         dc.push()
         dc.forward(6.2 / 2)
         dc.rect(3.6, 2.2)

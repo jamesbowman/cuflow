@@ -7,7 +7,6 @@ import shapely.geometry as sg
 
 import cuflow as cu
 import svgout
-import sot
 import eagle
 from dazzler import Dazzler
 from collections import defaultdict
@@ -203,68 +202,42 @@ class PZ254RS(cu.Part):
             p.setname(str(i))
 
 
-class SOT23_LDO(sot.SOT23):
-    source = {'LCSC': 'C176954'}
-    mfr = "AP2127N-3.3TRG1"
-    footprint = "SOT-23"
+class Module_LCD240x240(cu.Part):
     family = "U"
-
-    def pnp_jlc(self):
-        return self.center.copy().right(90)
-
-    def hex_hookup(self, names):
-        for (p,nm) in zip(self.pads, names):
-            p.setname(nm) 
-            if nm == "GND":
-                p.w("i f 0.7 / f 1")
-            elif nm == "VCC":
-                p.w("o f 0.7")
-            else:
-                wire_ongrid(p.w("o f 1"))
-            p.wire()
-
-    def hex_escape(self):
-        self.hex_hookup(('GND', 'VCC', '5V'))
-
-class SOT23_5(cu.Part):
-    family = "U"
-    footprint = "SOT-23-5"
-
-    def pnp_jlc(self):
-        return self.center.copy().right(90)
+    mfr = "LH133T-IG01"
+    footprint = "LCD240x240"
+    width = 30
+    height = 37.4
+    connector_y = -7.8
 
     def place(self, dc):
-        self.chamfered(dc, 1.5, 2.9)
+        dc.copy().rect(self.width, self.height).silko()
+        for x in (-self.width / 2, self.width / 2):
+            for y in (-self.height / 2, self.height / 2):
+                dc.copy().goxy(x, y).hole(2.5)
 
-        dc.push()
-        dc.goxy(-2.62 / 2, 0.95).right(180)
-        self.train(dc, 3, lambda: self.rpad(dc, 0.62, 1.22), 0.95)
-        dc.pop()
+        pins = dc.copy().goxy(7.7 / 2, self.connector_y).left(90)
+        self.train(pins, 12, lambda: self.rpad(pins, 0.35, 2), 0.7)
+        names = "GND GND LEDA VCC GND GND D/C GND SCL SDA RESET GND".split()
+        for p, nm in zip(self.pads, names):
+            p.setname(nm)
 
-        dc.push()
-        dc.goxy(2.62 / 2, -0.95)
-        self.train(dc, 2, lambda: self.rpad(dc, 0.62, 1.22), 2 * 0.95)
-        dc.pop()
+        bar = dc.copy().goxy(-6, self.connector_y)
+        bar.newpath()
+        bar.right(90).forward(12).silk()
+        self.pads[11].copy().w("f 2").text("12")
+        self.pads[0].copy().w("f 2").text("1")
 
-class LDO_23_5(SOT23_5):
-    source = {'LCSC': 'C81233'}
-    mfr = "AP2127N-3.3TRG1"
 
-    def hex_hookup(self, names):
-        for (p,nm) in zip(self.pads, names):
-            p.setname(nm) 
-            if nm == "GND":
-                p.w("i f 0.7 /").thermal(1)
-            elif nm == "VCC":
-                # p.w("o f 0.7")
-                p.thermal(1)
-            p.wire()
-        self.s("5V").w("o f 0.1")
-        self.s("CE").w("o f .4").goto(self.s("5V")).wire()
-        wire_ongrid(self.s("5V"))
+class LDO_1117_3V3(cu.SOT223):
+    source = {'LCSC': 'C26537'}
+    mfr = "ZLDO1117QG33TA"
+    drawid = False
 
-    def hex_escape(self):
-        self.hex_hookup(('5V', 'GND', 'CE', '', 'VCC'))
+    def place(self, dc):
+        super().place(dc)
+        for p, nm in zip(self.pads, ("VCC", "GND", "VCC", "5V")):
+            p.setname(nm)
 
 class SMD_3225_4P(cu.Part):
     family = "Y"
@@ -399,10 +372,12 @@ def spiq_a():
         p.setname(nm)
         brd.DC((label_x, p.xy[1])).ctext(nm, scale = 1.32)
 
-    # u3 = SOT23_LDO(layout_dc((7, 27.5)).right(180).left(90))
-    u3 = LDO_23_5(layout_dc((6.5, 27.5)).right(180))
-    if DO_ROUTING:
-        u3.hex_escape()
+    lcd = Module_LCD240x240(brd.DC((brd.size[0] / 2, brd.size[1] / 2)))
+
+    j2_bottom = j2.center.xy[1] - j2.N * j2.pitch / 2
+    j3_top = j3.center.xy[1] + j3.N * j3.pitch / 2
+    ldo_y = (j2_bottom + j3_top) / 2
+    u3 = LDO_1117_3V3(brd.DC((j2.center.xy[0] + 4, ldo_y)).right(90))
 
     def ucap(p, val = '100nF'):
         cn = cu.C0402_nolabel(p, val)
@@ -421,17 +396,21 @@ def spiq_a():
             wire_ongrid(cn.pads[1].w("o f .2"))
         return cn
     if 1:
-        cap(layout_dc((9, 14)))
-        cap(layout_dc((26.5, 25.6)).right(180))
-        cap(layout_dc((26.5, 24.1)).right(180))
-        cap(layout_dc((25, 11)).left(90))
-        cap(layout_dc((15, 16.5)).left(60))
+        cap_xs = iter(range(4, 40, 4))
+        def south_cap():
+            return brd.DC((next(cap_xs), 2.0))
 
-        cap(layout_dc((6, 24.5)).left(0), '1uF')
-        cn = hcap(layout_dc((6, 23.0)), '1uF')
+        cap(south_cap())
+        cap(south_cap())
+        cap(south_cap())
+        cap(south_cap())
+        cap(south_cap())
 
-        ci0 = hcap(layout_dc((22, 28)).left(180), '1uF')
-        ci = hcap(layout_dc((22, 26.5)).left(180), '1uF')
+        cap(south_cap(), '1uF')
+        cn = hcap(south_cap(), '1uF')
+
+        ci0 = hcap(south_cap(), '1uF')
+        ci = hcap(south_cap(), '1uF')
         if DO_ROUTING:
             u1.s("VREG_VOUT").hex("r 5 f").wire()
 
