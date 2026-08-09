@@ -903,7 +903,7 @@ def Module_LCD240x240(pb):
     p = brd.DC((pb.upper_edge + width / 2, 54.5))
     pb.upper_edge -= 10
 
-    p.copy().mark()
+    # p.copy().mark()
 
     h = 37.4
     dc = p.copy()
