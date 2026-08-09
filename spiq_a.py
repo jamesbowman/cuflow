@@ -638,9 +638,19 @@ def spiq_a():
         "Module_spiq_pwr": ina226,
         "Module_spiq_ios": j3,
     }
+    airwire_rows = []
+    total_airwire_distance = 0.0
 
     def add_airwire(source, target):
+        nonlocal total_airwire_distance
+        distance = source.distance(target)
         brd.layers["AIR"].add(sg.LineString((source.xy, target.xy)))
+        airwire_rows.append((
+            f"{source.part}.{source.name}",
+            f"{target.part}.{target.name}",
+            f"{distance:.3f}",
+        ))
+        total_airwire_distance += distance
 
     pinout_path = Path(__file__).with_name("spiq_a.pinout")
     for line in pinout_path.read_text().splitlines():
@@ -679,6 +689,27 @@ def spiq_a():
     )
     for source, target in current_measurement_airwires:
         add_airwire(source, target)
+
+    airwire_headers = ("src", "dest", "distance (mm)")
+    airwire_widths = [
+        max(len(header), *(len(row[column]) for row in airwire_rows))
+        for column, header in enumerate(airwire_headers)
+    ]
+    print("  ".join(
+        header.ljust(airwire_widths[column])
+        for column, header in enumerate(airwire_headers)))
+    print("  ".join("-" * width for width in airwire_widths))
+    for row in airwire_rows:
+        print("  ".join(
+            value.rjust(airwire_widths[column]) if column == 2 else
+            value.ljust(airwire_widths[column])
+            for column, value in enumerate(row)))
+    print("  ".join("-" * width for width in airwire_widths))
+    total_row = ("total", "", f"{total_airwire_distance:.3f}")
+    print("  ".join(
+        value.rjust(airwire_widths[column]) if column == 2 else
+        value.ljust(airwire_widths[column])
+        for column, value in enumerate(total_row)))
 
     brd.outline()
     brd.fill()

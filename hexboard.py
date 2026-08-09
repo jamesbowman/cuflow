@@ -176,7 +176,6 @@ def best_forward(p):
     return hh.best_forward(p)
 
 def river_ongrid(rr):
-    print(f"{rr=}")
     assert rr.tt[0].dir in (30, 90, 150, 210, 270, 330)
     p = rr.tt[0]
     (dx, dy) = best_forward(p)
@@ -198,4 +197,3 @@ def wire_ongrid(p):
         p.goyx(dx, dy).wire()
     p.dir = 30 + 60 * round((p.dir - 30) / 60)
     return p
-
