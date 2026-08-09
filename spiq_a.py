@@ -19,10 +19,11 @@ from hexboard import HexBoard, river_ongrid, wire_ongrid
 DO_ROUTING = 0
 
 used_pins = [
-# "SWCLK",    # Module_Serial_Debug.SWCLK
+# Module_Serial_Debug
+"SWCLK",
 # "GPIO1",    # Module_Serial_Debug.RX
 # "GPIO0",    # Module_Serial_Debug.TX
-# "SWD",      # Module_Serial_Debug.SWDIO
+"SWD",
 
 "GPIO0",
 "GPIO1",
@@ -202,6 +203,26 @@ class PZ254RS(cu.Part):
             p.setname(str(i))
 
 
+class Module_Serial_Debug(PZ254RS):
+    def place(self, dc):
+        super().place(dc)
+        names = ("GND", "SWDIO", "VCC", "TX", "RX", "SWCLK")
+        for pad, name in zip(self.pads, names):
+            pad.setname(name)
+            pad.copy().forward(4.5).ctext(
+                name, scale=0.8, angle=90)
+
+    def hex_escape(self):
+        for pad in self.pads:
+            route = pad.copy().right(180)
+            if pad.name == "GND":
+                route.w("o f 0.5 -")
+            elif pad.name == "VCC":
+                route.w("o f 0.5 +")
+            else:
+                wire_ongrid(route.w("o f 0.2"))
+
+
 class Module_LCD240x240(cu.Part):
     family = "U"
     mfr = "LH133T-IG01"
@@ -228,6 +249,17 @@ class Module_LCD240x240(cu.Part):
         self.pads[11].copy().w("f 2").text("12")
         self.pads[0].copy().w("f 2").text("1")
 
+    def hex_escape(self):
+        for pad in self.pads:
+            if pad.name == "GND":
+                pad.w("o f 0.5").wire()
+            elif pad.name == "VCC":
+                pad.w("o f 5 / f 1").wire()
+            elif pad.name == "RESET":
+                wire_ongrid(pad.w("o f 0.2"))
+            else:
+                wire_ongrid(pad.w("i f 0.2"))
+
 
 class LDO_1117_3V3(cu.SOT223):
     source = {'LCSC': 'C26537'}
@@ -238,6 +270,9 @@ class LDO_1117_3V3(cu.SOT223):
         super().place(dc)
         for p, nm in zip(self.pads, ("VCC", "GND", "VCC", "5V")):
             p.setname(nm)
+
+    def hex_escape(self):
+        return self.escape()
 
 
 class SOT23_5(cu.Part):
@@ -281,6 +316,74 @@ class LDO_23_5(SOT23_5):
         self.hex_hookup(("5V", "GND", "CE", "", "VCC"))
 
 
+class VSSOP10(cu.Part):
+    family = "U"
+    footprint = "VSSOP-10"
+    N = 10
+
+    def place(self, dc):
+        self.chamfered(dc, 3, 3)
+        pins_per_side = self.N // 2
+        pitch = 0.5
+        for _ in range(2):
+            dc.push()
+            dc.forward(pitch * (pins_per_side - 1) / 2)
+            dc.left(90)
+            dc.forward(4.4 / 2)
+            dc.left(90)
+            self.train(
+                dc, pins_per_side,
+                lambda: self.rpad(dc, 0.3, 1.45), pitch)
+            dc.pop()
+            dc.right(180)
+
+
+class INA226(VSSOP10):
+    mfr = "INA226AIDGSR"
+
+    def place(self, dc):
+        super().place(dc)
+        names = "A1 A0 Alert SDA SCL VCC GND VBUS IN- IN+".split()
+        for pad, name in zip(self.pads, names):
+            pad.setname(name)
+
+    def hex_escape(self):
+        shunt = self.shunt
+        self.s("A0").goto(self.s("A1")).wire()
+        self.s("A1").setname("GND").w("o f 1 /").wire()
+        self.s("GND").w("i f 1 /").wire()
+        self.s("VCC").w("o f 0.5").wire()
+        self.s("VBUS").goto(self.s("IN-")).wire()
+        self.s("IN+").goto(shunt.s("5V")).wire()
+        self.s("IN-").goto(shunt.s("VBUS"), twist=True).wire()
+        for resistor, signal in zip(self.i2c_pullups, ("SDA", "SCL")):
+            resistor.s(signal).goto(self.s(signal)).wire()
+            resistor.s("VCC").goto(self.s("VCC")).wire()
+
+
+class R1206(cu.Part):
+    family = "R"
+    footprint = "1206"
+    source = {"LCSC": "C22464903"}
+
+    def place(self, dc):
+        for direction in (-90, 90):
+            dc.push()
+            dc.right(direction)
+            dc.forward(3.2 / 2)
+            dc.rect(1.6, 1)
+            self.pad(dc)
+            dc.pop()
+
+        dc.rect(3.2, 1.6)
+        dc.silko()
+        dc.push()
+        dc.right(90)
+        dc.forward(2.65)
+        self.label(dc)
+        dc.pop()
+
+
 class SMD_3225_4P(cu.Part):
     family = "Y"
     def place(self, dc):
@@ -302,7 +405,7 @@ class Osc_12MHz(SMD_3225_4P):
     def pnp_jlc(self):
         return self.center.copy().right(90)
 
-    def escape(self):
+    def hex_escape(self):
         self.s("GND").w("l 90 f 1.5 / f 1").wire()
         self.s("VDD").setname("VCC")
         self.s("VCC").w("o f 0.5").wire()
@@ -415,6 +518,11 @@ def spiq_a():
         brd.DC((label_x, p.xy[1])).ctext(nm, scale = 1.32)
 
     lcd = Module_LCD240x240(brd.DC((brd.size[0] / 2, brd.size[1] / 2)))
+    serial_debug = Module_Serial_Debug(
+        brd.DC((brd.size[0] / 2, brd.size[1] / 2))
+        .setlayer("GBL").right(90), 6)
+    if DO_ROUTING:
+        serial_debug.hex_escape()
 
     j2_bottom = j2.center.xy[1] - j2.N * j2.pitch / 2
     j3_top = j3.center.xy[1] + j3.N * j3.pitch / 2
@@ -422,8 +530,25 @@ def spiq_a():
     ldo_1117 = LDO_1117_3V3(
         brd.DC((j2.center.xy[0] + 4, ldo_y)).right(90))
     ldo_ap2127 = LDO_23_5(layout_dc((6.5, 27.5)).right(180))
+
+    ina226 = INA226(brd.DC((29.5, 46.0)))
+
+    shunt = R1206(brd.DC((40.5, 46.0)))
+    shunt.pads[0].setname("5V")
+    shunt.pads[1].setname("VBUS")
+
+    i2c_pullups = []
+    for x, signal in ((16.8, "SDA"), (21.0, "SCL")):
+        resistor = cu.R0402(brd.DC((x, 46.0)), "4K7")
+        resistor.pads[0].setname("VCC")
+        resistor.pads[1].setname(signal)
+        i2c_pullups.append(resistor)
+
+    ina226.shunt = shunt
+    ina226.i2c_pullups = i2c_pullups
     if DO_ROUTING:
         ldo_ap2127.hex_escape()
+        ina226.hex_escape()
 
     def ucap(p, val = '100nF'):
         cn = cu.C0402_nolabel(p, val)
@@ -463,7 +588,7 @@ def spiq_a():
     if 1:
         y1 = Osc_12MHz(layout_dc((27.5, 12)).right(180))
         if DO_ROUTING:
-            y1.escape()
+            y1.hex_escape()
 
     if 1:
         h = Hex.from_xy(12, 23.5) + layout_offset
@@ -498,6 +623,10 @@ def spiq_a():
             brd.hex_route(u2.s("IO0"), u1.s("QSPI_SD0"))
             brd.hex_route(u2.s("CLK"), u1.s("QSPI_SCLK"))
             brd.hex_route(u2.s("IO3"), u1.s("QSPI_SD3"))
+        brd.hex_route(serial_debug.s("SWCLK"), u1.s("SWCLK"))
+        brd.hex_route(serial_debug.s("RX"), u1.s("GPIO1"))
+        brd.hex_route(serial_debug.s("TX"), u1.s("GPIO0"))
+        brd.hex_route(serial_debug.s("SWDIO"), u1.s("SWD"))
         if HAVEUSB:
             brd.hex_route(j1.s("D-"), r3.pads[0])
             brd.hex_route(j1.s("D+"), r4.pads[0])
@@ -526,6 +655,15 @@ def spiq_a():
         layout_dc((25.5, 5.0)).ctext("LABS 2025", scale = 1.1)
 
     # hexgrid(brd, origin)
+
+    missing_hex_escape = [
+        part.id
+        for parts in brd.parts.values()
+        for part in parts
+        if not callable(getattr(part, "hex_escape", None))
+    ]
+    assert not missing_hex_escape, (
+        "Parts missing hex_escape(): " + ", ".join(missing_hex_escape))
 
     brd.save("spiq_a")
     print("Saved")

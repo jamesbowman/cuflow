@@ -460,12 +460,14 @@ class Draw(Turtle):
 
     def silk(self):
         g = sg.LineString(self.path).buffer(self.board.silk / 2)
-        self.board.layers['GTO'].add(g)
+        layer = {'GTL': 'GTO', 'GBL': 'GBO'}[self.layer]
+        self.board.layers[layer].add(g)
         return self
 
     def silko(self):
         g = sg.LinearRing(self.path).buffer(self.board.silk / 2)
-        self.board.layers['GTO'].add(g)
+        layer = {'GTL': 'GTO', 'GBL': 'GBO'}[self.layer]
+        self.board.layers[layer].add(g)
 
     def outline(self):
         g = sg.LinearRing(self.path)
@@ -540,7 +542,10 @@ class Draw(Turtle):
         (x, y) = self.xy
         if angle:
             geometry = sa.rotate(geometry, angle, origin = (x, y))
-        self.board.layers['GTO'].add(geometry)
+        if self.layer == 'GBL':
+            geometry = sa.scale(geometry, xfact = -1, origin = (x, y))
+        layer = {'GTL': 'GTO', 'GBL': 'GBO'}[self.layer]
+        self.board.layers[layer].add(geometry)
         return self
 
     def text(self, s, scale = 1.0, angle = 0):
@@ -553,7 +558,7 @@ class Draw(Turtle):
 
     def ltext(self, s):
         (x, y) = self.xy
-        self.board.layers['GTO'].add(hershey.ltext(x, y, s))
+        return self._place_text(hershey.ltext(x, y, s), 0)
 
     def rtext(self, s, scale = 1.0, angle = 0):
         (x, y) = self.xy
@@ -992,7 +997,8 @@ class Board:
                         c = p.center
                         (x, y) = c.xy
                         note = p.footprint + "-" + p.mfr + p.val
-                        cs.writerow([p.id, flt(x), flt(y), str(int(c.dir)), "Top", note])
+                        side = "Bottom" if c.layer == "GBL" else "Top"
+                        cs.writerow([p.id, flt(x), flt(y), str(int(c.dir)), side, note])
         with open(fn + "-jlcpcb-pnp.csv", "wt") as f:
             cs = csv.writer(f)
             cs.writerow(["Designator", "Mid X", "Mid Y","Layer","Rotation"])
@@ -1003,7 +1009,8 @@ class Board:
                         c = p.pnp_jlc()
                         (x, y) = c.xy
                         angle = int(360 - c.dir) % 360
-                        cs.writerow([p.id, flt(x) + "mm", flt(y) + "mm", "Top", str(angle)])
+                        side = "Bottom" if c.layer == "GBL" else "Top"
+                        cs.writerow([p.id, flt(x) + "mm", flt(y) + "mm", side, str(angle)])
 
     def bom(self, fn):
         parts = defaultdict(list)
@@ -1229,27 +1236,26 @@ class Part:
     def pnp_jlc(self):
         return self.center
 
+    def hex_escape(self):
+        pass
+
     def text(self, dc, s):
-        (x, y) = dc.xy
-        dc.board.layers['GTO'].add(hershey.ctext(x, y, s))
+        dc.copy().ctext(s)
 
     def label(self, dc):
-        (x, y) = dc.xy
-        dc.board.layers['GTO'].add(hershey.ctext(x, y, self.id))
+        dc.copy().ctext(self.id)
 
     def minilabel(self, dc, s):
         dc.push()
         dc.rect(.7, .7)
         dc.silko()
         dc.w("r 180 f 1.5")
-        (x, y) = dc.xy
-        dc.board.layers['GTO'].add(hershey.ctext(x, y, s))
+        dc.copy().ctext(s)
         dc.pop()
         dc.newpath()
 
     def notate(self, dc, s):
-        (x, y) = dc.xy
-        dc.board.layers['GTO'].add(hershey.text(x, y, s, scale = 0.1))
+        dc.copy().text(s, scale = 0.1)
 
     def chamfered(self, dc, w, h, drawid = True, idoffset = (0, 0)):
         # Outline in top silk, chamfer indicates top-left
@@ -1274,9 +1280,8 @@ class Part:
         dc.forward(w / 2 + 0.5)
         dc.right(90)
         dc.goxy(*idoffset)
-        (x, y) = dc.xy
         if drawid:
-            dc.board.layers['GTO'].add(hershey.ctext(x, y, self.id))
+            dc.copy().ctext(self.id)
         dc.pop()
 
     def pad(self, dc):
