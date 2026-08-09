@@ -469,6 +469,7 @@ def spiq_a():
         brd.wire_routes()
 
     brd.outline()
+    brd.fill()
 
     if DO_ROUTING:
         brd.fill_any("GTL", "VCC")

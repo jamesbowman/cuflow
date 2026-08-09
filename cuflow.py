@@ -855,6 +855,10 @@ class Board:
         ]
         self.layers = {id : Layer(desc) for (id, desc) in layers}
         self.layers['GML'] = OutlineLayer('Mechanical')
+        self.layer_extensions = {
+            'GL2': 'G2L',
+            'GL3': 'G3L',
+        }
 
     def boundary(self, r = 0):
         x0,y0 = (-r, -r)
@@ -957,7 +961,8 @@ class Board:
         # self.drc()
         # self.check()
         for (id, l) in self.layers.items():
-            with open(basename + "." + id, "wt") as f:
+            extension = self.layer_extensions.get(id, id)
+            with open(basename + "." + extension, "wt") as f:
                 l.save(f)
         with open(basename + ".TXT", "wt") as f:
             excellon(f, self.holes)
