@@ -1,0 +1,15 @@
+GP14  Module_LCD240x240.SCL
+GP15  Module_LCD240x240.SDA
+GP11  Module_LCD240x240.RESET
+GP10  Module_LCD240x240.D/C
+VSYS  Module_spiq_pwr.None
+GP20  Module_spiq_pwr.SDA
+GP21  Module_spiq_pwr.SCL
+GP2   Module_spiq_ios.SCK
+GP4   Module_spiq_ios.MISO
+GP3   Module_spiq_ios.MOSI
+GP5   Module_spiq_ios.IO2
+GP6   Module_spiq_ios.IO3
+GP7   Module_spiq_ios.CS
+GP8   Module_spiq_ios.A
+GP9   Module_spiq_ios.B
