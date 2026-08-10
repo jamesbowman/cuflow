@@ -105,7 +105,7 @@ class HexRP2040(RP2040):
             "QSPI_SD2", "QSPI_SD1", "QSPI_SS_N")).left(30))
         for nm in ("XIN", ):
             wire_ongrid(self.s(nm))
-        self.pads[0].w("/").thermal(1).wire()
+        self.pads[0].w("-").wire()
 
 class HexW25Q128(cu.SOIC8):
     source = {'LCSC': 'C131025'}
@@ -365,8 +365,11 @@ class INA226(VSSOP10):
             pad.setname(name)
 
     def hex_escape(self):
-        pass
-
+        self.s("A0").goto(self.s("A1")).wire()
+        self.s("A1").w("o -")
+        self.s("VBUS").goto(self.s("IN-")).wire()
+        self.s("GND").w("o -")
+        self.s("VCC").w("o r 90 f .5 +")
 
 class R1206(cu.Part):
     family = "R"
@@ -540,10 +543,12 @@ def spiq_a():
 
     i2c_pullups = []
     for x, signal in ((16.8, "SDA"), (21.0, "SCL")):
-        resistor = cu.R0402(brd.DC((x, 46.0)), "4K7")
-        resistor.pads[0].setname("VCC")
+        resistor = cu.R0402(brd.DC((x, 46.0)).right(90), "4K7")
+        resistor.pads[0].w("o +").wire()
         resistor.pads[1].setname(signal)
         i2c_pullups.append(resistor)
+
+    i2c_pullups[1].pads[1].goto(ina226.s("SCL")).wire()
 
     def ucap(p, val = '100nF'):
         cn = cu.C0402_nolabel(p, val)
@@ -585,9 +590,9 @@ def spiq_a():
 
     if 1:
         h = Hex.from_xy(12, 23.5) + layout_offset
-        r3 = cu.R0402(brd.DC(h.to_plane()), "270")
+        r3 = cu.R0402(brd.DC(h.to_plane()), "27")
         h += Hex(0, -3)
-        r4 = cu.R0402(brd.DC(h.to_plane()), "270")
+        r4 = cu.R0402(brd.DC(h.to_plane()), "27")
         if DO_ROUTING:
             for p in r3.pads + r4.pads:
                 wire_ongrid(p.w("o f 0"))
@@ -655,7 +660,7 @@ def spiq_a():
         airwire_rows.append((
             f"{source.part}.{source.name}",
             f"{target.part}.{target.name}",
-            f"{distance:.3f}",
+            f"{distance:.3f}" if distance else "",
         ))
         total_airwire_distance += distance
 
@@ -684,15 +689,10 @@ def spiq_a():
 
     sda_pullup, scl_pullup = i2c_pullups
     current_measurement_airwires = (
-        (ina226.s("A0"), ina226.s("A1")),
-        (ina226.s("A1"), ina226.s("GND")),
-        (ina226.s("VBUS"), ina226.s("IN-")),
         (ina226.s("IN+"), shunt.s("5V")),
         (ina226.s("IN-"), shunt.s("VBUS")),
         (ina226.s("SDA"), sda_pullup.s("SDA")),
         (ina226.s("SCL"), scl_pullup.s("SCL")),
-        (ina226.s("VCC"), sda_pullup.s("VCC")),
-        (sda_pullup.s("VCC"), scl_pullup.s("VCC")),
     )
     for source, target in current_measurement_airwires:
         add_airwire(source, target)

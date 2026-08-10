@@ -8,7 +8,7 @@ class QFN56(cu.Part):
         dc.push()
         dc.rect(3.20, 3.20)
         self.pad(dc)
-        dc.via('GL2')
+        # dc.via('GL2')
         dc.pop()
         """
         g = 7.15 / 3
