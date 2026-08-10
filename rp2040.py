@@ -116,16 +116,26 @@ class RP2040(QFN56):
                     r = cu.C0402(p.copy().w("f 3 l 90"), '.1nF')
                     p.goto(r.pads[0])
                     r.pads[1].w("o -")
-                else:
-                    p.w("o f .3 ")
                 p.setname("VCC").wire()
 
         vreg_vout = self.s("VREG_VOUT").copy()
         vreg_vout.w("i f .3").wire()
         vreg_vout.copy().goto(self.s("DVDD2"), False).wire()
-        vreg_vout.w("f 0.6 l 90 f 0.2 r 90 f 4.4").goto(self.s("DVDD1")).wire()
+        vreg_vout.w("f 0.6 l 90 f 0.2 r 90 f 4.05").goto(self.s("DVDD1")).wire()
 
         self.s("TESTEN").w("i f 2")
+
+        vccs = [p for p in self.pads if p.name == "VCC"]
+        vccs[0].w("i f 0.5 r 90 +")
+        vccs[1].w("i +")
+        vccs[2].w("o +")
+        vccs[3].w("i +")
+        vccs[4].w("o +")
+        vccs[5].w("o +")
+        vccs[6].w("o +")
+        vccs[7].goto(vccs[6]).wire()
+        vccs[8].goto(vccs[9]).wire()
+        vccs[9].w("o +")
 
         banks = ([], [], [], [])
         for i,p in enumerate(self.pads[1:]):

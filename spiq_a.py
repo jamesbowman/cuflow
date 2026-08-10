@@ -53,9 +53,9 @@ used_pins = [
 # "GPIO17",
 # "GPIO18",
 # "GPIO19",
-"GPIO20",
+# "GPIO20",
 # "VCC",
-"GPIO21",
+# "GPIO21",
 # "GPIO22",
 # "GPIO23",
 # "GPIO24",
@@ -91,13 +91,11 @@ class HexRP2040(RP2040):
         def river(names):
             return cu.River(brd, [by_name[name] for name in names])
 
-        river_ongrid(river(("GPIO0", "GPIO1")).w("f .5"))
-        river_ongrid(river(tuple(f"GPIO{i}" for i in range(2, 10)))
-                     .w("f 0.8 r 60"))
+        river_ongrid(river(tuple(f"GPIO{i}" for i in range(0, 10)))
+                     .w("f 0.8 l 60"))
         river_ongrid(river(("GPIO10", "GPIO11")))
         river_ongrid(river(("GPIO14", "GPIO15")).right(30))
         river_ongrid(river(("SWCLK", "SWD")).w("f 0.52 l 30")).wire()
-        river_ongrid(river(("GPIO20", "GPIO21")))
         river_ongrid(river(("VREG_VOUT",)).w("f 0.5 r 30"))
         river_ongrid(river(("USB_DM", "USB_DP")).w("f 0.4 l 30"))
         river_ongrid(river((
@@ -106,6 +104,8 @@ class HexRP2040(RP2040):
         for nm in ("XIN", ):
             wire_ongrid(self.s(nm))
         self.pads[0].w("-").wire()
+
+        return
 
 class HexW25Q128(cu.SOIC8):
     source = {'LCSC': 'C131025'}
@@ -122,9 +122,9 @@ class HexW25Q128(cu.SOIC8):
 
         for p in self.pads:
             if p.name == "GND":
-                p.w("i f 1").wire().copy().w("/ f 1").wire()
+                p.w("i -")
             elif p.name == "VCC":
-                p.w("i f 1").wire()
+                p.w("i +")
             else:
                 # p.copy().w("o f 0.5").ctext(p.name, scale = 0.4)
                 p.w("o f .1")
@@ -317,20 +317,14 @@ class LDO_23_5(SOT23_5):
     source = {'LCSC': 'C81233'}
     mfr = "AP2127N-3.3TRG1"
 
-    def hex_hookup(self, names):
+    def hex_escape(self):
+        names = ("5V", "GND", "CE", "", "VCC")
         for p, nm in zip(self.pads, names):
             p.setname(nm)
-            if nm == "GND":
-                p.w("i f 0.7 /").thermal(1)
-            elif nm == "VCC":
-                p.thermal(1)
-            p.wire()
-        self.s("5V").w("o f 0.1")
-        self.s("CE").w("o f .4").goto(self.s("5V")).wire()
+        self.s("GND").w("i -")
+        self.s("VCC").w("i +")
+        self.s("CE").w("o f 0.4").goto(self.s("5V")).wire()
         wire_ongrid(self.s("5V"))
-
-    def hex_escape(self):
-        self.hex_hookup(("5V", "GND", "CE", "", "VCC"))
 
 
 class VSSOP10(cu.Part):
@@ -416,9 +410,8 @@ class Osc_12MHz(SMD_3225_4P):
         return self.center.copy().right(90)
 
     def hex_escape(self):
-        self.s("GND").w("l 90 f 1.5 / f 1").wire()
-        self.s("VDD").setname("VCC")
-        self.s("VCC").w("o f 0.5").wire()
+        self.s("GND").w("o -")
+        self.s("VDD").w("o +")
         wire_ongrid(self.s("CLK").w("o"))
 
 def hexgrid(b, o):
@@ -537,7 +530,7 @@ def spiq_a():
 
     ina226 = INA226(brd.DC((29.5, 46.0)))
 
-    shunt = R1206(brd.DC((40.5, 46.0)))
+    shunt = R1206(brd.DC((35.0, 46.0)).right(90))
     shunt.pads[0].setname("5V")
     shunt.pads[1].setname("VBUS")
 
