@@ -178,6 +178,13 @@ class USBC(cu.Part):
         a = p.copy().goxy(-4.8 / 2, 0)
         self.train(a.left(90), 2, lambda: self.rpad(a, 0.6, 1.1), 0.8)
 
+        pad_names = (
+            "B8", "A5", "B7", "A6", "A7", "B6", "A8", "B5",
+            "A1/B12", "A4/B9", "B4/A9", "B1/A12",
+        )
+        for pad, name in zip(self.pads, pad_names):
+            pad.setname(name)
+
         baseline = dc.copy().goxy(0, 2.6)
         baseline.mark()
 
