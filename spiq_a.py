@@ -194,6 +194,19 @@ class USBC(cu.Part):
             p = baseline.copy().goxy(d * 8.65 / 2, 4.2)
             p.left(90).stadium(0.3, 60, 2.1 - 0.6)
 
+    def hex_escape(self):
+        for name in ("A1/B12", "B1/A12"):
+            self.s(name).w("o -")
+
+        cc_pulldowns = []
+        for cc_pin in ("A5", "B5"):
+            center = self.s(cc_pin).copy().w("o f 2").left(90)
+            resistor = cu.R0402(center, "5K1")
+            resistor.pads[0].goto(self.s(cc_pin)).wire()
+            resistor.pads[0].setname(cc_pin)
+            resistor.pads[1].setname("GND").w("o -")
+            cc_pulldowns.append(resistor)
+
 
 class PZ254RS(cu.Part):
     family = "J"
@@ -643,19 +656,8 @@ def spiq_a():
         "Module_spiq_pwr": ina226,
         "Module_spiq_ios": j3,
     }
-    airwire_rows = []
-    total_airwire_distance = 0.0
-
-    def add_airwire(source, target):
-        nonlocal total_airwire_distance
-        distance = source.distance(target)
-        brd.layers["AIR"].add(sg.LineString((source.xy, target.xy)))
-        airwire_rows.append((
-            f"{source.part}.{source.name}",
-            f"{target.part}.{target.name}",
-            f"{distance:.3f}" if distance else "",
-        ))
-        total_airwire_distance += distance
+    airwires = []
+    current_measurement_bus_sources = {}
 
     pinout_path = Path(__file__).with_name("spiq_a.pinout")
     for line in pinout_path.read_text().splitlines():
@@ -666,7 +668,11 @@ def spiq_a():
         source_pin = "GPIO" + source_name.removeprefix("GP")
         source = u1.s(source_pin)
         target = pinout_modules[module_name].s(target_pin)
-        add_airwire(source, target)
+        if (module_name == "Module_spiq_pwr" and
+                target_pin in ("SDA", "SCL")):
+            current_measurement_bus_sources[target_pin] = source
+        else:
+            airwires.append((source, target))
 
     qspi_airwires = (
         ("QSPI_SS_N", "CS"),
@@ -677,18 +683,57 @@ def spiq_a():
         ("QSPI_SD3", "IO3"),
     )
     for rp2040_pin, flash_pin in qspi_airwires:
-        add_airwire(u1.s(rp2040_pin), u2.s(flash_pin))
-    add_airwire(u1.s("XIN"), y1.s("CLK"))
+        airwires.append((u1.s(rp2040_pin), u2.s(flash_pin)))
+    airwires.append((u1.s("XIN"), y1.s("CLK")))
+
+    usb_airwires = (
+        (j1.s("B7"), j1.s("A7"), r3.pads[0]),
+        (r3.pads[1], u1.s("USB_DM")),
+        (j1.s("A6"), j1.s("B6"), r4.pads[0]),
+        (r4.pads[1], u1.s("USB_DP")),
+    )
+    airwires.extend(usb_airwires)
 
     sda_pullup, scl_pullup = i2c_pullups
     current_measurement_airwires = (
         (ina226.s("IN+"), shunt.s("5V")),
         (ina226.s("IN-"), shunt.s("VBUS")),
-        (ina226.s("SDA"), sda_pullup.s("SDA")),
-        (ina226.s("SCL"), scl_pullup.s("SCL")),
+        (current_measurement_bus_sources["SDA"],
+         ina226.s("SDA"), sda_pullup.s("SDA")),
+        (current_measurement_bus_sources["SCL"],
+         ina226.s("SCL"), scl_pullup.s("SCL")),
     )
-    for source, target in current_measurement_airwires:
-        add_airwire(source, target)
+    airwires.extend(current_measurement_airwires)
+
+    airwire_rows = []
+    total_airwire_distance = 0.0
+
+    def minimum_spanning_tree(net):
+        assert len(net) >= 2
+        reached = {0}
+        unreached = set(range(1, len(net)))
+        tree = []
+        while unreached:
+            distance, source_index, target_index = min(
+                (net[source_index].distance(net[target_index]),
+                 source_index, target_index)
+                for source_index in reached
+                for target_index in unreached
+            )
+            tree.append((net[source_index], net[target_index], distance))
+            reached.add(target_index)
+            unreached.remove(target_index)
+        return tree
+
+    for net in airwires:
+        for source, target, distance in minimum_spanning_tree(net):
+            brd.layers["AIR"].add(sg.LineString((source.xy, target.xy)))
+            airwire_rows.append((
+                f"{source.part}.{source.name}",
+                f"{target.part}.{target.name}",
+                f"{distance:.3f}" if distance else "",
+            ))
+            total_airwire_distance += distance
 
     airwire_headers = ("src", "dest", "distance (mm)")
     airwire_widths = [
