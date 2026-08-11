@@ -445,12 +445,19 @@ class Osc_12MHz(SMD_3225_4P):
         self.s("VDD").w("o +")
         wire_ongrid(self.s("CLK").w("o"))
 
-def hexgrid(b, o):
-    b.layers['GTO'].polys = []
-    def ln(xys):
-        b.layers['GBO'].add(sg.LineString(xys).buffer(.01))
-    for h in hex.inrect((0, 0), b.size):
-        ln(h.hexagon())
+def hexgrid(b):
+    width, height = b.size
+    bounds = sg.box(0, 0, width, height)
+    margin_x = 2 * hex.height
+    margin_y = 2 * hex.size
+    for h in hex.inrect(
+            (-margin_x, -margin_y),
+            (width + margin_x, height + margin_y)):
+        clipped = sg.LineString(h.hexagon()).intersection(bounds)
+        lines = clipped.geoms if hasattr(clipped, "geoms") else (clipped,)
+        for line in lines:
+            if isinstance(line, sg.LineString) and not line.is_empty:
+                b.layers["HEX"].add(line)
 
 def spiq_a():
     w = .4/3   # .127 is JLCPCB minimum
@@ -484,10 +491,10 @@ def spiq_a():
 
     origin = Hex.from_xy(21, 20) + layout_offset
     xy = origin.to_plane()
-    dc = brd.DC(xy)
+    dc = brd.DC((xy[0] - 14, xy[1]))
 
     if 1:
-        u1 = HexRP2040(dc.left(60))
+        u1 = HexRP2040(dc.left(120))
 
     if 0:
         nick = {
@@ -509,8 +516,10 @@ def spiq_a():
             dc.text(nick[nm], scale = 0.2)
 
     if 1:
-        h = Hex.from_xy(9, 17.5) + layout_offset
-        u2 = HexW25Q128(brd.DC(h.to_plane()).right(180))
+        h = Hex.from_xy(9, 10)
+        u2_xy = h.to_plane()
+        u2 = HexW25Q128(
+            brd.DC((u2_xy[0], u2_xy[1])).right(180).left(120))
 
     # Match the legacy SPIDriver's 6.25 mm top-edge offset.
     j1 = USBC(brd.DC((0, brd.size[1] - 6.25)).right(90))
@@ -641,10 +650,13 @@ def spiq_a():
         u1.s("USB_DM").hex("6f").wire()
         u1.s("USB_DP").hex("7f").wire()
 
+    if 1:
         t0 = time.monotonic()
         brd.hex_setup()
         t1 = time.monotonic()
         print("Starting route")
+
+    if 0:
 
         if HAVEUSB:
             brd.hex_route(j1.s("5V"), u3.s("5V"))
@@ -653,13 +665,15 @@ def spiq_a():
         if HAVEUSB:
             brd.hex_route(ci.pads[1], u1.s("VREG_VOUT"))
 
-        if 1:
-            brd.hex_route(u2.s("CS"), u1.s("QSPI_SS_N"))
-            brd.hex_route(u2.s("IO1"), u1.s("QSPI_SD1"))
-            brd.hex_route(u2.s("IO2"), u1.s("QSPI_SD2"))
-            brd.hex_route(u2.s("IO0"), u1.s("QSPI_SD0"))
-            brd.hex_route(u2.s("CLK"), u1.s("QSPI_SCLK"))
-            brd.hex_route(u2.s("IO3"), u1.s("QSPI_SD3"))
+    if 1:
+        brd.hex_route(u2.s("CS"), u1.s("QSPI_SS_N"))
+        brd.hex_route(u2.s("IO1"), u1.s("QSPI_SD1"))
+        brd.hex_route(u2.s("IO2"), u1.s("QSPI_SD2"))
+        brd.hex_route(u2.s("IO0"), u1.s("QSPI_SD0"))
+        brd.hex_route(u2.s("CLK"), u1.s("QSPI_SCLK"))
+        brd.hex_route(u2.s("IO3"), u1.s("QSPI_SD3"))
+
+    if 0:
         brd.hex_route(serial_debug.s("SWCLK"), u1.s("SWCLK"))
         brd.hex_route(serial_debug.s("RX"), u1.s("GPIO1"))
         brd.hex_route(serial_debug.s("TX"), u1.s("GPIO0"))
@@ -677,6 +691,7 @@ def spiq_a():
         print(f"Hex setup:   {t1-t0:.3f} s")
         print(f"Hex route:   {t2-t1:.3f} s")
 
+    if 1:
         brd.hex_render()
         brd.wire_routes()
 
@@ -794,7 +809,7 @@ def spiq_a():
         layout_dc((25.5, 6.4)).ctext("(C) EXCAMERA", scale = 1.1)
         layout_dc((25.5, 5.0)).ctext("LABS 2025", scale = 1.1)
 
-    # hexgrid(brd, origin)
+    hexgrid(brd)
 
     missing_hex_escape = [
         part.id
