@@ -184,6 +184,7 @@ class USBC(cu.Part):
         )
         for pad, name in zip(self.pads, pad_names):
             pad.setname(name)
+        self.s("A6").mark()
 
         baseline = dc.copy().goxy(0, 2.6)
         baseline.mark()
@@ -195,17 +196,34 @@ class USBC(cu.Part):
             p.left(90).stadium(0.3, 60, 2.1 - 0.6)
 
     def hex_escape(self):
+        power_width = 2 * self.board.trace
         for name in ("A1/B12", "B1/A12"):
-            self.s(name).w("o -")
+            self.s(name).setwidth(power_width).w("o -")
 
-        cc_pulldowns = []
-        for cc_pin in ("A5", "B5"):
-            center = self.s(cc_pin).copy().w("o f 2").left(90)
-            resistor = cu.R0402(center, "5K1")
-            resistor.pads[0].goto(self.s(cc_pin)).wire()
-            resistor.pads[0].setname(cc_pin)
-            resistor.pads[1].setname("GND").w("o -")
-            cc_pulldowns.append(resistor)
+        via_escape = self.board.via_space + self.board.via / 2
+        vbus0 = self.s("A4/B9").copy().setwidth(power_width)
+        vbus1 = self.s("B4/A9").copy().setwidth(power_width)
+        vbus0.w(f"o f {via_escape} /")
+        vbus1.w(f"o f {via_escape} /")
+        vbus0.left(90).goto(vbus1).wire()
+
+        self.s("A6").copy().w("i f 0.4 r 90").goto(
+            self.s("B6"), twist=True).wire()
+        self.s("B7").copy().w("o f 0.4 l 90").goto(
+            self.s("A7"), twist=True).wire()
+
+        r7_center = self.s("B5").copy().w(
+            "o f 2 l 90 f 0.65 l 90").setname(None)
+        r6_center = self.board.DC(
+            (r7_center.xy[0] + 1.1, r7_center.xy[1]), r7_center.dir)
+        r6 = cu.R0402(r6_center, "5K1")
+        r7 = cu.R0402(r7_center, "5K1")
+
+        self.s("A5").copy().w("o").goto(
+            r6.pads[0], twist=True).wire()
+        self.s("B5").copy().w("o").goto(r7.pads[0]).wire()
+        for resistor in (r6, r7):
+            resistor.pads[1].w("o -")
 
 
 class PZ254RS(cu.Part):
@@ -334,10 +352,10 @@ class LDO_23_5(SOT23_5):
         names = ("5V", "GND", "CE", "", "VCC")
         for p, nm in zip(self.pads, names):
             p.setname(nm)
+        self.s("5V").mark()
         self.s("GND").w("i -")
         self.s("VCC").w("i +")
         self.s("CE").w("o f 0.4").goto(self.s("5V")).wire()
-        wire_ongrid(self.s("5V"))
 
 
 class VSSOP10(cu.Part):
@@ -539,7 +557,12 @@ def spiq_a():
     ldo_y = (j2_bottom + j3_top) / 2
     ldo_1117 = LDO_1117_3V3(
         brd.DC((j2.center.xy[0] + 4, ldo_y)).right(90))
-    ldo_ap2127 = LDO_23_5(layout_dc((6.5, 27.5)).right(180))
+    ldo_ap2127 = LDO_23_5(layout_dc((12.0, 29.8)))
+    ldo_5v = ldo_ap2127.pads[0]
+    nearest_usb_5v = min(
+        (j1.s("A4/B9"), j1.s("B4/A9")), key=ldo_5v.distance)
+    ldo_5v.copy().setlayer("GTL").setwidth(
+        2 * brd.trace).goto(nearest_usb_5v).wire()
 
     ina226 = INA226(brd.DC((29.5, 46.0)))
 
@@ -595,10 +618,16 @@ def spiq_a():
         y1 = Osc_12MHz(layout_dc((27.5, 12)).right(180))
 
     if 1:
-        h = Hex.from_xy(12, 23.5) + layout_offset
-        r3 = cu.R0402(brd.DC(h.to_plane()), "27")
-        h += Hex(0, -3)
-        r4 = cu.R0402(brd.DC(h.to_plane()), "27")
+        usb_body_south = j1.center.xy[1] - 8.94 / 2
+        series_resistor_y = usb_body_south - 1.0 - 1.1
+        r3 = cu.R0402(
+            brd.DC((3.9, series_resistor_y)).right(90), "27")
+        r4 = cu.R0402(
+            brd.DC((2.8, series_resistor_y)).right(90), "27")
+        j1.s("B7").copy().w("i").goto(
+            r3.pads[0], twist=True).wire()
+        j1.s("A6").copy().w("i").goto(
+            r4.pads[0], twist=True).wire()
         if DO_ROUTING:
             for p in r3.pads + r4.pads:
                 wire_ongrid(p.w("o f 0"))
@@ -687,9 +716,7 @@ def spiq_a():
     airwires.append((u1.s("XIN"), y1.s("CLK")))
 
     usb_airwires = (
-        (j1.s("B7"), j1.s("A7"), r3.pads[0]),
         (r3.pads[1], u1.s("USB_DM")),
-        (j1.s("A6"), j1.s("B6"), r4.pads[0]),
         (r4.pads[1], u1.s("USB_DP")),
     )
     airwires.extend(usb_airwires)
