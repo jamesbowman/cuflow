@@ -18,6 +18,7 @@ from hex import Hex, axial_direction_vectors
 from hexboard import HexBoard, river_ongrid, wire_ongrid
 
 DO_ROUTING = 0
+ROUTE2 = 0
 
 used_pins = [
 # Module_Serial_Debug
@@ -254,7 +255,7 @@ class PZ254RS(cu.Part):
 class Module_Serial_Debug(PZ254RS):
     def place(self, dc):
         super().place(dc)
-        names = ("GND", "SWDIO", "VCC", "TX", "RX", "SWCLK")
+        names = ("GND", "SWDIO", "VCC", "RX", "TX", "SWCLK")
         for pad, name in zip(self.pads, names):
             pad.setname(name)
             pad.copy().forward(4.5).ctext(
@@ -300,13 +301,11 @@ class Module_LCD240x240(cu.Part):
     def hex_escape(self):
         for pad in self.pads:
             if pad.name == "GND":
-                pad.w("o f 0.5").wire()
+                pad.w("i -").wire()
             elif pad.name == "VCC":
-                pad.w("o f 5 / f 1").wire()
-            elif pad.name == "RESET":
-                wire_ongrid(pad.w("o f 0.2"))
+                pad.w("i f 1 +").wire()
             else:
-                wire_ongrid(pad.w("i f 0.2"))
+                wire_ongrid(pad.w("o f 0.2"))
 
 
 class LDO_1117_3V3(cu.SOT223):
@@ -515,11 +514,11 @@ def spiq_a():
             dc.dir = 0
             dc.text(nick[nm], scale = 0.2)
 
-    if 1:
-        h = Hex.from_xy(9, 10)
-        u2_xy = h.to_plane()
-        u2 = HexW25Q128(
-            brd.DC((u2_xy[0], u2_xy[1])).right(180).left(120))
+    # Program Flash
+    h = Hex.from_xy(9, 10)
+    u2_xy = h.to_plane()
+    u2 = HexW25Q128(
+        brd.DC((u2_xy[0], u2_xy[1])).right(180).left(120))
 
     # Match the legacy SPIDriver's 6.25 mm top-edge offset.
     j1 = USBC(brd.DC((0, brd.size[1] - 6.25)).right(90))
@@ -556,9 +555,10 @@ def spiq_a():
         p.setname(nm)
         brd.DC((label_x, p.xy[1])).ctext(nm, scale = 1.32)
 
-    lcd = Module_LCD240x240(brd.DC((brd.size[0] / 2, brd.size[1] / 2)))
+    lcd = Module_LCD240x240(
+        brd.DC((brd.size[0] / 2, brd.size[1] / 2 - 2)))
     serial_debug = Module_Serial_Debug(
-        brd.DC((brd.size[0] / 2, brd.size[1] / 2))
+        brd.DC((brd.size[0] / 2, brd.size[1] / 2 + 5))
         .setlayer("GBL").right(90), 6)
 
     j2_bottom = j2.center.xy[1] - j2.N * j2.pitch / 2
@@ -573,11 +573,13 @@ def spiq_a():
     ldo_5v.copy().setlayer("GTL").setwidth(
         2 * brd.trace).goto(nearest_usb_5v).wire()
 
-    ina226 = INA226(brd.DC((29.5, 46.0)))
+    ina226 = INA226(brd.DC((29.5, 45.1)))
 
     shunt = R1206(brd.DC((35.0, 46.0)).right(90))
     shunt.pads[0].setname("5V")
     shunt.pads[1].setname("VBUS")
+    ina226.s("IN+").copy().goto(shunt.s("5V")).wire()
+    ina226.s("IN-").copy().goto(shunt.s("VBUS")).wire()
 
     i2c_pullups = []
     for x, signal in ((16.8, "SDA"), (21.0, "SCL")):
@@ -624,7 +626,7 @@ def spiq_a():
             u1.s("VREG_VOUT").hex("r 5 f").wire()
 
     if 1:
-        y1 = Osc_12MHz(layout_dc((27.5, 12)).right(180))
+        y1 = Osc_12MHz(brd.DC((12, 35)).right(0))
 
     if 1:
         usb_body_south = j1.center.xy[1] - 8.94 / 2
@@ -650,7 +652,7 @@ def spiq_a():
         u1.s("USB_DM").hex("6f").wire()
         u1.s("USB_DP").hex("7f").wire()
 
-    if 1:
+    if DO_ROUTING or ROUTE2:
         t0 = time.monotonic()
         brd.hex_setup()
         t1 = time.monotonic()
@@ -665,7 +667,7 @@ def spiq_a():
         if HAVEUSB:
             brd.hex_route(ci.pads[1], u1.s("VREG_VOUT"))
 
-    if 1:
+    if ROUTE2:
         brd.hex_route(u2.s("CS"), u1.s("QSPI_SS_N"))
         brd.hex_route(u2.s("IO1"), u1.s("QSPI_SD1"))
         brd.hex_route(u2.s("IO2"), u1.s("QSPI_SD2"))
@@ -691,7 +693,7 @@ def spiq_a():
         print(f"Hex setup:   {t1-t0:.3f} s")
         print(f"Hex route:   {t2-t1:.3f} s")
 
-    if 1:
+    if DO_ROUTING or ROUTE2:
         brd.hex_render()
         brd.wire_routes()
 
@@ -738,8 +740,6 @@ def spiq_a():
 
     sda_pullup, scl_pullup = i2c_pullups
     current_measurement_airwires = (
-        (ina226.s("IN+"), shunt.s("5V")),
-        (ina226.s("IN-"), shunt.s("VBUS")),
         (current_measurement_bus_sources["SDA"],
          ina226.s("SDA"), sda_pullup.s("SDA")),
         (current_measurement_bus_sources["SCL"],
