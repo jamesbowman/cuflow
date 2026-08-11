@@ -17,15 +17,18 @@ import hex
 from hex import Hex, axial_direction_vectors
 from hexboard import HexBoard, river_ongrid, wire_ongrid
 
+def mean(L):
+    return sum(L) / len(L)
+
 DO_ROUTING = 0
-ROUTE2 = 0
+ROUTE2 = 1
 
 used_pins = [
 # Module_Serial_Debug
 "SWCLK",
 # "GPIO1",    # Module_Serial_Debug.RX
 # "GPIO0",    # Module_Serial_Debug.TX
-"SWD",
+"SWDIO",
 
 "GPIO0",
 "GPIO1",
@@ -92,13 +95,11 @@ class HexRP2040(RP2040):
         def river(names):
             return cu.River(brd, [by_name[name] for name in names])
 
-        river_ongrid(river(tuple(f"GPIO{i}" for i in range(0, 10)))
+        river_ongrid(river(tuple(f"GPIO{i}" for i in range(0, 12)))
                      .w("f 0.8 l 60"))
-        river_ongrid(river(("GPIO10", "GPIO11")))
         river_ongrid(river(("GPIO14", "GPIO15")).right(30))
-        river_ongrid(river(("SWCLK", "SWD")).w("f 0.52 l 30")).wire()
-        river_ongrid(river(("VREG_VOUT",)).w("f 0.5 r 30"))
-        river_ongrid(river(("USB_DM", "USB_DP")).w("f 0.4 l 30"))
+        river_ongrid(river(("SWCLK", "SWDIO")).w("l 30")).wire()
+        river_ongrid(river(("USB_DM", "USB_DP")).w("f 0.4 r 30"))
         river_ongrid(river((
             "QSPI_SD3", "QSPI_SCLK", "QSPI_SD0",
             "QSPI_SD2", "QSPI_SD1", "QSPI_SS_N")).left(30))
@@ -489,11 +490,10 @@ def spiq_a():
             brd.layers['GML'].route(slot)
 
     origin = Hex.from_xy(21, 20) + layout_offset
-    xy = origin.to_plane()
-    dc = brd.DC((xy[0] - 14, xy[1]))
 
-    if 1:
-        u1 = HexRP2040(dc.left(120))
+    xy = Hex.from_xy(7, 27).to_plane()
+    dc = brd.DC((xy[0], xy[1]))
+    u1 = HexRP2040(dc.left(120))
 
     if 0:
         nick = {
@@ -575,11 +575,11 @@ def spiq_a():
 
     ina226 = INA226(brd.DC((29.5, 45.1)))
 
-    shunt = R1206(brd.DC((35.0, 46.0)).right(90))
-    shunt.pads[0].setname("5V")
-    shunt.pads[1].setname("VBUS")
-    ina226.s("IN+").copy().goto(shunt.s("5V")).wire()
-    ina226.s("IN-").copy().goto(shunt.s("VBUS")).wire()
+    midpoint = mean([ina226.s(nm).xy[1] for nm in ("IN+", "IN-")])
+    shunt = R1206(brd.DC((35.0, midpoint)).right(90))
+    (p0, p1) = shunt.pads
+    ina226.s("IN+").copy().goto(p0, twist = True).wire()
+    ina226.s("IN-").copy().goto(p1, twist = True).wire()
 
     i2c_pullups = []
     for x, signal in ((16.8, "SDA"), (21.0, "SCL")):
@@ -622,11 +622,9 @@ def spiq_a():
 
         ci0 = hcap(south_cap(), '1uF')
         ci = hcap(south_cap(), '1uF')
-        if DO_ROUTING:
-            u1.s("VREG_VOUT").hex("r 5 f").wire()
 
     if 1:
-        y1 = Osc_12MHz(brd.DC((12, 35)).right(0))
+        y1 = Osc_12MHz(brd.DC((12, 35)).right(90))
 
     if 1:
         usb_body_south = j1.center.xy[1] - 8.94 / 2
@@ -639,18 +637,13 @@ def spiq_a():
             r3.pads[0], twist=True).wire()
         j1.s("A6").copy().w("i").goto(
             r4.pads[0], twist=True).wire()
-        if DO_ROUTING:
-            for p in r3.pads + r4.pads:
-                wire_ongrid(p.w("o f 0"))
+        if DO_ROUTING or ROUTE2:
+            for r in (r3, r4):
+                wire_ongrid(r.pads[1].w("o f 0"))
 
     for parts in brd.parts.values():
         for part in parts:
             part.hex_escape()
-
-    if DO_ROUTING:
-        # Move these for VCC fill clearance
-        u1.s("USB_DM").hex("6f").wire()
-        u1.s("USB_DP").hex("7f").wire()
 
     if DO_ROUTING or ROUTE2:
         t0 = time.monotonic()
@@ -675,6 +668,15 @@ def spiq_a():
         brd.hex_route(u2.s("CLK"), u1.s("QSPI_SCLK"))
         brd.hex_route(u2.s("IO3"), u1.s("QSPI_SD3"))
 
+        brd.hex_route(u1.s("USB_DM"), r3.pads[1])
+        brd.hex_route(u1.s("USB_DP"), r4.pads[1])
+        brd.hex_route(u1.s("XIN"), y1.s("CLK"))
+
+        u1.s("SWDIO").hex("lr/ff").wire()
+        u1.s("SWCLK").hex("ff/ff").wire()
+        for nm in []: # ("SWDIO", "SWCLK", ):
+            brd.hex_route(serial_debug.s(nm), u1.s(nm))
+
     if 0:
         brd.hex_route(serial_debug.s("SWCLK"), u1.s("SWCLK"))
         brd.hex_route(serial_debug.s("RX"), u1.s("GPIO1"))
@@ -687,7 +689,6 @@ def spiq_a():
             brd.hex_route(u1.s("USB_DM"), r3.pads[1])
         brd.hex_route(u1.s("USB_DP"), r4.pads[1])
 
-        brd.hex_route(u1.s("XIN"), y1.s("CLK"))
 
         t2 = time.monotonic()
         print(f"Hex setup:   {t1-t0:.3f} s")

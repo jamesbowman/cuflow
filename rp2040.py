@@ -64,7 +64,7 @@ RP2040pins = [
     (22, "IOVDD"),
     (23, "DVDD1"),
     (24, "SWCLK"),
-    (25, "SWD"),
+    (25, "SWDIO"),
     (26, "RUN"),
     (27, "GPIO16"),
     (28, "GPIO17"),
@@ -128,7 +128,7 @@ class RP2040(QFN56):
         vccs = [p for p in self.pads if p.name == "VCC"]
         vccs[0].w("i f 0.5 r 90 +")
         vccs[1].w("i +")
-        vccs[2].w("o +")
+        vccs[2].w("i f .6 l 90 +")
         vccs[3].w("i +")
         vccs[4].w("o +")
         vccs[5].w("o +")
