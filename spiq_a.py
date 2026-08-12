@@ -253,6 +253,12 @@ class PZ254RS(cu.Part):
             p.setname(str(i))
 
 
+class Module_SPI_Header(PZ254RS):
+    def hex_escape(self):
+        for pad in self.pads:
+            wire_ongrid(pad.w("o"))
+
+
 class Module_Serial_Debug(PZ254RS):
     def place(self, dc):
         super().place(dc)
@@ -264,13 +270,15 @@ class Module_Serial_Debug(PZ254RS):
 
     def hex_escape(self):
         for pad in self.pads:
-            route = pad.copy().right(180)
+            route = pad.right(180)
             if pad.name == "GND":
-                route.w("o f 0.5 -")
+                route.w("o -")
             elif pad.name == "VCC":
-                route.w("o f 0.5 +")
+                route.w("o +")
+            elif pad.name in ("TX", "RX"):
+                wire_ongrid(route.w("o"))
             else:
-                wire_ongrid(route.w("o f 0.2"))
+                wire_ongrid(route.w("i"))
 
 
 class Module_LCD240x240(cu.Part):
@@ -395,6 +403,8 @@ class INA226(VSSOP10):
         self.s("VBUS").goto(self.s("IN-")).wire()
         self.s("GND").w("o -")
         self.s("VCC").w("o r 90 f .5 +")
+        for nm in ("SDA", "SCL"):
+            wire_ongrid(self.s(nm).w("i f 0.2"))
 
 class R1206(cu.Part):
     family = "R"
@@ -549,7 +559,7 @@ def spiq_a():
     edge_clearance = brd.size[1] - j2_top
     j3_pins = 8
     j3_y = edge_clearance + j3_pins * j2.pitch / 2
-    j3 = PZ254RS(brd.DC((j2.center.xy[0], j3_y)), j3_pins)
+    j3 = Module_SPI_Header(brd.DC((j2.center.xy[0], j3_y)), j3_pins)
     j3_names = ["SCK", "MOSI", "MISO", "IO2", "IO3", "CS", "A", "B"]
     for p, nm in zip(j3.pads, j3_names):
         p.setname(nm)
@@ -581,14 +591,17 @@ def spiq_a():
     ina226.s("IN+").copy().goto(p0, twist = True).wire()
     ina226.s("IN-").copy().goto(p1, twist = True).wire()
 
+    def hex_near(x, y):
+        xy = Hex.from_xy(x, y).to_plane()
+        return brd.DC(xy)
+
     i2c_pullups = []
-    for x, signal in ((16.8, "SDA"), (21.0, "SCL")):
-        resistor = cu.R0402(brd.DC((x, 46.0)).right(90), "4K7")
+    for x, y, angle, signal in ((23, 46, 0, "SDA"), (23, 43, 180, "SCL")):
+        resistor = cu.R0402(hex_near(x, y).right(angle), "4K7")
         resistor.pads[0].w("o +").wire()
         resistor.pads[1].setname(signal)
+        wire_ongrid(resistor.pads[1].w("o ")).wire()
         i2c_pullups.append(resistor)
-
-    i2c_pullups[1].pads[1].goto(ina226.s("SCL")).wire()
 
     def ucap(p, val = '100nF'):
         cn = cu.C0402_nolabel(p, val)
@@ -645,20 +658,32 @@ def spiq_a():
         for part in parts:
             part.hex_escape()
 
+    if ROUTE2:
+        u1.s("SWDIO").hex("lr/f").wire()
+        u1.s("SWCLK").hex("ff/f").wire()
+
+        bus = [u1.s(f"GPIO{i}") for i in range(2, 10)]
+        aligner = [
+            "f",
+            "2f",
+            "2f",
+            "3f",
+            "3f",
+            "4f",
+            "rl3f",
+            "rl3f",
+        ]
+        for p, a in zip(bus, aligner):
+            p.hex(a).wire()
+        for (i, p) in enumerate(bus):
+            p.hex(f"{i+2}f r / {i + 30}f / >>")
+            p.hex(f"{8 - i}f rfff").wire()
+
     if DO_ROUTING or ROUTE2:
         t0 = time.monotonic()
         brd.hex_setup()
         t1 = time.monotonic()
         print("Starting route")
-
-    if 0:
-
-        if HAVEUSB:
-            brd.hex_route(j1.s("5V"), u3.s("5V"))
-        brd.hex_route(cn.pads[1], u3.s("5V"))
-        brd.hex_route(ci0.pads[1], ci.pads[1])
-        if HAVEUSB:
-            brd.hex_route(ci.pads[1], u1.s("VREG_VOUT"))
 
     if ROUTE2:
         brd.hex_route(u2.s("CS"), u1.s("QSPI_SS_N"))
@@ -672,10 +697,11 @@ def spiq_a():
         brd.hex_route(u1.s("USB_DP"), r4.pads[1])
         brd.hex_route(u1.s("XIN"), y1.s("CLK"))
 
-        u1.s("SWDIO").hex("lr/ff").wire()
-        u1.s("SWCLK").hex("ff/ff").wire()
-        for nm in []: # ("SWDIO", "SWCLK", ):
+        for nm in ("SWDIO", "SWCLK", ):
             brd.hex_route(serial_debug.s(nm), u1.s(nm))
+
+        for (a, b) in zip(bus, j3.pads):
+            brd.hex_route(a, b)
 
     if 0:
         brd.hex_route(serial_debug.s("SWCLK"), u1.s("SWCLK"))

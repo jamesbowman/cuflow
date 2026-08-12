@@ -179,18 +179,16 @@ class Turtle:
         return self.forward(hex.height)
 
     def hex(self, s):
-        self.hexn = 0
+        self.hexn = None
         def iter(f):
-            if self.hexn == 0:
+            n = 1 if self.hexn is None else self.hexn
+            for i in range(n):
                 f()
-            else:
-                for i in range(self.hexn):
-                    f()
-            self.hexn = 0
+            self.hexn = None
 
         for c in s:
             if c.isdigit():
-                self.hexn = self.hexn * 10 + int(c)
+                self.hexn = (self.hexn or 0) * 10 + int(c)
             elif c == ' ':
                 pass
             elif c == 'l':
@@ -372,11 +370,10 @@ class Draw(Turtle):
 
     def mark(self):
         self.board.layers['GTO'].add(sg.Point(self.xy).buffer(.2))
-        self.push()
-        self.newpath()
-        self.forward(.3)
-        self.silk()
-        self.pop()
+        mm = self.copy()
+        mm.newpath()
+        mm.forward(.3)
+        mm.silk()
         return self
 
     def n_agon(self, r, n):
