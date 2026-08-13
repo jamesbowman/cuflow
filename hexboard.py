@@ -80,7 +80,15 @@ class HexBoard(cu.Board):
         self.routes = []
 
     def layer_blocks(self, nm):
-        layer_poly = sg.MultiPolygon([p for (nm, p) in self.layers[nm].polys]).buffer(0)
+        copper = [p for (_, p) in self.layers[nm].polys]
+        route_clearance = self.trace / 2 + self.space
+        drill_expansion = max(0, route_clearance - self.hr)
+        drill_keepouts = [
+            sg.Point(xy).buffer(diameter / 2 + drill_expansion)
+            for diameter, locations in self.holes.items()
+            for xy in locations
+        ]
+        layer_poly = sg.MultiPolygon(copper + drill_keepouts).buffer(0)
         blocked = self.gr.zeros(np.uint8) | (self.gr.valid == 0)
         vv = list(self.gr.valids())
         hexes = [sg.Point(h.to_plane()).buffer(self.hr) for h in vv]
@@ -94,8 +102,10 @@ class HexBoard(cu.Board):
     def hex_route(self, a, b):
         layer = a.layer
         assert b.layer == a.layer
-        a = Hex.from_xy(*a.xy)
-        b = Hex.from_xy(*b.xy)
+        source = a
+        target = b
+        a = Hex.from_xy(*source.xy)
+        b = Hex.from_xy(*target.xy)
 
         wavefront = set([tuple(a)])
         dirs = [Hex(dq,dr) for (dq, dr) in axial_direction_vectors]
@@ -135,6 +145,7 @@ class HexBoard(cu.Board):
                     break
         route.append(a)
         self.routes.append((layer, route))
+        self.addnet(source, target)
 
     def hex_render(self):
         (w, h) = self.size
