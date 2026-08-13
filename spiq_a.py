@@ -221,8 +221,7 @@ class USBC(cu.Part):
         r6 = cu.R0402(r6_center, "5K1")
         r7 = cu.R0402(r7_center, "5K1")
 
-        self.s("A5").copy().w("o").goto(
-            r6.pads[0], twist=True).wire()
+        self.s("A5").copy().w("o f 1 l 90 f 2").goto( r6.pads[0], twist=False).wire()
         self.s("B5").copy().w("o").goto(r7.pads[0]).wire()
         for resistor in (r6, r7):
             resistor.pads[1].w("o -")
@@ -576,7 +575,7 @@ def spiq_a():
     ldo_y = (j2_bottom + j3_top) / 2
     ldo_1117 = LDO_1117_3V3(
         brd.DC((j2.center.xy[0] + 4, ldo_y)).right(90))
-    ldo_ap2127 = LDO_23_5(layout_dc((12.0, 29.8)))
+    ldo_ap2127 = LDO_23_5(layout_dc((12.0, 31.8)))
     ldo_5v = ldo_ap2127.pads[0]
     nearest_usb_5v = min(
         (j1.s("A4/B9"), j1.s("B4/A9")), key=ldo_5v.distance)
