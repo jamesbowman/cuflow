@@ -777,21 +777,49 @@ def spiq_a():
     airwire_rows = []
     total_airwire_distance = 0.0
 
+    completed_connections = {
+        frozenset(connection)
+        for connection in brd.nets
+    }
+
     def minimum_spanning_tree(net):
         assert len(net) >= 2
-        reached = {0}
-        unreached = set(range(1, len(net)))
+        parent = list(range(len(net)))
+
+        def find(index):
+            while parent[index] != index:
+                parent[index] = parent[parent[index]]
+                index = parent[index]
+            return index
+
+        def union(a, b):
+            a = find(a)
+            b = find(b)
+            if a != b:
+                parent[b] = a
+
+        endpoint = lambda pad: (pad.part, pad.name)
+        for source_index in range(len(net)):
+            for target_index in range(source_index + 1, len(net)):
+                connection = frozenset((
+                    endpoint(net[source_index]),
+                    endpoint(net[target_index]),
+                ))
+                if connection in completed_connections:
+                    union(source_index, target_index)
+
         tree = []
-        while unreached:
-            distance, source_index, target_index = min(
-                (net[source_index].distance(net[target_index]),
-                 source_index, target_index)
-                for source_index in reached
-                for target_index in unreached
-            )
-            tree.append((net[source_index], net[target_index], distance))
-            reached.add(target_index)
-            unreached.remove(target_index)
+        edges = sorted(
+            (net[source_index].distance(net[target_index]),
+             source_index, target_index)
+            for source_index in range(len(net))
+            for target_index in range(source_index + 1, len(net))
+        )
+        for distance, source_index, target_index in edges:
+            if find(source_index) != find(target_index):
+                union(source_index, target_index)
+                tree.append((
+                    net[source_index], net[target_index], distance))
         return tree
 
     for net in airwires:
