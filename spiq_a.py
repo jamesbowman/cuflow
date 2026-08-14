@@ -638,10 +638,13 @@ def spiq_a():
 
         # Add all 100 nF 0402 capacitors after the LDO capacitors.
         c5 = cap(u2.center.copy().forward(3.6))
-        c6 = cap(brd.DC((8, 2.0)))
-        c7 = cap(brd.DC((12, 2.0)))
-        c8 = cap(brd.DC((16, 2.0)))
-        c9 = cap(brd.DC((20, 2.0)))
+        c6 = cap(u6.center.copy().forward(2.3))
+        c7 = cap(brd.DC((14, 25.8)).right(90))
+        c8 = cap(brd.DC((12.7, 30.5)).right(150))
+        c9 = cap(brd.DC((3.3, 31.5)).right(150))
+        c10 = ucap(brd.DC((1.3, 23.7)).right(90), '100nF')
+        u1.s("DVDD2").copy().w("o f 2").goto(c10.pads[0], True).wire()
+        c10.pads[1].w("o -")
 
     if 1:
         y1 = Osc_12MHz(brd.DC((12, 34)).right(60))
@@ -669,7 +672,7 @@ def spiq_a():
             part.hex_escape()
 
     power_width = 2 * brd.trace
-    j1.s("B4/A9").setwidth(power_width).w("o f 1.1 l 90 f 2.2 r 90").goto(r2.pads[0]).wire()
+    j1.s("B4/A9").setwidth(power_width).w("o f 1.1 l 90 f 2.5 r 90").goto(r2.pads[0], twist = True).wire()
 
     for (a,b) in ((2,3), (4,5)):
         j2.pads[a].copy().setwidth(power_width).goto(j2.pads[b]).wire()
@@ -888,7 +891,7 @@ def spiq_a():
             value.ljust(airwire_widths[column])
             for column, value in enumerate(total_row)))
 
-    brd.outline()
+    brd.outline(corner_radius = 2)
     brd.fill(edge_clearance = 0.4)
 
     if 0:

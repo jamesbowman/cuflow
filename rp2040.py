@@ -102,13 +102,17 @@ class RP2040(QFN56):
     source = {'LCSC': 'C2040'}
     mfr = 'RP2040'
     footprint = "LQFN-56(7x7)"
+
+    def place(self, dc):
+        super().place(dc)
+        self.setnames()
+
     def setnames(self):
         for i,nm in RP2040pins:
             self.pads[i].setname(nm)
+
     def escape(self, used_pins):
         brd = self.board
-        for i,nm in RP2040pins:
-            self.pads[i].setname(nm)
         for p in self.pads:
             nm = p.name
             if nm in ("IOVDD", "VREG_VIN", "USB_VDD", "RUN", "ADC_AVDD"):
@@ -134,8 +138,8 @@ class RP2040(QFN56):
         vccs[6].goto(vccs[5], twist = True).wire()
         vccs[5].w("o +")
         vccs[7].goto(vccs[6]).wire()
-        vccs[8].goto(vccs[9]).wire()
-        vccs[9].w("o +")
+        vccs[9].goto(vccs[8]).wire()
+        vccs[8].w("o f 0.6 +")
 
         banks = ([], [], [], [])
         for i,p in enumerate(self.pads[1:]):

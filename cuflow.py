@@ -837,6 +837,7 @@ class Board:
         self.parts = defaultdict(list)
         self.holes = defaultdict(list)
         self.keepouts = []
+        self.outline_polygon = None
 
         self.c = trace + space # track spacing, used everywhere
 
@@ -864,22 +865,32 @@ class Board:
             'GL3': 'G3L',
         }
 
-    def boundary(self, r = 0):
+    def boundary(self, r = 0, corner_radius = 0):
         x0,y0 = (-r, -r)
         x1,y1 = self.size
         x1 += r
         y1 += r
+        if corner_radius:
+            assert 0 < corner_radius <= min(x1 - x0, y1 - y0) / 2
+            inset = sg.box(
+                x0 + corner_radius, y0 + corner_radius,
+                x1 - corner_radius, y1 - corner_radius)
+            return sg.LinearRing(inset.buffer(corner_radius).exterior.coords)
         return sg.LinearRing([
             (x0, y0),
             (x1, y0),
             (x1, y1),
             (x0, y1)])
 
-    def outline(self):
-        self.layers['GML'].add(self.boundary())
+    def outline(self, corner_radius = 0):
+        boundary = self.boundary(corner_radius = corner_radius)
+        self.outline_polygon = sg.Polygon(boundary)
+        self.layers['GML'].add(boundary)
 
     def oversize(self, r):
-        self.layers['GML'].add(self.boundary(r))
+        boundary = self.boundary(r)
+        self.outline_polygon = sg.Polygon(boundary)
+        self.layers['GML'].add(boundary)
         sr = self.silk / 2
         g = self.boundary(1.1 * sr).buffer(sr)
         self.layers['GTO'].add(g.buffer(0))
@@ -908,8 +919,9 @@ class Board:
 
     def fill(self, edge_clearance = 0.2):
         ko = so.unary_union(self.keepouts)
-        g = sg.box(0, 0, self.size[0], self.size[1]).buffer(
-            -edge_clearance).difference(ko)
+        board_area = self.outline_polygon or sg.box(
+            0, 0, self.size[0], self.size[1])
+        g = board_area.buffer(-edge_clearance).difference(ko)
         self.layers['GL2'].fill(g, 'GL2', self.via_space)
         self.layers['GL3'].fill(g, 'GL3', self.via_space)
 
