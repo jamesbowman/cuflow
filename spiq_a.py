@@ -505,7 +505,7 @@ def spiq_a():
     u1 = HexRP2040(dc.left(120))
 
     # Program Flash
-    h = Hex.from_xy(9, 10)
+    h = Hex.from_xy(6, 17)
     u2_xy = h.to_plane()
     u2 = HexW25Q128(
         brd.DC((u2_xy[0], u2_xy[1])).right(180).left(120))
