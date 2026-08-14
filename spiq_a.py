@@ -680,6 +680,13 @@ def spiq_a():
             p.hex(f"{i+2}f r / {i + 37}f / >>")
             p.hex(f"{8 - i}f rfff").wire()
 
+        # reorder the LCD signals
+        lcd.s("D/C").hex("/>6f/>13f").wire()
+        lcd.s("RESET").hex("/>10f/>6f").wire()
+        lcd.s("SCL").hex("f/>14f/>9f").wire()
+        lcd.s("SDA").hex("/>18f/>3f").wire()
+
+
     if DO_ROUTING or ROUTE2:
         t0 = time.monotonic()
         brd.hex_setup()
