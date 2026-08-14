@@ -71,6 +71,10 @@ def shift_array(arr, shift_x, shift_y):
 
 
 class HexBoard(cu.Board):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.route_keepouts = {layer: [] for layer in ('GTL', 'GBL')}
     
     def hex_setup(self):
         (hd, _) = (Hex(1, 0).to_plane())    # hd is the center-center distance
@@ -90,7 +94,8 @@ class HexBoard(cu.Board):
             for xy in locations
         ]
         layer_poly = sg.MultiPolygon(
-            copper + drill_keepouts + self.keepouts).buffer(0)
+            copper + drill_keepouts + self.keepouts +
+            self.route_keepouts[nm]).buffer(0)
         blocked = self.gr.zeros(np.uint8) | (self.gr.valid == 0)
         vv = list(self.gr.valids())
         hexes = [sg.Point(h.to_plane()).buffer(self.hr) for h in vv]

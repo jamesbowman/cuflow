@@ -20,7 +20,7 @@ from hexboard import HexBoard, river_ongrid, wire_ongrid
 def mean(L):
     return sum(L) / len(L)
 
-ROUTE2 = 0
+ROUTE2 = 1
 
 used_pins = [
 # Module_Serial_Debug
@@ -408,7 +408,7 @@ class INA226(VSSOP10):
         self.s("A0").goto(self.s("A1")).wire()
         self.s("A1").w("o -")
         self.s("VBUS").goto(self.s("IN-")).wire()
-        self.s("GND").w("o -")
+        self.s("GND").w("i -")
         self.s("VCC").w("o r 90 f .5 +")
         wire_ongrid(self.s("SDA").w("i f 0.2"))
         wire_ongrid(self.s("SCL").w("o f 0.2"))
@@ -576,10 +576,10 @@ def spiq_a():
     ldo_5v.copy().setlayer("GTL").setwidth(
         2 * brd.trace).goto(nearest_usb_5v, twist = True).wire()
 
-    u6 = INA226(brd.DC((29.5, 45.1)))
+    u6 = INA226(brd.DC((29.5, 44.1)))
 
     midpoint = mean([u6.s(nm).xy[1] for nm in ("IN+", "IN-")])
-    r2 = R1206(brd.DC((35.0, midpoint)).right(90))
+    r2 = R1206(brd.DC((34.0, midpoint)).right(90))
     (p0, p1) = r2.pads
     u6.s("IN+").copy().goto(p0, twist = True).wire()
     u6.s("IN-").copy().goto(p1, twist = True).wire()
@@ -595,7 +595,7 @@ def spiq_a():
 
     r3 = cu.R0402(hex_near(23, 43).right(0), "4K7")
     setup_i2c_pullup(r3, "SDA")
-    r4 = cu.R0402(hex_near(23, 46).right(180), "4K7")
+    r4 = cu.R0402(hex_near(23, 45).right(180), "4K7")
     setup_i2c_pullup(r4, "SCL")
 
     def ucap(p, val = '100nF'):
@@ -608,26 +608,8 @@ def spiq_a():
         if val == '100nF':
             cn.pads[0].w("o -")
             cn.pads[1].w("o +")
-    def hcap(p, val = '100nF'):
-        cn = ucap(p, val)
         return cn
     if 1:
-        cap_xs = iter(range(8, 40, 4))
-        def south_cap():
-            return brd.DC((next(cap_xs), 2.0))
-
-        cap(u2.center.copy().forward(3.6))
-        cap(south_cap())
-        cap(south_cap())
-        cap(south_cap())
-        cap(south_cap())
-
-        cap(south_cap(), '1uF')
-        cn = hcap(south_cap(), '1uF')
-
-        ci0 = hcap(south_cap(), '1uF')
-        ci = hcap(south_cap(), '1uF')
-
         def ldo_cap(package, center, value, supply, ldo_pad, twist = False):
             capacitor = package(center, value)
             capacitor.pads[0].setname("GND").setwidth(
@@ -638,24 +620,34 @@ def spiq_a():
             return capacitor
 
         # U4: the 1117 regulator needs bulk capacitance on both sides.
-        c10 = ldo_cap(
+        c1 = ldo_cap(
             cu.C0805, brd.DC((47.5, u4.center.xy[1])).right(90),
             "10uF", "5V", u4.s("5V"), True)
-        c11 = ldo_cap(
+        c2 = ldo_cap(
             cu.C0805, brd.DC((59.3, u4.pads[2].xy[1])).right(90),
             "10uF", "VCC", u4.pads[0])
 
         # U5: use the AP2127 datasheet's 1 uF input minimum and a
         # little extra output capacitance for transient response.
-        c12 = ldo_cap(
+        c3 = ldo_cap(
             cu.C0603, brd.DC((10.3, 38)).right(180),
             "1uF", "5V", u5.pads[0])
-        c13 = ldo_cap(
+        c4 = ldo_cap(
             cu.C0603, brd.DC((12.2, 45)).right(90),
             "4.7uF", "VCC", u5.pads[4], True)
 
+        # Add all 100 nF 0402 capacitors after the LDO capacitors.
+        c5 = cap(u2.center.copy().forward(3.6))
+        c6 = cap(brd.DC((8, 2.0)))
+        c7 = cap(brd.DC((12, 2.0)))
+        c8 = cap(brd.DC((16, 2.0)))
+        c9 = cap(brd.DC((20, 2.0)))
+
     if 1:
-        y1 = Osc_12MHz(brd.DC((12, 35)).right(90))
+        y1 = Osc_12MHz(brd.DC((12, 34)).right(60))
+        y1_body = y1.center.copy().rect(2.8, 3.5).poly()
+        for layer in ("GTL", "GBL"):
+            brd.route_keepouts[layer].append(y1_body)
 
     if 1:
         usb_body_south = j1.center.xy[1] - 8.94 / 2
@@ -689,8 +681,8 @@ def spiq_a():
     if ROUTE2:
         # Debug port signals on bottom
 
-        u1.s("SWDIO").hex("lr/f").wire()
-        u1.s("SWCLK").hex("ff/f").wire()
+        u1.s("SWDIO").hex("lr/!3f").wire()
+        u1.s("SWCLK").hex("ff/!3f").wire()
         u1.s("GPIO0").hex("r/f").wire()
         u1.s("GPIO1").hex("2frf/f").wire()
 
@@ -737,10 +729,10 @@ def spiq_a():
         brd.hex_route(u1.s("USB_DP"), r6.pads[1])
         brd.hex_route(u1.s("XIN"), y1.s("CLK"))
 
-        for nm in ("SWDIO", "SWCLK", ):
-            brd.hex_route(j4.s(nm), u1.s(nm))
+        brd.hex_route(j4.s("SWCLK"), u1.s("SWCLK"))
         brd.hex_route(u1.s("GPIO0"), j4.s("TX"))
         brd.hex_route(u1.s("GPIO1"), j4.s("RX"))
+        brd.hex_route(j4.s("SWDIO"), u1.s("SWDIO"))
 
         for (a, b) in zip(bus, j3.pads):
             brd.hex_route(a, b)
