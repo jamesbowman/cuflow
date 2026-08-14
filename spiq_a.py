@@ -313,6 +313,8 @@ class Module_LCD240x240(cu.Part):
                 pad.w("i -").wire()
             elif pad.name == "VCC":
                 pad.w("i f 1 +").wire()
+            elif pad.name == "LEDA":
+                pass
             else:
                 wire_ongrid(pad.w("o f 0.2"))
 
@@ -328,7 +330,9 @@ class LDO_1117_3V3(cu.SOT223):
             p.setname(nm)
 
     def hex_escape(self):
-        return self.escape()
+        self.pads[2].w("i f 4").wire(width = 0.8)
+        self.s("GND").inside().forward(1.0).wire(width = 0.8).via("GL2")
+        return (self.pads[3], self.pads[0])
 
 
 class SOT23_5(cu.Part):
@@ -568,6 +572,13 @@ def spiq_a():
 
     lcd = Module_LCD240x240(
         brd.DC((brd.size[0] / 2, brd.size[1] / 2 - 2)))
+    leda = lcd.s("LEDA")
+    backlight_resistor = cu.R0603(
+        brd.DC((leda.xy[0] - 2.4, leda.xy[1])), "6R2")
+    backlight_resistor.pads[0].setname("VCC").w("o +").wire()
+    backlight_resistor.pads[1].setname("LEDA")
+    leda.copy().goto(backlight_resistor.s("LEDA")).wire()
+
     serial_debug = Module_Serial_Debug(
         brd.DC((brd.size[0] / 2, brd.size[1] / 2 + 5))
         .setlayer("GBL").right(90), 6)

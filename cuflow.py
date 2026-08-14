@@ -1384,6 +1384,9 @@ class D0603(C0603):
 class R0402(C0402):
     family = "R"
 
+class R0603(C0603):
+    family = "R"
+
 class R0402_nolabel(R0402):
     def label(self, dc):
         pass
