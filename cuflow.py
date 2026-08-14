@@ -1378,6 +1378,28 @@ class C0603(Discrete2):
         self.label(dc)
         dc.pop()
 
+class C0805(Discrete2):
+    family = "C"
+    footprint = "0805"
+    def place(self, dc):
+        # IPC medium-density pads for a 2.0 x 1.25 mm body.
+        for d in (-90, 90):
+            dc.push()
+            dc.right(d)
+            dc.forward(2.0 / 2)
+            dc.rect(1.4, 1.2)
+            self.pad(dc)
+            dc.pop()
+
+        dc.rect(2.0, 1.25)
+        dc.silko()
+
+        dc.push()
+        dc.right(90)
+        dc.forward(2.4)
+        self.label(dc)
+        dc.pop()
+
 class D0603(C0603):
     family = "D"
     footprint = "0603"
@@ -1932,8 +1954,11 @@ class SOT223(Part):
     family = "U"
     footprint = "SOT223"
     drawid = True
+    idoffset = (0, 0)
     def place(self, dc):
-        self.chamfered(dc, 6.30, 3.30, drawid = self.drawid)
+        self.chamfered(
+            dc, 6.30, 3.30, drawid = self.drawid,
+            idoffset = self.idoffset)
         dc.push()
         dc.forward(6.2 / 2)
         dc.rect(3.6, 2.2)

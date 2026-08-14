@@ -20,7 +20,7 @@ from hexboard import HexBoard, river_ongrid, wire_ongrid
 def mean(L):
     return sum(L) / len(L)
 
-ROUTE2 = 1
+ROUTE2 = 0
 
 used_pins = [
 # Module_Serial_Debug
@@ -326,7 +326,7 @@ class Module_LCD240x240(cu.Part):
 class LDO_1117_3V3(cu.SOT223):
     source = {'LCSC': 'C26537'}
     mfr = "ZLDO1117QG33TA"
-    drawid = False
+    idoffset = (0, -4.3)
 
     def place(self, dc):
         super().place(dc)
@@ -605,15 +605,18 @@ def spiq_a():
     def cap(p, val = '100nF'):
         cn = ucap(p, val)
         cn.pads[1].setname("VCC")
+        if val == '100nF':
+            cn.pads[0].w("o -")
+            cn.pads[1].w("o +")
     def hcap(p, val = '100nF'):
         cn = ucap(p, val)
         return cn
     if 1:
-        cap_xs = iter(range(4, 40, 4))
+        cap_xs = iter(range(8, 40, 4))
         def south_cap():
             return brd.DC((next(cap_xs), 2.0))
 
-        cap(south_cap())
+        cap(u2.center.copy().forward(3.6))
         cap(south_cap())
         cap(south_cap())
         cap(south_cap())
@@ -624,6 +627,32 @@ def spiq_a():
 
         ci0 = hcap(south_cap(), '1uF')
         ci = hcap(south_cap(), '1uF')
+
+        def ldo_cap(package, center, value, supply, ldo_pad, twist = False):
+            capacitor = package(center, value)
+            capacitor.pads[0].setname("GND").setwidth(
+                2 * brd.trace).w("o -")
+            capacitor.pads[1].setname(supply).setwidth(2 * brd.trace)
+            capacitor.pads[1].copy().goto(ldo_pad, twist).wire()
+            brd.addnet(capacitor.pads[1], ldo_pad)
+            return capacitor
+
+        # U4: the 1117 regulator needs bulk capacitance on both sides.
+        c10 = ldo_cap(
+            cu.C0805, brd.DC((47.5, u4.center.xy[1])).right(90),
+            "10uF", "5V", u4.s("5V"), True)
+        c11 = ldo_cap(
+            cu.C0805, brd.DC((59.3, u4.pads[2].xy[1])).right(90),
+            "10uF", "VCC", u4.pads[0])
+
+        # U5: use the AP2127 datasheet's 1 uF input minimum and a
+        # little extra output capacitance for transient response.
+        c12 = ldo_cap(
+            cu.C0603, brd.DC((10.3, 38)).right(180),
+            "1uF", "5V", u5.pads[0])
+        c13 = ldo_cap(
+            cu.C0603, brd.DC((12.2, 45)).right(90),
+            "4.7uF", "VCC", u5.pads[4], True)
 
     if 1:
         y1 = Osc_12MHz(brd.DC((12, 35)).right(90))
@@ -654,9 +683,8 @@ def spiq_a():
         j2.pads[a].copy().setwidth(power_width).goto(j2.pads[b]).wire()
 
     r2.pads[1].setwidth(power_width).goto(j2.pads[4], twist = True).wire()
-    j2.pads[5].setwidth(power_width).w("o f 1 l 90").goto(u4.s("5V"), twist = True).wire()
+    j2.pads[5].setwidth(power_width).w("o f 0 l 90").goto(u4.s("5V"), twist = True).wire()
     j2.pads[3].setwidth(power_width).w("i").goto(u4.s("VCC"), twist = True).wire()
-    u4.s("VCC").mark()
 
     if ROUTE2:
         # Debug port signals on bottom
