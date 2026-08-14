@@ -894,9 +894,7 @@ def spiq_a():
     brd.outline(corner_radius = 2)
     brd.fill(edge_clearance = 0.4)
 
-    if 0:
-        layout_dc((25.5, 6.4)).ctext("(C) EXCAMERA", scale = 1.1)
-        layout_dc((25.5, 5.0)).ctext("LABS 2026", scale = 1.1)
+    brd.DC((30.5, 1.2)).ctext("(C) EXCAMERA LABS 2026", scale = 1.1)
 
     hexgrid(brd)
 
