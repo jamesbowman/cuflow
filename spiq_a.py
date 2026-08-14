@@ -498,38 +498,11 @@ def spiq_a():
     def layout_dc(xy):
         return brd.DC(layout_xy(xy))
 
-    if 0:
-        for xy in ((2, 9), (30 - 2, 9)):
-            dc = layout_dc(xy)
-            dc.rect(1, 8)
-            slot = dc.poly().buffer(0.5)
-            brd.keepouts.append(slot.buffer(.2))
-            brd.layers['GML'].route(slot)
-
     origin = Hex.from_xy(21, 20) + layout_offset
 
     xy = Hex.from_xy(7, 27).to_plane()
     dc = brd.DC((xy[0], xy[1]))
     u1 = HexRP2040(dc.left(120))
-
-    if 0:
-        nick = {
-            "QSPI_SD3"  : "IO3",
-            "QSPI_SCLK" : "CLK",
-            "QSPI_SD0"  : "IO0",
-            "QSPI_SD2"  : "IO2",
-            "QSPI_SD1"  : "IO1",
-            "QSPI_SS_N" : "CS",
-            "USB_DP"    : "D+",
-            "USB_DM"    : "D-",
-            "XIN"       : "XIN",
-            "GPIO0"     : "PWM0",
-            "GPIO1"     : "PWM1",
-        }
-        for nm in nick:
-            dc = u1.s(nm).copy()
-            dc.dir = 0
-            dc.text(nick[nm], scale = 0.2)
 
     # Program Flash
     h = Hex.from_xy(9, 10)
@@ -762,23 +735,6 @@ def spiq_a():
                 r4.s("SCL"),
             ))
 
-    if 0:
-        brd.hex_route(j4.s("SWCLK"), u1.s("SWCLK"))
-        brd.hex_route(j4.s("RX"), u1.s("GPIO1"))
-        brd.hex_route(j4.s("TX"), u1.s("GPIO0"))
-        brd.hex_route(j4.s("SWDIO"), u1.s("SWD"))
-        if HAVEUSB:
-            brd.hex_route(j1.s("D-"), r5.pads[0])
-            brd.hex_route(j1.s("D+"), r6.pads[0])
-        if HAVEUSB:
-            brd.hex_route(u1.s("USB_DM"), r5.pads[1])
-        brd.hex_route(u1.s("USB_DP"), r6.pads[1])
-
-
-        t2 = time.monotonic()
-        print(f"Hex setup:   {t1-t0:.3f} s")
-        print(f"Hex route:   {t2-t1:.3f} s")
-
     if ROUTE2:
         brd.hex_render()
         brd.wire_routes()
@@ -917,7 +873,7 @@ def spiq_a():
 
     if 0:
         layout_dc((25.5, 6.4)).ctext("(C) EXCAMERA", scale = 1.1)
-        layout_dc((25.5, 5.0)).ctext("LABS 2025", scale = 1.1)
+        layout_dc((25.5, 5.0)).ctext("LABS 2026", scale = 1.1)
 
     hexgrid(brd)
 
