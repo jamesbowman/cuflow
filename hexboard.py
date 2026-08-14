@@ -1,5 +1,6 @@
 import numpy as np
 import shapely.geometry as sg
+from collections import deque
 from shapely.strtree import STRtree
 from PIL import Image, ImageDraw, ImageFont
 
@@ -146,6 +147,74 @@ class HexBoard(cu.Board):
         route.append(a)
         self.routes.append((layer, route))
         self.addnet(source, target)
+
+    def hex_route_net(self, terminals):
+        terminals = tuple(terminals)
+        assert len(terminals) == 3, "hex_route_net() currently supports 3-node nets"
+
+        layer = terminals[0].layer
+        assert all(terminal.layer == layer for terminal in terminals)
+
+        terminal_hexes = [Hex.from_xy(*terminal.xy) for terminal in terminals]
+        terminal_cells = {tuple(h) for h in terminal_hexes}
+        valid = {(h.q, h.r) for h in self.gr.valids()}
+        blocked = self.blocked[layer]
+        directions = [Hex(dq, dr) for dq, dr in axial_direction_vectors]
+
+        def wavefront(start):
+            start = tuple(start)
+            distance = {start: 0}
+            previous = {}
+            pending = deque([start])
+            while pending:
+                cell = pending.popleft()
+                h = Hex(*cell)
+                for direction in directions:
+                    neighbor = h + direction
+                    neighbor_cell = tuple(neighbor)
+                    if neighbor_cell not in valid or neighbor_cell in distance:
+                        continue
+                    if (neighbor_cell not in terminal_cells and
+                            blocked[neighbor.q, neighbor.r]):
+                        continue
+                    distance[neighbor_cell] = distance[cell] + 1
+                    previous[neighbor_cell] = cell
+                    pending.append(neighbor_cell)
+            return distance, previous
+
+        searches = [wavefront(h) for h in terminal_hexes]
+        common = set(searches[0][0])
+        for distance, _ in searches[1:]:
+            common.intersection_update(distance)
+        assert common, "Signal net failed to route"
+
+        junction = min(common, key=lambda cell: (
+            sum(distance[cell] for distance, _ in searches),
+            max(distance[cell] for distance, _ in searches),
+            cell[1],
+            cell[0],
+        ))
+
+        routes = []
+        occupied = set()
+        for terminal, (_, previous) in zip(terminal_hexes, searches):
+            terminal_cell = tuple(terminal)
+            cell = junction
+            route = [Hex(*cell)]
+            occupied.add(cell)
+            while cell != terminal_cell:
+                cell = previous[cell]
+                route.append(Hex(*cell))
+                occupied.add(cell)
+            routes.append(route)
+
+        for q, r in occupied:
+            self.blocked[layer][q, r] = 1
+        self.routes.extend((layer, route) for route in routes)
+        for terminal in terminals[1:]:
+            self.addnet(terminals[0], terminal)
+
+        return routes
 
     def hex_render(self):
         (w, h) = self.size

@@ -57,7 +57,7 @@ used_pins = [
 # "GPIO17",
 # "GPIO18",
 # "GPIO19",
-# "GPIO20",
+"GPIO20",
 # "VCC",
 # "GPIO21",
 # "GPIO22",
@@ -103,8 +103,9 @@ class HexRP2040(RP2040):
         river_ongrid(river((
             "QSPI_SD3", "QSPI_SCLK", "QSPI_SD0",
             "QSPI_SD2", "QSPI_SD1", "QSPI_SS_N")).left(30))
-        for nm in ("XIN", ):
-            wire_ongrid(self.s(nm))
+        for nm in ("XIN", "GPIO20"):
+            wire_ongrid(self.s(nm).w("o"))
+        wire_ongrid(self.s("GPIO21").w("o f 1"))
         self.pads[0].w("-").wire()
 
         return
@@ -209,7 +210,7 @@ class USBC(cu.Part):
         vbus1.w(f"o f {via_escape} /")
         vbus0.left(90).goto(vbus1).wire()
 
-        self.s("A6").copy().w("i f 0.4 r 90").goto(
+        self.s("A6").copy().w("i f 0.6 r 90").goto(
             self.s("B6"), twist=True).wire()
         self.s("B7").copy().w("o f 0.4 l 90").goto(
             self.s("A7"), twist=True).wire()
@@ -274,7 +275,7 @@ class Module_Serial_Debug(PZ254RS):
                 route.w("o -")
             elif pad.name == "VCC":
                 route.w("o +")
-            elif pad.name in ("TX", "RX"):
+            elif pad.name in ("TX", ):
                 wire_ongrid(route.w("o"))
             else:
                 wire_ongrid(route.w("i"))
@@ -359,7 +360,6 @@ class LDO_23_5(SOT23_5):
         names = ("5V", "GND", "CE", "", "VCC")
         for p, nm in zip(self.pads, names):
             p.setname(nm)
-        self.s("5V").mark()
         self.s("GND").w("i -")
         self.s("VCC").w("i +")
         self.s("CE").w("o f 0.4").goto(self.s("5V")).wire()
@@ -402,8 +402,8 @@ class INA226(VSSOP10):
         self.s("VBUS").goto(self.s("IN-")).wire()
         self.s("GND").w("o -")
         self.s("VCC").w("o r 90 f .5 +")
-        for nm in ("SDA", "SCL"):
-            wire_ongrid(self.s(nm).w("i f 0.2"))
+        wire_ongrid(self.s("SDA").w("i f 0.2"))
+        wire_ongrid(self.s("SCL").w("o f 0.2"))
 
 class R1206(cu.Part):
     family = "R"
@@ -574,15 +574,20 @@ def spiq_a():
 
     j2_bottom = j2.center.xy[1] - j2.N * j2.pitch / 2
     j3_top = j3.center.xy[1] + j3.N * j3.pitch / 2
+
+    # External 3V3 supply
     ldo_y = (j2_bottom + j3_top) / 2
     ldo_1117 = LDO_1117_3V3(
         brd.DC((j2.center.xy[0] + 4, ldo_y)).right(90))
-    ldo_ap2127 = LDO_23_5(layout_dc((12.0, 31.8)))
+
+    # Internal 3V3 supply
+    ldo_ap2127 = LDO_23_5(layout_dc((12.0, 31.6)).left(90))
     ldo_5v = ldo_ap2127.pads[0]
+
     nearest_usb_5v = min(
         (j1.s("A4/B9"), j1.s("B4/A9")), key=ldo_5v.distance)
     ldo_5v.copy().setlayer("GTL").setwidth(
-        2 * brd.trace).goto(nearest_usb_5v).wire()
+        2 * brd.trace).goto(nearest_usb_5v, twist = True).wire()
 
     ina226 = INA226(brd.DC((29.5, 45.1)))
 
@@ -659,6 +664,17 @@ def spiq_a():
         for part in parts:
             part.hex_escape()
 
+    power_width = 2 * brd.trace
+    j1.s("B4/A9").setwidth(power_width).w("o f 1.1 l 90 f 2.2 r 90").goto(shunt.pads[0]).wire()
+
+    for (a,b) in ((2,3), (4,5)):
+        j2.pads[a].copy().setwidth(power_width).goto(j2.pads[b]).wire()
+
+    shunt.pads[1].setwidth(power_width).goto(j2.pads[4], twist = True).wire()
+    j2.pads[5].setwidth(power_width).w("o f 1 l 90").goto(ldo_1117.s("5V"), twist = True).wire()
+    j2.pads[3].setwidth(power_width).w("i").goto(ldo_1117.s("VCC"), twist = True).wire()
+    ldo_1117.s("VCC").mark()
+
     if ROUTE2:
         # Debug port signals on bottom
 
@@ -698,6 +714,7 @@ def spiq_a():
         print("Starting route")
 
     if ROUTE2:
+
         brd.hex_route(u2.s("CS"), u1.s("QSPI_SS_N"))
         brd.hex_route(u2.s("IO1"), u1.s("QSPI_SD1"))
         brd.hex_route(u2.s("IO2"), u1.s("QSPI_SD2"))
@@ -722,6 +739,18 @@ def spiq_a():
         brd.hex_route(lcd.s("SCL"), u1.s("GPIO14"))
         brd.hex_route(lcd.s("SDA"), u1.s("GPIO15"))
 
+        if 1:
+            brd.hex_route_net((
+                u1.s("GPIO20"),
+                ina226.s("SDA"),
+                i2c_pullups[0].s("SDA"),
+            ))
+        if 1:
+            brd.hex_route_net((
+                u1.s("GPIO21"),
+                ina226.s("SCL"),
+                i2c_pullups[1].s("SCL"),
+            ))
 
     if 0:
         brd.hex_route(serial_debug.s("SWCLK"), u1.s("SWCLK"))
@@ -852,26 +881,27 @@ def spiq_a():
             ))
             total_airwire_distance += distance
 
-    airwire_headers = ("src", "dest", "distance (mm)")
-    airwire_widths = [
-        max(len(header), *(len(row[column]) for row in airwire_rows))
-        for column, header in enumerate(airwire_headers)
-    ]
-    print("  ".join(
-        header.ljust(airwire_widths[column])
-        for column, header in enumerate(airwire_headers)))
-    print("  ".join("-" * width for width in airwire_widths))
-    for row in airwire_rows:
+    if airwire_rows:
+        airwire_headers = ("src", "dest", "distance (mm)")
+        airwire_widths = [
+            max(len(header), *(len(row[column]) for row in airwire_rows))
+            for column, header in enumerate(airwire_headers)
+        ]
+        print("  ".join(
+            header.ljust(airwire_widths[column])
+            for column, header in enumerate(airwire_headers)))
+        print("  ".join("-" * width for width in airwire_widths))
+        for row in airwire_rows:
+            print("  ".join(
+                value.rjust(airwire_widths[column]) if column == 2 else
+                value.ljust(airwire_widths[column])
+                for column, value in enumerate(row)))
+        print("  ".join("-" * width for width in airwire_widths))
+        total_row = ("total", "", f"{total_airwire_distance:.3f}")
         print("  ".join(
             value.rjust(airwire_widths[column]) if column == 2 else
             value.ljust(airwire_widths[column])
-            for column, value in enumerate(row)))
-    print("  ".join("-" * width for width in airwire_widths))
-    total_row = ("total", "", f"{total_airwire_distance:.3f}")
-    print("  ".join(
-        value.rjust(airwire_widths[column]) if column == 2 else
-        value.ljust(airwire_widths[column])
-        for column, value in enumerate(total_row)))
+            for column, value in enumerate(total_row)))
 
     brd.outline()
     brd.fill()

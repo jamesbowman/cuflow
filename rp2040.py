@@ -130,7 +130,7 @@ class RP2040(QFN56):
         vccs[1].w("i +")
         vccs[2].w("i f .6 l 90 +")
         vccs[3].w("i +")
-        vccs[4].w("o +")
+        vccs[4].w("o f .2 l 45 f .3 +")
         vccs[5].w("o +")
         vccs[6].w("o +")
         vccs[7].goto(vccs[6]).wire()
