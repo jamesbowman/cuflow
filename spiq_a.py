@@ -597,7 +597,7 @@ def spiq_a():
         return brd.DC(xy)
 
     i2c_pullups = []
-    for x, y, angle, signal in ((23, 46, 0, "SDA"), (23, 43, 180, "SCL")):
+    for x, y, angle, signal in ((23, 43, 0, "SDA"), (23, 46, 180, "SCL")):
         resistor = cu.R0402(hex_near(x, y).right(angle), "4K7")
         resistor.pads[0].w("o +").wire()
         resistor.pads[1].setname(signal)
@@ -660,8 +660,12 @@ def spiq_a():
             part.hex_escape()
 
     if ROUTE2:
+        # Debug port signals on bottom
+
         u1.s("SWDIO").hex("lr/f").wire()
         u1.s("SWCLK").hex("ff/f").wire()
+        u1.s("GPIO0").hex("r/f").wire()
+        u1.s("GPIO1").hex("2frf/f").wire()
 
         bus = [u1.s(f"GPIO{i}") for i in range(2, 10)]
         aligner = [
@@ -707,9 +711,17 @@ def spiq_a():
 
         for nm in ("SWDIO", "SWCLK", ):
             brd.hex_route(serial_debug.s(nm), u1.s(nm))
+        brd.hex_route(u1.s("GPIO0"), serial_debug.s("TX"))
+        brd.hex_route(u1.s("GPIO1"), serial_debug.s("RX"))
 
         for (a, b) in zip(bus, j3.pads):
             brd.hex_route(a, b)
+
+        brd.hex_route(lcd.s("D/C"), u1.s("GPIO10"))
+        brd.hex_route(lcd.s("RESET"), u1.s("GPIO11"))
+        brd.hex_route(lcd.s("SCL"), u1.s("GPIO14"))
+        brd.hex_route(lcd.s("SDA"), u1.s("GPIO15"))
+
 
     if 0:
         brd.hex_route(serial_debug.s("SWCLK"), u1.s("SWCLK"))
