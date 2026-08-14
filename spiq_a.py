@@ -21,7 +21,7 @@ def mean(L):
     return sum(L) / len(L)
 
 DO_ROUTING = 0
-ROUTE2 = 1
+ROUTE2 = 0
 
 used_pins = [
 # Module_Serial_Debug
@@ -192,11 +192,16 @@ class USBC(cu.Part):
         baseline = dc.copy().goxy(0, 2.6)
         baseline.mark()
 
+        def routed_slot(slot, length):
+            slot.left(90).stadium(0.3, 60, length - 0.6)
+            self.board.keepouts.append(slot.boundary.buffer(0.2))
+
         for d in (-1, 1):
             p = baseline.copy().goxy(d * 8.65 / 2, 0)
-            p.left(90).mark().stadium(0.3, 60, 1.8 - 0.6)
+            p.mark()
+            routed_slot(p, 1.8)
             p = baseline.copy().goxy(d * 8.65 / 2, 4.2)
-            p.left(90).stadium(0.3, 60, 2.1 - 0.6)
+            routed_slot(p, 2.1)
 
     def hex_escape(self):
         power_width = 2 * self.board.trace
@@ -574,7 +579,7 @@ def spiq_a():
         brd.DC((brd.size[0] / 2, brd.size[1] / 2 - 2)))
     leda = lcd.s("LEDA")
     backlight_resistor = cu.R0603(
-        brd.DC((leda.xy[0] - 2.4, leda.xy[1])), "6R2")
+        brd.DC((13, 16)), "6R2")
     backlight_resistor.pads[0].setname("VCC").w("o +").wire()
     backlight_resistor.pads[1].setname("LEDA")
     leda.copy().goto(backlight_resistor.s("LEDA")).wire()
@@ -660,9 +665,9 @@ def spiq_a():
         usb_body_south = j1.center.xy[1] - 8.94 / 2
         series_resistor_y = usb_body_south - 1.0 - 1.1
         r3 = cu.R0402(
-            brd.DC((3.9, series_resistor_y)).right(90), "27")
+            brd.DC((5.2, series_resistor_y)).right(90), "27")
         r4 = cu.R0402(
-            brd.DC((2.8, series_resistor_y)).right(90), "27")
+            brd.DC((4.1, series_resistor_y)).right(90), "27")
         j1.s("B7").copy().w("i").goto(
             r3.pads[0], twist=True).wire()
         j1.s("A6").copy().w("i").goto(
@@ -915,7 +920,7 @@ def spiq_a():
             for column, value in enumerate(total_row)))
 
     brd.outline()
-    brd.fill()
+    brd.fill(edge_clearance = 0.4)
 
     if DO_ROUTING:
         brd.fill_any("GTL", "VCC")

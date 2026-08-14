@@ -906,9 +906,10 @@ class Board:
     def DCf(self, xy, d = 0):
         return Drawf(self, xy, d)
 
-    def fill(self):
+    def fill(self, edge_clearance = 0.2):
         ko = so.unary_union(self.keepouts)
-        g = sg.box(0, 0, self.size[0], self.size[1]).buffer(-0.2).difference(ko)
+        g = sg.box(0, 0, self.size[0], self.size[1]).buffer(
+            -edge_clearance).difference(ko)
         self.layers['GL2'].fill(g, 'GL2', self.via_space)
         self.layers['GL3'].fill(g, 'GL3', self.via_space)
 

@@ -89,7 +89,8 @@ class HexBoard(cu.Board):
             for diameter, locations in self.holes.items()
             for xy in locations
         ]
-        layer_poly = sg.MultiPolygon(copper + drill_keepouts).buffer(0)
+        layer_poly = sg.MultiPolygon(
+            copper + drill_keepouts + self.keepouts).buffer(0)
         blocked = self.gr.zeros(np.uint8) | (self.gr.valid == 0)
         vv = list(self.gr.valids())
         hexes = [sg.Point(h.to_plane()).buffer(self.hr) for h in vv]
