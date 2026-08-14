@@ -1,10 +1,11 @@
-gerbv \
+gerbv-app -u mm \
 -f '#FFFFFF' $1.GTO \
 -f '#FF0000' $1.TXT \
 -f '#a0a000' $1.GTL \
 -f '#008000' $1.GBL \
--f '#202020' $1.GML \
+-f '#ff2000' $1.GML \
 -f '#505050' $1.GBO \
 -f '#FFFF00' $1.G2L \
 -f '#00FFFF' $1.G3L \
 -f '#FF00FF' $1.AIR \
+-f '#608090' $1.HEX \
