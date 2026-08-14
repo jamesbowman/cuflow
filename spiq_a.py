@@ -20,8 +20,7 @@ from hexboard import HexBoard, river_ongrid, wire_ongrid
 def mean(L):
     return sum(L) / len(L)
 
-DO_ROUTING = 0
-ROUTE2 = 0
+ROUTE2 = 1
 
 used_pins = [
 # Module_Serial_Debug
@@ -629,18 +628,12 @@ def spiq_a():
     def ucap(p, val = '100nF'):
         cn = cu.C0402_nolabel(p, val)
         cn.pads[0].setname("GND")
-        if DO_ROUTING:
-            cn.pads[0].w("o f .5 / f .6").wire()
         return cn
     def cap(p, val = '100nF'):
         cn = ucap(p, val)
         cn.pads[1].setname("VCC")
-        if DO_ROUTING:
-            cn.pads[1].w("o f .3").wire()
     def hcap(p, val = '100nF'):
         cn = ucap(p, val)
-        if DO_ROUTING:
-            wire_ongrid(cn.pads[1].w("o f .2"))
         return cn
     if 1:
         cap_xs = iter(range(4, 40, 4))
@@ -673,7 +666,7 @@ def spiq_a():
             r5.pads[0], twist=True).wire()
         j1.s("A6").copy().w("i").goto(
             r6.pads[0], twist=True).wire()
-        if DO_ROUTING or ROUTE2:
+        if ROUTE2:
             for r in (r5, r6):
                 wire_ongrid(r.pads[1].w("o f 0"))
 
@@ -724,7 +717,7 @@ def spiq_a():
         u3.s("SDA").hex("/>18f/>3f").wire()
 
 
-    if DO_ROUTING or ROUTE2:
+    if ROUTE2:
         t0 = time.monotonic()
         brd.hex_setup()
         t1 = time.monotonic()
@@ -786,7 +779,7 @@ def spiq_a():
         print(f"Hex setup:   {t1-t0:.3f} s")
         print(f"Hex route:   {t2-t1:.3f} s")
 
-    if DO_ROUTING or ROUTE2:
+    if ROUTE2:
         brd.hex_render()
         brd.wire_routes()
 
@@ -921,10 +914,6 @@ def spiq_a():
 
     brd.outline()
     brd.fill(edge_clearance = 0.4)
-
-    if DO_ROUTING:
-        brd.fill_any("GTL", "VCC")
-        brd.fill_any("GBL", "GND")
 
     if 0:
         layout_dc((25.5, 6.4)).ctext("(C) EXCAMERA", scale = 1.1)
