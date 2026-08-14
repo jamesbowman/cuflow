@@ -220,16 +220,16 @@ class USBC(cu.Part):
         self.s("B7").copy().w("o f 0.4 l 90").goto(
             self.s("A7"), twist=True).wire()
 
-        r7_center = self.s("B5").copy().w(
+        r8_center = self.s("B5").copy().w(
             "o f 2 l 90 f 0.65 l 90").setname(None)
-        r6_center = self.board.DC(
-            (r7_center.xy[0] + 1.1, r7_center.xy[1]), r7_center.dir)
-        r6 = cu.R0402(r6_center, "5K1")
+        r7_center = self.board.DC(
+            (r8_center.xy[0] + 1.1, r8_center.xy[1]), r8_center.dir)
         r7 = cu.R0402(r7_center, "5K1")
+        r8 = cu.R0402(r8_center, "5K1")
 
-        self.s("A5").copy().w("o f 1 l 90 f 2").goto( r6.pads[0], twist=False).wire()
-        self.s("B5").copy().w("o").goto(r7.pads[0]).wire()
-        for resistor in (r6, r7):
+        self.s("A5").copy().w("o f 1 l 90 f 2").goto( r7.pads[0], twist=False).wire()
+        self.s("B5").copy().w("o").goto(r8.pads[0]).wire()
+        for resistor in (r7, r8):
             resistor.pads[1].w("o -")
 
 
@@ -575,16 +575,15 @@ def spiq_a():
         p.setname(nm)
         brd.DC((label_x, p.xy[1])).ctext(nm, scale = 1.32)
 
-    lcd = Module_LCD240x240(
+    u3 = Module_LCD240x240(
         brd.DC((brd.size[0] / 2, brd.size[1] / 2 - 2)))
-    leda = lcd.s("LEDA")
-    backlight_resistor = cu.R0603(
-        brd.DC((13, 16)), "6R2")
-    backlight_resistor.pads[0].setname("VCC").w("o +").wire()
-    backlight_resistor.pads[1].setname("LEDA")
-    leda.copy().goto(backlight_resistor.s("LEDA")).wire()
+    leda = u3.s("LEDA")
+    r1 = cu.R0603(brd.DC((13, 16)), "6R2")
+    r1.pads[0].setname("VCC").w("o +").wire()
+    r1.pads[1].setname("LEDA")
+    leda.copy().goto(r1.s("LEDA")).wire()
 
-    serial_debug = Module_Serial_Debug(
+    j4 = Module_Serial_Debug(
         brd.DC((brd.size[0] / 2, brd.size[1] / 2 + 5))
         .setlayer("GBL").right(90), 6)
 
@@ -593,37 +592,39 @@ def spiq_a():
 
     # External 3V3 supply
     ldo_y = (j2_bottom + j3_top) / 2
-    ldo_1117 = LDO_1117_3V3(
+    u4 = LDO_1117_3V3(
         brd.DC((j2.center.xy[0] + 4, ldo_y)).right(90))
 
     # Internal 3V3 supply
-    ldo_ap2127 = LDO_23_5(layout_dc((12.0, 31.6)).left(90))
-    ldo_5v = ldo_ap2127.pads[0]
+    u5 = LDO_23_5(layout_dc((12.0, 31.6)).left(90))
+    ldo_5v = u5.pads[0]
 
     nearest_usb_5v = min(
         (j1.s("A4/B9"), j1.s("B4/A9")), key=ldo_5v.distance)
     ldo_5v.copy().setlayer("GTL").setwidth(
         2 * brd.trace).goto(nearest_usb_5v, twist = True).wire()
 
-    ina226 = INA226(brd.DC((29.5, 45.1)))
+    u6 = INA226(brd.DC((29.5, 45.1)))
 
-    midpoint = mean([ina226.s(nm).xy[1] for nm in ("IN+", "IN-")])
-    shunt = R1206(brd.DC((35.0, midpoint)).right(90))
-    (p0, p1) = shunt.pads
-    ina226.s("IN+").copy().goto(p0, twist = True).wire()
-    ina226.s("IN-").copy().goto(p1, twist = True).wire()
+    midpoint = mean([u6.s(nm).xy[1] for nm in ("IN+", "IN-")])
+    r2 = R1206(brd.DC((35.0, midpoint)).right(90))
+    (p0, p1) = r2.pads
+    u6.s("IN+").copy().goto(p0, twist = True).wire()
+    u6.s("IN-").copy().goto(p1, twist = True).wire()
 
     def hex_near(x, y):
         xy = Hex.from_xy(x, y).to_plane()
         return brd.DC(xy)
 
-    i2c_pullups = []
-    for x, y, angle, signal in ((23, 43, 0, "SDA"), (23, 46, 180, "SCL")):
-        resistor = cu.R0402(hex_near(x, y).right(angle), "4K7")
+    def setup_i2c_pullup(resistor, signal):
         resistor.pads[0].w("o +").wire()
         resistor.pads[1].setname(signal)
         wire_ongrid(resistor.pads[1].w("o ")).wire()
-        i2c_pullups.append(resistor)
+
+    r3 = cu.R0402(hex_near(23, 43).right(0), "4K7")
+    setup_i2c_pullup(r3, "SDA")
+    r4 = cu.R0402(hex_near(23, 46).right(180), "4K7")
+    setup_i2c_pullup(r4, "SCL")
 
     def ucap(p, val = '100nF'):
         cn = cu.C0402_nolabel(p, val)
@@ -664,16 +665,16 @@ def spiq_a():
     if 1:
         usb_body_south = j1.center.xy[1] - 8.94 / 2
         series_resistor_y = usb_body_south - 1.0 - 1.1
-        r3 = cu.R0402(
+        r5 = cu.R0402(
             brd.DC((5.2, series_resistor_y)).right(90), "27")
-        r4 = cu.R0402(
+        r6 = cu.R0402(
             brd.DC((4.1, series_resistor_y)).right(90), "27")
         j1.s("B7").copy().w("i").goto(
-            r3.pads[0], twist=True).wire()
+            r5.pads[0], twist=True).wire()
         j1.s("A6").copy().w("i").goto(
-            r4.pads[0], twist=True).wire()
+            r6.pads[0], twist=True).wire()
         if DO_ROUTING or ROUTE2:
-            for r in (r3, r4):
+            for r in (r5, r6):
                 wire_ongrid(r.pads[1].w("o f 0"))
 
     for parts in brd.parts.values():
@@ -681,15 +682,15 @@ def spiq_a():
             part.hex_escape()
 
     power_width = 2 * brd.trace
-    j1.s("B4/A9").setwidth(power_width).w("o f 1.1 l 90 f 2.2 r 90").goto(shunt.pads[0]).wire()
+    j1.s("B4/A9").setwidth(power_width).w("o f 1.1 l 90 f 2.2 r 90").goto(r2.pads[0]).wire()
 
     for (a,b) in ((2,3), (4,5)):
         j2.pads[a].copy().setwidth(power_width).goto(j2.pads[b]).wire()
 
-    shunt.pads[1].setwidth(power_width).goto(j2.pads[4], twist = True).wire()
-    j2.pads[5].setwidth(power_width).w("o f 1 l 90").goto(ldo_1117.s("5V"), twist = True).wire()
-    j2.pads[3].setwidth(power_width).w("i").goto(ldo_1117.s("VCC"), twist = True).wire()
-    ldo_1117.s("VCC").mark()
+    r2.pads[1].setwidth(power_width).goto(j2.pads[4], twist = True).wire()
+    j2.pads[5].setwidth(power_width).w("o f 1 l 90").goto(u4.s("5V"), twist = True).wire()
+    j2.pads[3].setwidth(power_width).w("i").goto(u4.s("VCC"), twist = True).wire()
+    u4.s("VCC").mark()
 
     if ROUTE2:
         # Debug port signals on bottom
@@ -717,10 +718,10 @@ def spiq_a():
             p.hex(f"{8 - i}f rfff").wire()
 
         # reorder the LCD signals
-        lcd.s("D/C").hex("/>6f/>13f").wire()
-        lcd.s("RESET").hex("/>10f/>6f").wire()
-        lcd.s("SCL").hex("f/>14f/>9f").wire()
-        lcd.s("SDA").hex("/>18f/>3f").wire()
+        u3.s("D/C").hex("/>6f/>13f").wire()
+        u3.s("RESET").hex("/>10f/>6f").wire()
+        u3.s("SCL").hex("f/>14f/>9f").wire()
+        u3.s("SDA").hex("/>18f/>3f").wire()
 
 
     if DO_ROUTING or ROUTE2:
@@ -738,47 +739,47 @@ def spiq_a():
         brd.hex_route(u2.s("CLK"), u1.s("QSPI_SCLK"))
         brd.hex_route(u2.s("IO3"), u1.s("QSPI_SD3"))
 
-        brd.hex_route(u1.s("USB_DM"), r3.pads[1])
-        brd.hex_route(u1.s("USB_DP"), r4.pads[1])
+        brd.hex_route(u1.s("USB_DM"), r5.pads[1])
+        brd.hex_route(u1.s("USB_DP"), r6.pads[1])
         brd.hex_route(u1.s("XIN"), y1.s("CLK"))
 
         for nm in ("SWDIO", "SWCLK", ):
-            brd.hex_route(serial_debug.s(nm), u1.s(nm))
-        brd.hex_route(u1.s("GPIO0"), serial_debug.s("TX"))
-        brd.hex_route(u1.s("GPIO1"), serial_debug.s("RX"))
+            brd.hex_route(j4.s(nm), u1.s(nm))
+        brd.hex_route(u1.s("GPIO0"), j4.s("TX"))
+        brd.hex_route(u1.s("GPIO1"), j4.s("RX"))
 
         for (a, b) in zip(bus, j3.pads):
             brd.hex_route(a, b)
 
-        brd.hex_route(lcd.s("D/C"), u1.s("GPIO10"))
-        brd.hex_route(lcd.s("RESET"), u1.s("GPIO11"))
-        brd.hex_route(lcd.s("SCL"), u1.s("GPIO14"))
-        brd.hex_route(lcd.s("SDA"), u1.s("GPIO15"))
+        brd.hex_route(u3.s("D/C"), u1.s("GPIO10"))
+        brd.hex_route(u3.s("RESET"), u1.s("GPIO11"))
+        brd.hex_route(u3.s("SCL"), u1.s("GPIO14"))
+        brd.hex_route(u3.s("SDA"), u1.s("GPIO15"))
 
         if 1:
             brd.hex_route_net((
                 u1.s("GPIO20"),
-                ina226.s("SDA"),
-                i2c_pullups[0].s("SDA"),
+                u6.s("SDA"),
+                r3.s("SDA"),
             ))
         if 1:
             brd.hex_route_net((
                 u1.s("GPIO21"),
-                ina226.s("SCL"),
-                i2c_pullups[1].s("SCL"),
+                u6.s("SCL"),
+                r4.s("SCL"),
             ))
 
     if 0:
-        brd.hex_route(serial_debug.s("SWCLK"), u1.s("SWCLK"))
-        brd.hex_route(serial_debug.s("RX"), u1.s("GPIO1"))
-        brd.hex_route(serial_debug.s("TX"), u1.s("GPIO0"))
-        brd.hex_route(serial_debug.s("SWDIO"), u1.s("SWD"))
+        brd.hex_route(j4.s("SWCLK"), u1.s("SWCLK"))
+        brd.hex_route(j4.s("RX"), u1.s("GPIO1"))
+        brd.hex_route(j4.s("TX"), u1.s("GPIO0"))
+        brd.hex_route(j4.s("SWDIO"), u1.s("SWD"))
         if HAVEUSB:
-            brd.hex_route(j1.s("D-"), r3.pads[0])
-            brd.hex_route(j1.s("D+"), r4.pads[0])
+            brd.hex_route(j1.s("D-"), r5.pads[0])
+            brd.hex_route(j1.s("D+"), r6.pads[0])
         if HAVEUSB:
-            brd.hex_route(u1.s("USB_DM"), r3.pads[1])
-        brd.hex_route(u1.s("USB_DP"), r4.pads[1])
+            brd.hex_route(u1.s("USB_DM"), r5.pads[1])
+        brd.hex_route(u1.s("USB_DP"), r6.pads[1])
 
 
         t2 = time.monotonic()
@@ -790,8 +791,8 @@ def spiq_a():
         brd.wire_routes()
 
     pinout_modules = {
-        "Module_LCD240x240": lcd,
-        "Module_spiq_pwr": ina226,
+        "Module_LCD240x240": u3,
+        "Module_spiq_pwr": u6,
         "Module_spiq_ios": j3,
     }
     airwires = []
@@ -825,17 +826,16 @@ def spiq_a():
     airwires.append((u1.s("XIN"), y1.s("CLK")))
 
     usb_airwires = (
-        (r3.pads[1], u1.s("USB_DM")),
-        (r4.pads[1], u1.s("USB_DP")),
+        (r5.pads[1], u1.s("USB_DM")),
+        (r6.pads[1], u1.s("USB_DP")),
     )
     airwires.extend(usb_airwires)
 
-    sda_pullup, scl_pullup = i2c_pullups
     current_measurement_airwires = (
         (current_measurement_bus_sources["SDA"],
-         ina226.s("SDA"), sda_pullup.s("SDA")),
+         u6.s("SDA"), r3.s("SDA")),
         (current_measurement_bus_sources["SCL"],
-         ina226.s("SCL"), scl_pullup.s("SCL")),
+         u6.s("SCL"), r4.s("SCL")),
     )
     airwires.extend(current_measurement_airwires)
 
