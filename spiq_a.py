@@ -536,6 +536,8 @@ def spiq_a():
     j2 = PZ254RS(brd.DC((50.0, 38.65)), 6)
     for p, nm in zip(j2.pads, ("GND", "GND", "VCC", "VCC", "5V", "5V")):
         p.setname(nm)
+    for i in (0,1):
+        j2.pads[i].w("o -")
     label_x = j2.center.xy[0] + 7.1
     pair_centers = []
     for pair, label in zip((j2.pads[0:2], j2.pads[2:4], j2.pads[4:6]),
@@ -675,7 +677,7 @@ def spiq_a():
         for p, a in zip(bus, aligner):
             p.hex(a).wire()
         for (i, p) in enumerate(bus):
-            p.hex(f"{i+2}f r / {i + 30}f / >>")
+            p.hex(f"{i+2}f r / {i + 37}f / >>")
             p.hex(f"{8 - i}f rfff").wire()
 
     if DO_ROUTING or ROUTE2:
