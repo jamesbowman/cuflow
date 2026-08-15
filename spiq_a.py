@@ -160,6 +160,7 @@ class USBmicro(eagle.LibraryPart):
         wire_ongrid(self.s("5V").w("i"))
 
 class USBC(cu.Part):
+    mfr = "USB-TYPE-C-018"
     source = {'LCSC': 'C2927038'}   # Also C2765186 (better datasheet)
     family = "J"
 
@@ -194,16 +195,22 @@ class USBC(cu.Part):
         baseline = dc.copy().goxy(0, 2.6)
         baseline.mark()
 
-        def routed_slot(slot, length):
-            slot.left(90).stadium(0.3, 60, length - 0.6)
-            self.board.keepouts.append(slot.boundary.buffer(0.2))
+        def plated_slot(slot, land_length):
+            # C2765186 specifies a 0.6 mm routed slot surrounded by a
+            # 0.2 mm land: 1.4/1.7 mm slots in 1.8/2.1 mm lands.
+            slot_length = land_length - 0.4
+            slot.left(90).stadium(0.3, 60, slot_length - 0.6)
+            land = slot.boundary.buffer(0.2)
+            for layer in ("GTL", "GTS", "GTP", "GBL", "GBS"):
+                self.board.layers[layer].add(land, "SHIELD")
+            self.board.keepouts.append(land)
 
         for d in (-1, 1):
             p = baseline.copy().goxy(d * 8.65 / 2, 0)
             p.mark()
-            routed_slot(p, 1.8)
+            plated_slot(p, 1.8)
             p = baseline.copy().goxy(d * 8.65 / 2, 4.2)
-            routed_slot(p, 2.1)
+            plated_slot(p, 2.1)
 
     def hex_escape(self):
         power_width = 2 * self.board.trace
@@ -238,6 +245,10 @@ class USBC(cu.Part):
 class PZ254RS(cu.Part):
     family = "J"
     footprint = "PZ254RS-11-NP-01"
+    lcsc_by_pin_count = {
+        6: "C52191418",
+        8: "C52191420",
+    }
     pitch = 2.54
     body_width = 2.5
     pad_width = 1.02
@@ -247,6 +258,8 @@ class PZ254RS(cu.Part):
         self.N = int(self.val)
         assert 2 <= self.N <= 40
         self.mfr = f"PZ254RS-11-{self.N:02d}P-01"
+        if self.N in self.lcsc_by_pin_count:
+            self.source = {"LCSC": self.lcsc_by_pin_count[self.N]}
         self.val = ""
 
         self.chamfered(dc, self.body_width, self.N * self.pitch)
@@ -400,6 +413,7 @@ class VSSOP10(cu.Part):
 
 class INA226(VSSOP10):
     mfr = "INA226AIDGSR"
+    source = {"LCSC": "C49851"}
 
     def place(self, dc):
         super().place(dc)
@@ -579,6 +593,7 @@ def spiq_a():
 
     u3 = Module_LCD240x240(
         brd.DC((brd.size[0] / 2, brd.size[1] / 2 - 2)))
+    u3.inBOM = False
     leda = u3.s("LEDA")
     r1 = cu.R0603(brd.DC((12.5, 14)).right(90), "6R2")
     r1.pads[0].setname("VCC").w("o +").wire()
@@ -588,6 +603,7 @@ def spiq_a():
     j4 = Module_Serial_Debug(
         brd.DC((brd.size[0] / 2, brd.size[1] / 2 + 5))
         .setlayer("GBL").right(90), 6)
+    j4.inBOM = False
 
     j2_bottom = j2.center.xy[1] - j2.N * j2.pitch / 2
     j3_top = j3.center.xy[1] + j3.N * j3.pitch / 2
@@ -609,7 +625,7 @@ def spiq_a():
     u6 = INA226(brd.DC((29.5, 44.1)))
 
     midpoint = mean([u6.s(nm).xy[1] for nm in ("IN+", "IN-")])
-    r2 = R1206(brd.DC((34.0, midpoint)).right(90))
+    r2 = R1206(brd.DC((34.0, midpoint)).right(90), "0R27")
     (p0, p1) = r2.pads
     u6.s("IN+").copy().goto(p0, twist = True).wire()
     u6.s("IN-").copy().goto(p1, twist = True).wire()
@@ -623,9 +639,9 @@ def spiq_a():
         resistor.pads[1].setname(signal)
         wire_ongrid(resistor.pads[1].w("o ")).wire()
 
-    r3 = cu.R0402(hex_near(23, 43).right(0), "4K7")
+    r3 = cu.R0402(hex_near(23, 43).right(0), "5K1")
     setup_i2c_pullup(r3, "SDA")
-    r4 = cu.R0402(hex_near(23, 45).right(180), "4K7")
+    r4 = cu.R0402(hex_near(23, 45).right(180), "5K1")
     setup_i2c_pullup(r4, "SCL")
 
     def ucap(p, val = '100nF'):
