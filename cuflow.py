@@ -947,6 +947,9 @@ class Board:
         gml = self.layers['GML'].lines
         assert gml != [], "Missing board outline"
         mask = sg.Polygon(gml[-1], gml[:-1])
+        routed = self.layers['GML'].routed
+        if routed:
+            mask = mask.difference(so.unary_union(routed))
         for d,xys in self.holes.items():
             if d > 0.3:
                 hlist = so.unary_union([sg.Point(xy).buffer(d / 2) for xy in xys])
@@ -959,6 +962,9 @@ class Board:
         if gml == []:
             return substrate
         mask = sg.Polygon(gml[-1], gml[:-1])
+        routed = self.layers['GML'].routed
+        if routed:
+            mask = mask.difference(so.unary_union(routed))
         for d,xys in self.holes.items():
             if d > 0.3:
                 hlist = so.unary_union([sg.Point(xy).buffer(d / 2) for xy in xys])
@@ -994,6 +1000,15 @@ class Board:
             self.layers['GTL'].povray(f, mask = mask)
         with open(basename + ".gts.pov", "wt") as f:
             self.layers['GTS'].povray(f, mask = mask, invert = True)
+        # Copper covered by top solder mask.  This is useful to render the
+        # slight conformal rise of solder mask over traces separately from
+        # exposed, surface-finished copper.
+        covered_copper = Layer(None)
+        covered_copper.add(
+            self.layers['GTL'].preview().difference(
+                self.layers['GTS'].preview()).intersection(mask))
+        with open(basename + ".gtl-covered.pov", "wt") as f:
+            covered_copper.povray(f, mask = mask)
 
         self.bom(basename)
         self.pnp(basename)
