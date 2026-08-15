@@ -65,8 +65,12 @@ class Layer:
         surface = self.preview()
         g = gerber.Gerber(f, self.desc)
         def renderpoly(g, po):
-            if type(po) == sg.MultiPolygon:
+            if po.is_empty:
+                return
+            if isinstance(po, (sg.MultiPolygon, sg.GeometryCollection)):
                 [renderpoly(g, p) for p in po.geoms]
+                return
+            if not isinstance(po, sg.Polygon):
                 return
             # Subdivide a poly if it has holes
             if len(po.interiors) == 0:
@@ -77,15 +81,11 @@ class Layer:
                 y0 = min([y for (x, y) in po.exterior.coords])
                 y1 = max([y for (x, y) in po.exterior.coords])
                 xm = (x0 + x1) / 2
-                eps = 0.005
-                # eps = 0.000
+                eps = 0.000
                 renderpoly(g, po.intersection(sg.box(x0, y0, xm + eps, y1)))
                 renderpoly(g, po.intersection(sg.box(xm - eps, y0, x1, y1)))
 
-        if isinstance(surface, sg.Polygon):
-            renderpoly(g, surface)
-        else:
-            [renderpoly(g, po) for po in surface.geoms]
+        renderpoly(g, surface)
         g.finish()
 
     def povray(self, f, prefix = "polygon {", mask = None, invert = False):

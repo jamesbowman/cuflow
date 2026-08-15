@@ -1,5 +1,6 @@
 import numpy as np
 import shapely.geometry as sg
+import shapely.ops as so
 from collections import deque
 from shapely.strtree import STRtree
 from PIL import Image, ImageDraw, ImageFont
@@ -93,7 +94,7 @@ class HexBoard(cu.Board):
             for diameter, locations in self.holes.items()
             for xy in locations
         ]
-        layer_poly = sg.MultiPolygon(
+        layer_poly = so.unary_union(
             copper + drill_keepouts + self.keepouts +
             self.route_keepouts[nm]).buffer(0)
         blocked = self.gr.zeros(np.uint8) | (self.gr.valid == 0)
@@ -234,9 +235,21 @@ class HexBoard(cu.Board):
             (x, y) = xy
             return (x * ppmm, (self.size[1]  - y) * ppmm)
 
-        for (nm, p) in self.layers['GTL'].polys:
-            pts = [xf(p) for p in p.exterior.coords]
-            dr.polygon(pts, fill = (60, 60, 160))
+        def draw_geometry(geometry):
+            if isinstance(geometry, sg.Polygon):
+                dr.polygon(
+                    [xf(point) for point in geometry.exterior.coords],
+                    fill = (60, 60, 160))
+                for interior in geometry.interiors:
+                    dr.polygon(
+                        [xf(point) for point in interior.coords],
+                        fill = 'black')
+            elif hasattr(geometry, "geoms"):
+                for child in geometry.geoms:
+                    draw_geometry(child)
+
+        for _, polygon in self.layers['GTL'].polys:
+            draw_geometry(polygon)
 
         for h in self.gr.valids():
             if not self.blocked['GTL'][h.q, h.r]:

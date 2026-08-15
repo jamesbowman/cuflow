@@ -4,9 +4,12 @@ import math
 import time
 from pathlib import Path
 
+import shapely.affinity as sa
 import shapely.geometry as sg
+import shapely.ops as so
 
 import cuflow as cu
+import svg_loader
 import svgout
 import eagle
 from dazzler import Dazzler
@@ -488,6 +491,32 @@ def spiq_a():
         via_space = cu.mil(5),
         silk = cu.mil(5))
 
+    def spiq_logo():
+        x0, y0 = (0.9, 0.9)
+        x1, y1 = (13.6, 10)
+
+        svg_path = Path(__file__).with_name("spiq-path.svg")
+        artwork = svg_loader.load(
+            svg_path, fill="#f6d410", tolerance=0.05)
+        assert not artwork.is_empty, "No gold artwork found in spiq-path.svg"
+
+        source_x0, source_y0, source_x1, source_y1 = artwork.bounds
+        scale_x = (x1 - x0) / (source_x1 - source_x0)
+        scale_y = -(y1 - y0) / (source_y1 - source_y0)
+        artwork = sa.affine_transform(artwork, (
+            scale_x, 0, 0, scale_y,
+            x0 - scale_x * source_x0,
+            y1 - scale_y * source_y0,
+        ))
+        brd.layers["GTL"].add(artwork)
+        brd.layers["GTS"].add(artwork.buffer(0.05))
+        if 0:
+            r = 0.100 / 2
+            bd = artwork.buffer(r).boundary
+            brd.layers["GTO"].add(bd.buffer(r))
+
+    spiq_logo()
+
     layout_offset = Hex(-12, 24)
     layout_dx, layout_dy = layout_offset.to_plane()
 
@@ -550,10 +579,10 @@ def spiq_a():
     u3 = Module_LCD240x240(
         brd.DC((brd.size[0] / 2, brd.size[1] / 2 - 2)))
     leda = u3.s("LEDA")
-    r1 = cu.R0603(brd.DC((13, 16)), "6R2")
+    r1 = cu.R0603(brd.DC((12.5, 14)).right(90), "6R2")
     r1.pads[0].setname("VCC").w("o +").wire()
     r1.pads[1].setname("LEDA")
-    leda.copy().goto(r1.s("LEDA")).wire()
+    leda.copy().w("i f 3").goto(r1.s("LEDA")).wire()
 
     j4 = Module_Serial_Debug(
         brd.DC((brd.size[0] / 2, brd.size[1] / 2 + 5))
