@@ -471,8 +471,11 @@ def spiq_a():
         x1, y1 = (13.6, 10)
 
         svg_path = Path(__file__).with_name("spiq-path.svg")
-        artwork = svg_loader.load(
-            svg_path, fill="#f6d410", tolerance=0.05)
+        try:
+            artwork = svg_loader.load(
+                svg_path, fill="#f6d410", tolerance=0.05)
+        except FileNotFoundError:
+            return
         assert not artwork.is_empty, "No gold artwork found in spiq-path.svg"
 
         source_x0, source_y0, source_x1, source_y1 = artwork.bounds
@@ -714,7 +717,7 @@ def spiq_a():
         for p, a in zip(bus, aligner):
             p.hex(a).wire()
         for (i, p) in enumerate(bus):
-            p.hex(f"{i+2}f r / {i + 37}f / >>")
+            p.hex(f"{i+2}f r / {i + 35}f / >>")
             p.hex(f"{8 - i}f rfff").wire()
 
         # reorder the LCD signals
