@@ -170,8 +170,6 @@ class USBC(cu.Part):
     def place(self, dc):
         self.chamfered(dc.copy().forward(7.35 / 2), 8.94, 7.35)
 
-        dc.mark()
-
         holes = dc.copy().forward(6.28)
         for d in (-1, 1):
             holes.copy().goxy(d * 5.78 / 2, 0).hole(0.65, ko = 0.22)
@@ -190,10 +188,8 @@ class USBC(cu.Part):
         )
         for pad, name in zip(self.pads, pad_names):
             pad.setname(name)
-        self.s("A6").mark()
 
         baseline = dc.copy().goxy(0, 2.6)
-        baseline.mark()
 
         def plated_slot(slot, land_length):
             # C2765186 specifies a 0.6 mm routed slot surrounded by a
@@ -207,7 +203,6 @@ class USBC(cu.Part):
 
         for d in (-1, 1):
             p = baseline.copy().goxy(d * 8.65 / 2, 0)
-            p.mark()
             plated_slot(p, 1.8)
             p = baseline.copy().goxy(d * 8.65 / 2, 4.2)
             plated_slot(p, 2.1)
@@ -644,6 +639,14 @@ def spiq_a():
     r4 = cu.R0402(hex_near(23, 45).right(180), "5K1")
     setup_i2c_pullup(r4, "SCL")
 
+    p = hex_near(16, 46)
+    r10 = cu.R0402(p, "5K1")
+    r11 = cu.R0402(p.forward(-1.1), "5K1")
+    r10.pads[1].w("l 90 f 1.7").wire()
+    r11.pads[1].w("o -")
+    r10.pads[0].goto(r11.pads[0]).wire()
+    analog_vin = wire_ongrid(r11.pads[0].w("o")).hex("/ f").wire()
+
     def ucap(p, val = '100nF'):
         cn = cu.C0402_nolabel(p, val)
         cn.pads[0].setname("GND")
@@ -735,6 +738,8 @@ def spiq_a():
         u1.s("GPIO0").hex("r/f").wire()
         u1.s("GPIO1").hex("2frf/f").wire()
 
+        wire_ongrid(u1.s("GPIO26/ADC0").w("o f .4 ")).hex("/ f").wire()
+
         bus = [u1.s(f"GPIO{i}") for i in range(2, 10)]
         aligner = [
             "f",
@@ -803,6 +808,8 @@ def spiq_a():
                 u6.s("SCL"),
                 r4.s("SCL"),
             ))
+        brd.hex_route(analog_vin, u1.s("GPIO26/ADC0"))
+
 
     if ROUTE2:
         brd.hex_render()
