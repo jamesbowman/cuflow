@@ -1,23 +1,14 @@
-import sys
-import json
-import math
-import time
 from pathlib import Path
 
 import shapely.affinity as sa
 import shapely.geometry as sg
-import shapely.ops as so
 
 import cuflow as cu
 import svg_loader
-import svgout
-import eagle
-from dazzler import Dazzler
-from collections import defaultdict
 from rp2040 import RP2040
 
 import hex
-from hex import Hex, axial_direction_vectors
+from hex import Hex
 from hexboard import HexBoard, river_ongrid, wire_ongrid
 
 def mean(L):
@@ -123,41 +114,16 @@ class HexW25Q128(cu.SOIC8):
     def hex_escape(self):
         [c.setname(nm) for (c, nm) in zip(self.pads, "CS IO1 IO2 GND IO0 CLK IO3 VCC".split())]
 
-        # bootsel = self.s("CS").copy().w("i l 90 f 3 r 90").wire()
-
         for p in self.pads:
             if p.name == "GND":
                 p.w("i -")
             elif p.name == "VCC":
                 p.w("i +")
             else:
-                # p.copy().w("o f 0.5").ctext(p.name, scale = 0.4)
                 p.w("o f .1")
                 wire_ongrid(p)
                 p.wire()
 
-
-class USBmicro(eagle.LibraryPart):
-    libraryfile = "10118194-0001LF.lbr"
-    partname = "AMPHENOL_10118194-0001LF"
-    mfr = "AMPHENOL_10118194-0001LF"
-    footprint = "SMD"
-    source = {"LCSC": "C132563"}
-    family = "J"
-
-    def pnp_jlc(self):
-        return self.center.copy().forward(1.3)
-
-    def setnames(self):
-        [p.setname(nm) for (p,nm) in zip(self.pads, ('5V', 'D-', 'D+', '', 'GND'))]
-
-    def hex_escape(self):
-        self.setnames()
-        self.s("GND").w("i f .3 l 90 f 2 / f 1").wire()
-        for nm in ('D-', 'D+'):
-            p = self.s(nm)
-            wire_ongrid(p.w("o f 0.1"))
-        wire_ongrid(self.s("5V").w("i"))
 
 class USBC(cu.Part):
     mfr = "USB-TYPE-C-018"
@@ -536,8 +502,6 @@ def spiq_a():
     def layout_dc(xy):
         return brd.DC(layout_xy(xy))
 
-    origin = Hex.from_xy(21, 20) + layout_offset
-
     xy = Hex.from_xy(7, 27).to_plane()
     dc = brd.DC((xy[0], xy[1]))
     u1 = HexRP2040(dc.left(120))
@@ -550,7 +514,6 @@ def spiq_a():
 
     # Match the legacy SPIDriver's 6.25 mm top-edge offset.
     j1 = USBC(brd.DC((0, brd.size[1] - 6.25)).right(90))
-    HAVEUSB = 0
 
     j2 = PZ254RS(brd.DC((50.0, 38.65)), 6)
     for p, nm in zip(j2.pads, ("GND", "GND", "VCC", "VCC", "5V", "5V")):
@@ -658,63 +621,60 @@ def spiq_a():
             cn.pads[0].w("o -")
             cn.pads[1].w("o +")
         return cn
-    if 1:
-        def ldo_cap(package, center, value, supply, ldo_pad, twist = False):
-            capacitor = package(center, value)
-            capacitor.pads[0].setname("GND").setwidth(
-                2 * brd.trace).w("o -")
-            capacitor.pads[1].setname(supply).setwidth(2 * brd.trace)
-            capacitor.pads[1].copy().goto(ldo_pad, twist).wire()
-            brd.addnet(capacitor.pads[1], ldo_pad)
-            return capacitor
+    def ldo_cap(package, center, value, supply, ldo_pad, twist = False):
+        capacitor = package(center, value)
+        capacitor.pads[0].setname("GND").setwidth(
+            2 * brd.trace).w("o -")
+        capacitor.pads[1].setname(supply).setwidth(2 * brd.trace)
+        capacitor.pads[1].copy().goto(ldo_pad, twist).wire()
+        brd.addnet(capacitor.pads[1], ldo_pad)
+        return capacitor
 
-        # U4: the 1117 regulator needs bulk capacitance on both sides.
-        c1 = ldo_cap(
-            cu.C0805, brd.DC((47.5, u4.center.xy[1])).right(90),
-            "10uF", "5V", u4.s("5V"), True)
-        c2 = ldo_cap(
-            cu.C0805_nolabel, brd.DC((59.3, u4.pads[2].xy[1])).right(90),
-            "10uF", "VCC", u4.pads[0])
+    # U4: the 1117 regulator needs bulk capacitance on both sides.
+    c1 = ldo_cap(
+        cu.C0805, brd.DC((47.5, u4.center.xy[1])).right(90),
+        "10uF", "5V", u4.s("5V"), True)
+    c2 = ldo_cap(
+        cu.C0805_nolabel, brd.DC((59.3, u4.pads[2].xy[1])).right(90),
+        "10uF", "VCC", u4.pads[0])
 
-        # U5: use the AP2127 datasheet's 1 uF input minimum and a
-        # little extra output capacitance for transient response.
-        c3 = ldo_cap(
-            cu.C0603, brd.DC((10.3, 38)).right(180),
-            "1uF", "5V", u5.pads[0])
-        c4 = ldo_cap(
-            cu.C0603, brd.DC((12.2, 45)).right(90),
-            "4.7uF", "VCC", u5.pads[4], True)
+    # U5: use the AP2127 datasheet's 1 uF input minimum and a
+    # little extra output capacitance for transient response.
+    c3 = ldo_cap(
+        cu.C0603, brd.DC((10.3, 38)).right(180),
+        "1uF", "5V", u5.pads[0])
+    c4 = ldo_cap(
+        cu.C0603, brd.DC((12.2, 45)).right(90),
+        "4.7uF", "VCC", u5.pads[4], True)
 
-        # Add all 100 nF 0402 capacitors after the LDO capacitors.
-        c5 = cap(u2.center.copy().forward(3.6))
-        c6 = cap(u6.center.copy().forward(2.3))
-        c7 = cap(brd.DC((13.0, 26.0)).right(150))
-        c8 = cap(brd.DC((12.7, 30.5)).right(150))
-        c9 = cap(brd.DC((3.3, 31.5)).right(150))
-        c10 = cu.C0402_nolabel(brd.DC((1.3, 23.7)).right(90), '100nF')
-        u1.s("DVDD2").copy().w("o f 2").goto(c10.pads[0], True).wire()
-        c10.pads[1].w("o -")
+    # Add all 100 nF 0402 capacitors after the LDO capacitors.
+    c5 = cap(u2.center.copy().forward(3.6))
+    c6 = cap(u6.center.copy().forward(2.3))
+    c7 = cap(brd.DC((13.0, 26.0)).right(150))
+    c8 = cap(brd.DC((12.7, 30.5)).right(150))
+    c9 = cap(brd.DC((3.3, 31.5)).right(150))
+    c10 = cu.C0402_nolabel(brd.DC((1.3, 23.7)).right(90), '100nF')
+    u1.s("DVDD2").copy().w("o f 2").goto(c10.pads[0], True).wire()
+    c10.pads[1].w("o -")
 
-    if 1:
-        y1 = Osc_12MHz(brd.DC((12, 34)).right(60))
-        y1_body = y1.center.copy().rect(2.8, 3.5).poly()
-        for layer in ("GTL", "GBL"):
-            brd.route_keepouts[layer].append(y1_body)
+    y1 = Osc_12MHz(brd.DC((12, 34)).right(60))
+    y1_body = y1.center.copy().rect(2.8, 3.5).poly()
+    for layer in ("GTL", "GBL"):
+        brd.route_keepouts[layer].append(y1_body)
 
-    if 1:
-        usb_body_south = j1.center.xy[1] - 8.94 / 2
-        series_resistor_y = usb_body_south - 1.0 - 1.1
-        r7 = cu.R0402(
-            brd.DC((5.2, series_resistor_y)).right(90), "27")
-        r8 = cu.R0402(
-            brd.DC((4.1, series_resistor_y)).right(90), "27")
-        j1.s("B7").copy().w("i").goto(
-            r7.pads[0], twist=True).wire()
-        j1.s("A6").copy().w("i").goto(
-            r8.pads[0], twist=True).wire()
-        if ROUTE2:
-            for r in (r7, r8):
-                wire_ongrid(r.pads[1].w("o f 0"))
+    usb_body_south = j1.center.xy[1] - 8.94 / 2
+    series_resistor_y = usb_body_south - 1.0 - 1.1
+    r7 = cu.R0402(
+        brd.DC((5.2, series_resistor_y)).right(90), "27")
+    r8 = cu.R0402(
+        brd.DC((4.1, series_resistor_y)).right(90), "27")
+    j1.s("B7").copy().w("i").goto(
+        r7.pads[0], twist=True).wire()
+    j1.s("A6").copy().w("i").goto(
+        r8.pads[0], twist=True).wire()
+    if ROUTE2:
+        for r in (r7, r8):
+            wire_ongrid(r.pads[1].w("o f 0"))
 
     for parts in brd.parts.values():
         for part in parts:
@@ -765,9 +725,7 @@ def spiq_a():
 
 
     if ROUTE2:
-        t0 = time.monotonic()
         brd.hex_setup()
-        t1 = time.monotonic()
         print("Starting route")
 
     if ROUTE2:
@@ -796,18 +754,16 @@ def spiq_a():
         brd.hex_route(u3.s("SCL"), u1.s("GPIO14"))
         brd.hex_route(u3.s("SDA"), u1.s("GPIO15"))
 
-        if 1:
-            brd.hex_route_net((
-                u1.s("GPIO20"),
-                u6.s("SDA"),
-                r3.s("SDA"),
-            ))
-        if 1:
-            brd.hex_route_net((
-                u1.s("GPIO21"),
-                u6.s("SCL"),
-                r4.s("SCL"),
-            ))
+        brd.hex_route_net((
+            u1.s("GPIO20"),
+            u6.s("SDA"),
+            r3.s("SDA"),
+        ))
+        brd.hex_route_net((
+            u1.s("GPIO21"),
+            u6.s("SCL"),
+            r4.s("SCL"),
+        ))
         brd.hex_route(analog_vin, u1.s("GPIO26/ADC0"))
 
 
