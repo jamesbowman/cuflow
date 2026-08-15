@@ -190,17 +190,21 @@ class USBC(cu.Part):
         self.s("B7").copy().w("o f 0.4 l 90").goto(
             self.s("A7"), twist=True).wire()
 
-        r10_center = self.s("B5").copy().w(
+        r8_center = self.s("B5").copy().w(
             "o f 2 l 90 f 0.65 l 90").setname(None)
-        r9_center = self.board.DC(
-            (r10_center.xy[0] + 1.1, r10_center.xy[1]), r10_center.dir)
-        r9 = cu.R0402(r9_center, "5K1")
-        r10 = cu.R0402(r10_center, "5K1")
+        r7_center = self.board.DC(
+            (r8_center.xy[0] + 1.1, r8_center.xy[1]), r8_center.dir)
+        r7 = cu.R0402(
+            r7_center, "5K1", source={"LCSC": "C25905"})
+        r8 = cu.R0402(
+            r8_center, "5K1", source={"LCSC": "C25905"})
 
-        self.s("A5").copy().w("o f 1 l 90 f 2").goto( r9.pads[0], twist=False).wire()
-        self.s("B5").copy().w("o").goto(r10.pads[0]).wire()
-        for resistor in (r9, r10):
+        self.s("A5").copy().w("o f 1 l 90 f 2").goto( r7.pads[0], twist=False).wire()
+        self.s("B5").copy().w("o").goto(r8.pads[0]).wire()
+        for resistor in (r7, r8):
             resistor.pads[1].w("o -")
+
+        return (r7, r8)
 
 
 class PZ254RS(cu.Part):
@@ -302,7 +306,7 @@ class Module_LCD240x240(cu.Part):
 
 class LDO_1117_3V3(cu.SOT223):
     source = {'LCSC': 'C26537'}
-    mfr = "ZLDO1117QG33TA"
+    mfr = "NCP1117ST33T3G"
     idoffset = (0, -4.3)
 
     def place(self, dc):
@@ -339,7 +343,7 @@ class SOT23_5(cu.Part):
 
 class LDO_23_5(SOT23_5):
     source = {'LCSC': 'C81233'}
-    mfr = "AP2127N-3.3TRG1"
+    mfr = "ME6212C33M5G"
 
     def hex_escape(self):
         names = ("5V", "GND", "CE", "", "VCC")
@@ -556,7 +560,9 @@ def spiq_a():
         brd.DC((brd.size[0] / 2, brd.size[1] / 2 - 2)))
     u3.inBOM = False
     leda = u3.s("LEDA")
-    r1 = cu.R0603(brd.DC((12.5, 14)).right(90), "6R2")
+    r1 = cu.R0603(
+        brd.DC((12.5, 14)).right(90), "6R2",
+        source={"LCSC": "C48996862"})
     r1.pads[0].setname("VCC").w("o +").wire()
     r1.pads[1].setname("LEDA")
     leda.copy().w("i f 3").goto(r1.s("LEDA")).wire()
@@ -600,21 +606,31 @@ def spiq_a():
         resistor.pads[1].setname(signal)
         wire_ongrid(resistor.pads[1].w("o ")).wire()
 
-    r3 = cu.R0402(hex_near(23, 43).right(0), "5K1")
+    r3 = cu.R0402(
+        hex_near(23, 43).right(0), "5K1",
+        source={"LCSC": "C25905"})
     setup_i2c_pullup(r3, "SDA")
-    r4 = cu.R0402(hex_near(23, 45).right(180), "5K1")
+    r4 = cu.R0402(
+        hex_near(23, 45).right(180), "5K1",
+        source={"LCSC": "C25905"})
     setup_i2c_pullup(r4, "SCL")
 
     p = hex_near(16, 46)
-    r5 = cu.R0402(p, "5K1")
-    r6 = cu.R0402(p.forward(-1.1), "5K1")
+    r5 = cu.R0402(p, "5K1", source={"LCSC": "C25905"})
+    r6 = cu.R0402(
+        p.forward(-1.1), "5K1", source={"LCSC": "C25905"})
     r5.pads[1].w("l 90 f 1.7").wire()
     r6.pads[1].w("o -")
     r5.pads[0].goto(r6.pads[0]).wire()
     analog_vin = wire_ongrid(r6.pads[0].w("o")).hex("/ f").wire()
 
+    # Construct the USB-C CC pull-downs before the USB data resistors so
+    # all six 5.1 kOhm resistors receive contiguous designators R3-R8.
+    r7, r8 = j1.hex_escape()
+
     def ucap(p, val = '100nF'):
-        cn = cu.C0402_nolabel(p, val)
+        cn = cu.C0402_nolabel(
+            p, val, source={"LCSC": "C1525"})
         cn.pads[0].setname("GND")
         return cn
     def cap(p, val = '100nF'):
@@ -624,8 +640,11 @@ def spiq_a():
             cn.pads[0].w("o -")
             cn.pads[1].w("o +")
         return cn
-    def ldo_cap(package, center, value, supply, ldo_pad, twist = False):
-        capacitor = package(center, value)
+    def ldo_cap(
+            package, center, value, supply, ldo_pad, twist = False,
+            lcsc = None):
+        source = {"LCSC": lcsc} if lcsc else None
+        capacitor = package(center, value, source=source)
         capacitor.pads[0].setname("GND").setwidth(
             2 * brd.trace).w("o -")
         capacitor.pads[1].setname(supply).setwidth(2 * brd.trace)
@@ -636,19 +655,19 @@ def spiq_a():
     # U4: the 1117 regulator needs bulk capacitance on both sides.
     c1 = ldo_cap(
         cu.C0805, brd.DC((47.5, u4.center.xy[1])).right(90),
-        "10uF", "5V", u4.s("5V"), True)
+        "10uF", "5V", u4.s("5V"), True, "C15850")
     c2 = ldo_cap(
         cu.C0805_nolabel, brd.DC((59.3, u4.pads[2].xy[1])).right(90),
-        "10uF", "VCC", u4.pads[0])
+        "10uF", "VCC", u4.pads[0], lcsc="C15850")
 
-    # U5: use the AP2127 datasheet's 1 uF input minimum and a
-    # little extra output capacitance for transient response.
+    # U5: use 1 uF input capacitance and a little extra output
+    # capacitance for transient response.
     c3 = ldo_cap(
         cu.C0603, brd.DC((10.3, 38)).right(180),
-        "1uF", "5V", u5.pads[0])
+        "1uF", "5V", u5.pads[0], lcsc="C15849")
     c4 = ldo_cap(
         cu.C0603, brd.DC((12.2, 45)).right(90),
-        "4.7uF", "VCC", u5.pads[4], True)
+        "4.7uF", "VCC", u5.pads[4], True, "C19666")
 
     # Add all 100 nF 0402 capacitors after the LDO capacitors.
     c5 = cap(u2.center.copy().forward(3.6))
@@ -656,7 +675,9 @@ def spiq_a():
     c7 = cap(brd.DC((13.0, 26.0)).right(150))
     c8 = cap(brd.DC((12.7, 30.5)).right(150))
     c9 = cap(brd.DC((3.3, 31.5)).right(150))
-    c10 = cu.C0402_nolabel(brd.DC((1.3, 23.7)).right(90), '100nF')
+    c10 = cu.C0402_nolabel(
+        brd.DC((1.3, 23.7)).right(90), '100nF',
+        source={"LCSC": "C1525"})
     u1.s("DVDD2").copy().w("o f 2").goto(c10.pads[0], True).wire()
     c10.pads[1].w("o -")
 
@@ -667,21 +688,24 @@ def spiq_a():
 
     usb_body_south = j1.center.xy[1] - 8.94 / 2
     series_resistor_y = usb_body_south - 1.0 - 1.1
-    r7 = cu.R0402(
-        brd.DC((5.2, series_resistor_y)).right(90), "27")
-    r8 = cu.R0402(
-        brd.DC((4.1, series_resistor_y)).right(90), "27")
+    r9 = cu.R0402(
+        brd.DC((5.2, series_resistor_y)).right(90), "27",
+        source={"LCSC": "C25100"})
+    r10 = cu.R0402(
+        brd.DC((4.1, series_resistor_y)).right(90), "27",
+        source={"LCSC": "C25100"})
     j1.s("B7").copy().w("i").goto(
-        r7.pads[0], twist=True).wire()
+        r9.pads[0], twist=True).wire()
     j1.s("A6").copy().w("i").goto(
-        r8.pads[0], twist=True).wire()
+        r10.pads[0], twist=True).wire()
     if ROUTE2:
-        for r in (r7, r8):
+        for r in (r9, r10):
             wire_ongrid(r.pads[1].w("o f 0"))
 
     for parts in brd.parts.values():
         for part in parts:
-            part.hex_escape()
+            if part is not j1:
+                part.hex_escape()
 
     power_width = 2 * brd.trace
     j1.s("B4/A9").setwidth(power_width).w("o f 1.1 l 90 f 2.5 r 90").goto(r2.pads[0], twist = True).wire()
@@ -740,8 +764,8 @@ def spiq_a():
         brd.hex_route(u2.s("CLK"), u1.s("QSPI_SCLK"))
         brd.hex_route(u2.s("IO3"), u1.s("QSPI_SD3"))
 
-        brd.hex_route(u1.s("USB_DM"), r7.pads[1])
-        brd.hex_route(u1.s("USB_DP"), r8.pads[1])
+        brd.hex_route(u1.s("USB_DM"), r9.pads[1])
+        brd.hex_route(u1.s("USB_DP"), r10.pads[1])
         brd.hex_route(u1.s("XIN"), y1.s("CLK"))
 
         brd.hex_route(j4.s("SWCLK"), u1.s("SWCLK"))
@@ -810,8 +834,8 @@ def spiq_a():
     airwires.append((u1.s("XIN"), y1.s("CLK")))
 
     usb_airwires = (
-        (r7.pads[1], u1.s("USB_DM")),
-        (r8.pads[1], u1.s("USB_DP")),
+        (r9.pads[1], u1.s("USB_DM")),
+        (r10.pads[1], u1.s("USB_DP")),
     )
     airwires.extend(usb_airwires)
 
@@ -918,6 +942,36 @@ def spiq_a():
     ]
     assert not missing_hex_escape, (
         "Parts missing hex_escape(): " + ", ".join(missing_hex_escape))
+
+    # Keep Python part names synchronized with the generated designators.
+    # C5-C10 are intentionally excluded because they are decoupling caps.
+    expected_part_names = """
+        j1 j2 j3 j4
+        u1 u2 u3 u4 u5 u6
+        r1 r2 r3 r4 r5 r6 r7 r8 r9 r10
+        c1 c2 c3 c4
+        y1
+    """.split()
+    part_locals = locals()
+    named_parts = {
+        source_name: part_locals[source_name]
+        for source_name in expected_part_names
+    }
+    for source_name, part in named_parts.items():
+        assert part.id == source_name.upper(), (
+            f"Source name {source_name} refers to {part.id}")
+
+    decoupling_caps = {c5, c6, c7, c8, c9, c10}
+    constructed_parts = {
+        part
+        for parts in brd.parts.values()
+        for part in parts
+    }
+    covered_parts = set(named_parts.values()) | decoupling_caps
+    assert constructed_parts == covered_parts, (
+        "Part designator assertions are incomplete; uncovered: " +
+        ", ".join(sorted(
+            part.id for part in constructed_parts - covered_parts)))
 
     brd.save("spiq_a")
     print("Saved")
