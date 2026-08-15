@@ -173,7 +173,7 @@ class USBC(cu.Part):
 
         holes = dc.copy().forward(6.28)
         for d in (-1, 1):
-            holes.copy().goxy(d * 5.78 / 2, 0).hole(0.65, ko = 0.13)
+            holes.copy().goxy(d * 5.78 / 2, 0).hole(0.65, ko = 0.22)
 
         p = holes.copy().goxy(0, 1.07)
         a = p.copy().goxy(3.50 / 2, 0)
@@ -672,7 +672,7 @@ def spiq_a():
         c7 = cap(brd.DC((13.0, 26.0)).right(150))
         c8 = cap(brd.DC((12.7, 30.5)).right(150))
         c9 = cap(brd.DC((3.3, 31.5)).right(150))
-        c10 = ucap(brd.DC((1.3, 23.7)).right(90), '100nF')
+        c10 = cu.C0402_nolabel(brd.DC((1.3, 23.7)).right(90), '100nF')
         u1.s("DVDD2").copy().w("o f 2").goto(c10.pads[0], True).wire()
         c10.pads[1].w("o -")
 
