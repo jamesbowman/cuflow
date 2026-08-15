@@ -316,7 +316,7 @@ class LDO_1117_3V3(cu.SOT223):
 
     def hex_escape(self):
         self.pads[2].w("i f 4").wire(width = 0.8)
-        self.s("GND").inside().forward(1.0).wire(width = 0.8).via("GL2")
+        self.s("GND").wire(width = 0.8).w("i f 1 l 90 f 4 -")
         return (self.pads[3], self.pads[0])
 
 
@@ -579,6 +579,35 @@ def spiq_a():
     ldo_y = (j2_bottom + j3_top) / 2
     u4 = LDO_1117_3V3(
         brd.DC((j2.center.xy[0] + 4, ldo_y)).right(90))
+    u4_heatsink = u4.center.copy().setlayer("GBL").rect(10, 10).poly()
+    brd.layers["GBL"].add(u4_heatsink, "VCC")
+    tab_x0, tab_y0, tab_x1, tab_y1 = u4.pads[0].boundary.bounds
+    tab_center = ((tab_x0 + tab_x1) / 2, (tab_y0 + tab_y1) / 2)
+    top_heatsink = brd.DC(tab_center).rect(tab_x1 - tab_x0, 8).poly()
+    brd.layers["GTL"].add(top_heatsink, "VCC")
+    via_radius = brd.via / 2
+    via_overlap = 0.1
+    thermal_vias = (
+        (tab_x0 + 0.2, tab_y1 + via_radius - via_overlap),
+        ((tab_x0 + tab_x1) / 2, tab_y1 + via_radius - via_overlap),
+        (tab_x1 - 0.2, tab_y1 + via_radius - via_overlap),
+        (tab_x0 - via_radius + via_overlap, tab_y1 - 0.4),
+        (tab_x0 - via_radius + via_overlap, (tab_y0 + tab_y1) / 2),
+        (tab_x0 - via_radius + via_overlap, tab_y0 + 0.4),
+        (tab_x0 + 0.2, tab_y0 - via_radius + via_overlap),
+        ((tab_x0 + tab_x1) / 2, tab_y0 - via_radius + via_overlap),
+        (tab_x1 - 0.2, tab_y0 - via_radius + via_overlap),
+    )
+    for xy in thermal_vias:
+        via_copper = sg.Point(xy).buffer(via_radius)
+        assert via_copper.intersects(u4.pads[0].boundary)
+        assert not any(
+            via_copper.intersects(pad.boundary) for pad in u4.pads[1:])
+        brd.DC(xy).via()
+    center_via_copper = sg.Point(u4.center.xy).buffer(via_radius)
+    assert not any(
+        center_via_copper.intersects(pad.boundary) for pad in u4.pads)
+    brd.DC(u4.center.xy).via()
 
     # Internal 3V3 supply
     u5 = LDO_23_5(layout_dc((12.0, 31.6)).left(90))
