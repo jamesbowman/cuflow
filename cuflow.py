@@ -1412,6 +1412,10 @@ class C0805(Discrete2):
         self.label(dc)
         dc.pop()
 
+class C0805_nolabel(C0805):
+    def label(self, dc):
+        pass
+
 class D0603(C0603):
     family = "D"
     footprint = "0603"

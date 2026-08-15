@@ -549,12 +549,13 @@ def spiq_a():
     for i in (0,1):
         j2.pads[i].w("o -")
     label_x = j2.center.xy[0] + 7.1
+    label_text_x = label_x + 3.0
     pair_centers = []
     for pair, label in zip((j2.pads[0:2], j2.pads[2:4], j2.pads[4:6]),
-                           ("GND", "3.3 V", "5V")):
+                           ("GND", "3.3V", "5V")):
         y = sum(p.xy[1] for p in pair) / 2
         pair_centers.append(y)
-        brd.DC((label_x, y)).ctext(label, scale = 1.32)
+        brd.DC((label_text_x, y)).rtext(label, scale = 1.452)
     bar_ys = [pair_centers[0] + j2.pitch]
     bar_ys += [(a + b) / 2 for a, b in zip(pair_centers, pair_centers[1:])]
     bar_ys.append(pair_centers[-1] - j2.pitch)
@@ -574,7 +575,7 @@ def spiq_a():
     j3_names = ["SCK", "MOSI", "MISO", "IO2", "IO3", "CS", "A", "B"]
     for p, nm in zip(j3.pads, j3_names):
         p.setname(nm)
-        brd.DC((label_x, p.xy[1])).ctext(nm, scale = 1.32)
+        brd.DC((label_text_x, p.xy[1])).rtext(nm, scale = 1.452)
 
     u3 = Module_LCD240x240(
         brd.DC((brd.size[0] / 2, brd.size[1] / 2 - 2)))
@@ -653,7 +654,7 @@ def spiq_a():
             cu.C0805, brd.DC((47.5, u4.center.xy[1])).right(90),
             "10uF", "5V", u4.s("5V"), True)
         c2 = ldo_cap(
-            cu.C0805, brd.DC((59.3, u4.pads[2].xy[1])).right(90),
+            cu.C0805_nolabel, brd.DC((59.3, u4.pads[2].xy[1])).right(90),
             "10uF", "VCC", u4.pads[0])
 
         # U5: use the AP2127 datasheet's 1 uF input minimum and a
