@@ -668,7 +668,7 @@ def spiq_a():
         # Add all 100 nF 0402 capacitors after the LDO capacitors.
         c5 = cap(u2.center.copy().forward(3.6))
         c6 = cap(u6.center.copy().forward(2.3))
-        c7 = cap(brd.DC((14, 25.8)).right(90))
+        c7 = cap(brd.DC((13.0, 26.0)).right(150))
         c8 = cap(brd.DC((12.7, 30.5)).right(150))
         c9 = cap(brd.DC((3.3, 31.5)).right(150))
         c10 = ucap(brd.DC((1.3, 23.7)).right(90), '100nF')
