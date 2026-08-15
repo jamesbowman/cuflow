@@ -1,4 +1,5 @@
 import numpy as np
+import shapely
 import shapely.geometry as sg
 import shapely.ops as so
 from collections import deque
@@ -82,6 +83,13 @@ class HexBoard(cu.Board):
         self.hr = hd / 2                         # hr is the hex radius
 
         self.gr = ByteGrid(*self.size)
+        self.route_hexes = tuple(self.gr.valids())
+        self.valid_cells = frozenset(
+            (h.q, h.r) for h in self.route_hexes)
+        coordinates = np.asarray([h.to_plane() for h in self.route_hexes])
+        route_disks = shapely.buffer(
+            shapely.points(coordinates), self.hr, quad_segs=16)
+        self.route_tree = STRtree(route_disks)
         self.blocked = {layer: self.layer_blocks(layer) for layer in ('GTL', 'GBL')}
         self.routes = []
 
@@ -98,12 +106,8 @@ class HexBoard(cu.Board):
             copper + drill_keepouts + self.keepouts +
             self.route_keepouts[nm]).buffer(0)
         blocked = self.gr.zeros(np.uint8) | (self.gr.valid == 0)
-        vv = list(self.gr.valids())
-        hexes = [sg.Point(h.to_plane()).buffer(self.hr) for h in vv]
-        s = STRtree(hexes)
-        result = s.query_nearest(layer_poly)
-        for i in result:
-            h = vv[i]
+        for i in self.route_tree.query(layer_poly, predicate="intersects"):
+            h = self.route_hexes[i]
             blocked[h.q, h.r] = 1
         return blocked
 
@@ -118,7 +122,7 @@ class HexBoard(cu.Board):
         wavefront = set([tuple(a)])
         dirs = [Hex(dq,dr) for (dq, dr) in axial_direction_vectors]
 
-        valid = {(h.q, h.r) for h in self.gr.valids()}
+        valid = self.valid_cells
         blocked = self.blocked[layer].copy()
         blocked[b.q, b.r] = 0
         distance = self.gr.zeros(np.uint8)
@@ -164,7 +168,7 @@ class HexBoard(cu.Board):
 
         terminal_hexes = [Hex.from_xy(*terminal.xy) for terminal in terminals]
         terminal_cells = {tuple(h) for h in terminal_hexes}
-        valid = {(h.q, h.r) for h in self.gr.valids()}
+        valid = self.valid_cells
         blocked = self.blocked[layer]
         directions = [Hex(dq, dr) for dq, dr in axial_direction_vectors]
 
