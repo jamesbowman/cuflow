@@ -515,6 +515,26 @@ def spiq_a():
 
     spiq_logo()
 
+    def oshw_logo():
+        artwork = svg_loader.load(
+            Path(__file__).with_name("assets") / "oshw-logo-filled-white.svg",
+            fill="#fff")
+        assert not artwork.is_empty, "No artwork found in OSHW logo SVG"
+        artwork = max(artwork.geoms, key=lambda geometry: geometry.area)
+
+        x0, y0, x1, y1 = artwork.bounds
+        source_center = ((x0 + x1) / 2, (y0 + y1) / 2)
+        scale = 5.5 / (y1 - y0)
+        center = (40, 45.75)
+        artwork = sa.affine_transform(artwork, (
+            scale, 0, 0, -scale,
+            center[0] - scale * source_center[0],
+            center[1] + scale * source_center[1],
+        ))
+        brd.layers["GTO"].add(artwork)
+
+    oshw_logo()
+
     layout_offset = Hex(-12, 24)
     layout_dx, layout_dy = layout_offset.to_plane()
 
