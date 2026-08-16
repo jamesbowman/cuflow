@@ -2,3 +2,4 @@ pillow
 svgwrite
 shapely
 svgelements
+easyeda2kicad==1.0.1

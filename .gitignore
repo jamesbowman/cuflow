@@ -24,4 +24,6 @@ __pycache__
 *.gts.pov
 tags
 out.png
+webviewer/node_modules/
+.easyeda_cache/
 0

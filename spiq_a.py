@@ -4,6 +4,7 @@ import shapely.affinity as sa
 import shapely.geometry as sg
 
 import cuflow as cu
+import htmlout
 import svg_loader
 from rp2040 import RP2040
 
@@ -129,12 +130,18 @@ class USBC(cu.Part):
     mfr = "USB-TYPE-C-018"
     source = {'LCSC': 'C2927038'}   # Also C2765186 (better datasheet)
     family = "J"
+    body_width = 8.94
+    body_depth = 7.35
 
     def pnp_jlc(self):
-        return self.center.copy().right(90)
+        return self.center.copy().forward(5)
 
     def place(self, dc):
-        self.chamfered(dc.copy().forward(7.35 / 2), 8.94, 7.35)
+        self.chamfered(
+            dc.copy().forward(self.body_depth / 2),
+            self.body_width,
+            self.body_depth,
+        )
 
         holes = dc.copy().forward(6.28)
         for d in (-1, 1):
@@ -218,6 +225,9 @@ class PZ254RS(cu.Part):
     body_width = 2.5
     pad_width = 1.02
     pad_length = 2.3
+
+    def pnp_jlc(self):
+        return self.center.copy().left(90)
 
     def place(self, dc):
         self.N = int(self.val)
@@ -325,7 +335,7 @@ class SOT23_5(cu.Part):
     footprint = "SOT-23-5"
 
     def pnp_jlc(self):
-        return self.center.copy().right(90)
+        return self.center.copy().left(270)
 
     def place(self, dc):
         self.chamfered(dc, 1.5, 2.9)
@@ -345,6 +355,9 @@ class LDO_23_5(SOT23_5):
     source = {'LCSC': 'C81233'}
     mfr = "ME6212C33M5G"
 
+    def step_adjust(self):
+        return 180
+
     def hex_escape(self):
         names = ("5V", "GND", "CE", "", "VCC")
         for p, nm in zip(self.pads, names):
@@ -358,6 +371,9 @@ class VSSOP10(cu.Part):
     family = "U"
     footprint = "VSSOP-10"
     N = 10
+
+    def pnp_jlc(self):
+        return self.center.copy().right(90)
 
     def place(self, dc):
         self.chamfered(dc, 3, 3)
@@ -562,7 +578,7 @@ def spiq_a():
     leda = u3.s("LEDA")
     r1 = cu.R0603(
         brd.DC((12.5, 14)).right(90), "6R2",
-        source={"LCSC": "C48996862"})
+        source={"LCSC": "C23210"})
     r1.pads[0].setname("VCC").w("o +").wire()
     r1.pads[1].setname("LEDA")
     leda.copy().w("i f 3").goto(r1.s("LEDA")).wire()
@@ -683,7 +699,7 @@ def spiq_a():
 
     # U4: the 1117 regulator needs bulk capacitance on both sides.
     c1 = ldo_cap(
-        cu.C0805, brd.DC((47.5, u4.center.xy[1])).right(90),
+        cu.C0805, brd.DC((47.7, u4.center.xy[1])).right(90),
         "10uF", "5V", u4.s("5V"), True, "C15850")
     c2 = ldo_cap(
         cu.C0805_nolabel, brd.DC((59.3, u4.pads[2].xy[1])).right(90),
@@ -1002,7 +1018,8 @@ def spiq_a():
         ", ".join(sorted(
             part.id for part in constructed_parts - covered_parts)))
 
-    brd.save("spiq_a")
+    generated_records = brd.save("spiq_a")
+    htmlout.write(brd, "spiq_a.html", generated_records)
     print("Saved")
 
 if __name__ == "__main__":

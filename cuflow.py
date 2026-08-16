@@ -1010,34 +1010,63 @@ class Board:
         with open(basename + ".gtl-covered.pov", "wt") as f:
             covered_copper.povray(f, mask = mask)
 
-        self.bom(basename)
-        self.pnp(basename)
+        return {
+            "bom": self.bom(basename),
+            "pnp": self.pnp(basename),
+        }
 
     def pnp(self, fn):
-        with open(fn + "-pnp.csv", "wt") as f:
-            cs = csv.writer(f)
-            cs.writerow(["Designator", "Center(X)", "Center(Y)", "Rotatation", "Layer", "Note"])
-            def flt(x): return "{:.3f}".format(x)
-            for f,pp in self.parts.items():
-                for p in pp:
-                    if p.inBOM:
-                        c = p.center
-                        (x, y) = c.xy
-                        note = p.footprint + "-" + p.mfr + p.val
-                        side = "Bottom" if c.layer == "GBL" else "Top"
-                        cs.writerow([p.id, flt(x), flt(y), str(int(c.dir)), side, note])
-        with open(fn + "-jlcpcb-pnp.csv", "wt") as f:
-            cs = csv.writer(f)
-            cs.writerow(["Designator", "Mid X", "Mid Y","Layer","Rotation"])
-            def flt(x): return "{:.3f}".format(x)
-            for f,pp in self.parts.items():
-                for p in pp:
-                    if p.inBOM:
-                        c = p.pnp_jlc()
-                        (x, y) = c.xy
-                        angle = int(360 - c.dir) % 360
-                        side = "Bottom" if c.layer == "GBL" else "Top"
-                        cs.writerow([p.id, flt(x) + "mm", flt(y) + "mm", side, str(angle)])
+        def flt(x):
+            return "{:.3f}".format(x)
+
+        records = []
+        jlcpcb_records = []
+        for _, parts in self.parts.items():
+            for part in parts:
+                if not part.inBOM:
+                    continue
+
+                center = part.center
+                x, y = center.xy
+                records.append({
+                    "Designator": part.id,
+                    "Center(X)": flt(x),
+                    "Center(Y)": flt(y),
+                    "Rotatation": str(int(center.dir)),
+                    "Layer": "Bottom" if center.layer == "GBL" else "Top",
+                    "Note": part.footprint + "-" + part.mfr + part.val,
+                })
+
+                jlc_center = part.pnp_jlc()
+                jlc_x, jlc_y = jlc_center.xy
+                jlcpcb_records.append({
+                    "Designator": part.id,
+                    "Mid X": flt(jlc_x) + "mm",
+                    "Mid Y": flt(jlc_y) + "mm",
+                    "Layer": "Bottom" if jlc_center.layer == "GBL" else "Top",
+                    "Rotation": str(int(360 - jlc_center.dir) % 360),
+                })
+
+        def write_records(filename, fieldnames, generated_records):
+            with open(filename, "wt", newline="") as output:
+                writer = csv.DictWriter(output, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(generated_records)
+
+        write_records(
+            fn + "-pnp.csv",
+            ["Designator", "Center(X)", "Center(Y)", "Rotatation", "Layer", "Note"],
+            records,
+        )
+        write_records(
+            fn + "-jlcpcb-pnp.csv",
+            ["Designator", "Mid X", "Mid Y", "Layer", "Rotation"],
+            jlcpcb_records,
+        )
+        return {
+            "pnp": records,
+            "jlcpcb": jlcpcb_records,
+        }
 
     def bom(self, fn):
         parts = defaultdict(list)
@@ -1053,29 +1082,46 @@ class Board:
                     attr = (rank.index(f), p.mfr + p.val, p.footprint, vendor, vendor_c)
                     parts[attr].append(p.id)
 
-        with open(fn + "-bom.csv", "wt") as f:
-            c = csv.writer(f)
-            c.writerow(['parts', 'qty', 'device', 'package', 'vendor', 'code'])
-            for attr in sorted(parts):
-                (f, mfr, footprint, vendor, vendor_c) = attr
-                pp = parts[attr]
-                c.writerow([pretty_parts(pp),
-                    str(len(pp)),
-                    mfr,
-                    footprint,
-                    vendor,
-                    vendor_c])
-        with open(fn + "-jlcpcb-bom.csv", "wt") as f:
-            c = csv.writer(f)
-            c.writerow(["Comment","Designator","Footprint","JLCPCB Part #"])
-            for attr in sorted(parts):
-                (f, mfr, footprint, vendor, vendor_c) = attr
-                pp = parts[attr]
-                c.writerow([
-                    mfr,
-                    ",".join(pp),
-                    footprint,
-                    vendor_c])
+        records = []
+        jlcpcb_records = []
+        for attr in sorted(parts):
+            _, mfr, footprint, vendor, vendor_c = attr
+            designators = parts[attr]
+            records.append({
+                "parts": pretty_parts(designators),
+                "qty": str(len(designators)),
+                "device": mfr,
+                "package": footprint,
+                "vendor": vendor,
+                "code": vendor_c,
+            })
+            jlcpcb_records.append({
+                "Comment": mfr,
+                "Designator": ",".join(designators),
+                "Footprint": footprint,
+                "JLCPCB Part #": vendor_c,
+            })
+
+        def write_records(filename, fieldnames, generated_records):
+            with open(filename, "wt", newline="") as output:
+                writer = csv.DictWriter(output, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(generated_records)
+
+        write_records(
+            fn + "-bom.csv",
+            ["parts", "qty", "device", "package", "vendor", "code"],
+            records,
+        )
+        write_records(
+            fn + "-jlcpcb-bom.csv",
+            ["Comment", "Designator", "Footprint", "JLCPCB Part #"],
+            jlcpcb_records,
+        )
+        return {
+            "bom": records,
+            "jlcpcb": jlcpcb_records,
+        }
 
     def postscript(self, fn):
         ps = ["%!PS-Adobe-2.0"]
@@ -1262,6 +1308,9 @@ class Part:
 
     def pnp_jlc(self):
         return self.center
+
+    def step_adjust(self):
+        return 0
 
     def hex_escape(self):
         pass
@@ -1986,6 +2035,10 @@ class SOT223(Part):
     footprint = "SOT223"
     drawid = True
     idoffset = (0, 0)
+
+    def pnp_jlc(self):
+        return self.center.copy().right(90)
+
     def place(self, dc):
         self.chamfered(
             dc, 6.30, 3.30, drawid = self.drawid,

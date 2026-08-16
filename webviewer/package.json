@@ -1,0 +1,18 @@
+{
+  "name": "cuflow-webviewer",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "esbuild viewer-runtime.js --bundle --minify --format=iife --outfile=viewer-runtime.min.js",
+    "convert:bezel": "node convert-stl.js ../assets/misc-stl/bezel.stl generated/bezel.mesh.json 292d33",
+    "convert:soic": "node convert-step.js ../models/spiq.3dshapes/SOIC-8_L5.3-W5.3-H1.9-LS7.9-P1.27.step generated/SOIC-8_L5.3-W5.3-H1.9-LS7.9-P1.27.mesh.json",
+    "convert:models": "node convert-models.js ../assets/step/models.json generated"
+  },
+  "dependencies": {
+    "three": "0.179.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.9",
+    "occt-import-js": "0.0.23"
+  }
+}

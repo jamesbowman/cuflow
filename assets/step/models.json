@@ -1,0 +1,245 @@
+{
+  "format": "cuflow-easyeda-models-1",
+  "models": {
+    "C131025": {
+      "easyedaName": "SOIC-8_L5.3-W5.3-H1.9-LS7.9-P1.27",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C131025.step",
+      "translation": [
+        -1.270000002562277e-05,
+        1.2699999967891173e-05,
+        0.0
+      ],
+      "wrl": "C131025.wrl"
+    },
+    "C1525": {
+      "easyedaName": "C0402_L1.0-W0.5-H0.5",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C1525.step",
+      "translation": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "wrl": "C1525.wrl"
+    },
+    "C15849": {
+      "easyedaName": "C0603_L1.6-W0.8-H0.8",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C15849.step",
+      "translation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "wrl": "C15849.wrl"
+    },
+    "C15850": {
+      "easyedaName": "C0805_L2.0-W1.3-H1.3",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C15850.step",
+      "translation": [
+        0.0,
+        1.2699999967946685e-05,
+        0.0
+      ],
+      "wrl": "C15850.wrl"
+    },
+    "C19666": {
+      "easyedaName": "C0603_L1.6-W0.8-H0.8",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C19666.step",
+      "translation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "wrl": "C19666.wrl"
+    },
+    "C2040": {
+      "easyedaName": "LQFN-56_L7.0-W7.0-P0.4-EP",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C2040.step",
+      "translation": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "wrl": "C2040.wrl"
+    },
+    "C22464903": {
+      "easyedaName": "R1206_L3.2-W1.6-H0.6",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C22464903.step",
+      "translation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "wrl": "C22464903.wrl"
+    },
+    "C23210": {
+      "easyedaName": "R0603",
+      "rotation": [
+        0.0,
+        0.0,
+        90.0
+      ],
+      "step": "C23210.step",
+      "translation": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "wrl": "C23210.wrl"
+    },
+    "C25100": {
+      "easyedaName": "R0402_L1.0-W0.5-H0.4",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C25100.step",
+      "translation": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "wrl": "C25100.wrl"
+    },
+    "C25905": {
+      "easyedaName": "R0402_L1.0-W0.5-H0.4",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C25905.step",
+      "translation": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "wrl": "C25905.wrl"
+    },
+    "C26537": {
+      "easyedaName": "SOT-223-4P_L6.5-W3.5-H1.6-LS7.0-P2.30",
+      "rotation": [
+        0.0,
+        0.0,
+        180.0
+      ],
+      "step": "C26537.step",
+      "translation": [
+        -0.10003789999998225,
+        -1.2700000025844815e-05,
+        0.0
+      ],
+      "wrl": "C26537.wrl"
+    },
+    "C2927038": {
+      "easyedaName": "USB-C_SMD-TYPE-C-31-M-12",
+      "rotation": [
+        0.0,
+        0.0,
+        180.0
+      ],
+      "step": "C2927038.step",
+      "translation": [
+        0.0,
+        -1.1440414000000274,
+        -0.9999979999999999
+      ],
+      "wrl": "C2927038.wrl"
+    },
+    "C454611": {
+      "easyedaName": "OSC-SMD_4P-L3.2-W2.5-H1.0",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C454611.step",
+      "translation": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "wrl": "C454611.wrl"
+    },
+    "C49851": {
+      "easyedaName": "MSOP-10_L3.0-W3.0-H1.1-LS5.0-P0.50",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C49851.step",
+      "translation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "wrl": "C49851.wrl"
+    },
+    "C52191420": {
+      "easyedaName": "HDR-SMD_PZ254RS-11-08P-01",
+      "rotation": [
+        0.0,
+        0.0,
+        180.0
+      ],
+      "step": "C52191420.step",
+      "translation": [
+        0.0,
+        -5.896990999999999,
+        0.0
+      ],
+      "wrl": "C52191420.wrl"
+    },
+    "C81233": {
+      "easyedaName": "SOT-23-5_L2.9-W1.6-H1.1-LS2.8-P0.95",
+      "rotation": [
+        0.0,
+        0.0,
+        90.0
+      ],
+      "step": "C81233.step",
+      "translation": [
+        1.270000002562277e-05,
+        1.2699999968002196e-05,
+        0.0
+      ],
+      "wrl": "C81233.wrl"
+    }
+  }
+}
