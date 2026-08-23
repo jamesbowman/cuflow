@@ -921,7 +921,8 @@ def Module_LCD240x240(pb):
     y = (c.pads[0].xy[1] + c.pads[-1].xy[1]) / 2
     brd.DC((x - 6, y), 90).forward(12).silk()
     # https://www.aliexpress.us/item/3256803568692645.html
-    #                           12   11  10     9   8   7   6   5   4   3   2     1
+    #                            1    2    3    4   5   6   7   8   9  10   11    12
+    #
     #                               LEDK LEDA      CS
     for (p, nm) in zip(c.pads, "GND  GND LEDA  VCC GND GND D/C GND SCL SDA RESET GND".split()):
         p.setname(nm)
