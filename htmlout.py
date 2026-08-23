@@ -295,9 +295,8 @@ def _document(runtime, model_json):
 <body>
 <main id="viewer" aria-label="Interactive 3D PCB viewer"></main>
 <nav class="toolbar" aria-label="Camera views">
-  <button id="view-iso" type="button">Perspective</button>
-  <button id="view-top" type="button">Top</button>
-  <button id="view-reset" type="button">Reset</button>
+  <button id="view-reset" type="button">reset</button>
+  <button id="view-top" type="button">top</button>
 </nav>
 <div class="help">Drag to rotate board · right-drag to pan · scroll to zoom</div>
 <script>{runtime}</script>
@@ -581,34 +580,38 @@ def _document(runtime, model_json):
   scene.add(cameraFill);
 
   const span = Math.max(...MODEL.size);
-  const iso = new THREE.Vector3(span * 0.72, span * 0.82, span * 0.92);
-  camera.position.copy(iso);
-  camera.up.set(0, 1, 0);
+  const dramaticPosition = new THREE.Vector3(
+    span * 0.72,
+    span * 0.82,
+    span * 0.92
+  );
 
-  function resetCamera() {{
-    camera.position.copy(iso);
+  function resetView() {{
+    group.quaternion.identity();
+    camera.up.set(0, 1, 0);
+    camera.position.copy(dramaticPosition);
     controls.target.set(0, 0, 0);
     controls.update();
   }}
-  resetCamera();
 
-  const boardUp = new THREE.Vector3(0, 1, 0);
-  const cameraDirection = camera.position.clone().normalize();
-  const topQuaternion = new THREE.Quaternion().setFromUnitVectors(
-    boardUp, cameraDirection
-  );
-  document.getElementById("view-iso").onclick = () => {{
+  function topView() {{
     group.quaternion.identity();
-  }};
-  document.getElementById("view-top").onclick = () => {{
-    group.quaternion.copy(topQuaternion);
-  }};
-  document.getElementById("view-reset").onclick = () => {{
-    group.quaternion.identity();
-    controls.reset();
-    resetCamera();
-  }};
-  controls.saveState();
+    const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+    const horizontalFov = 2 * Math.atan(
+      Math.tan(verticalFov / 2) * camera.aspect
+    );
+    const heightDistance = MODEL.size[1] / (2 * Math.tan(verticalFov / 2));
+    const widthDistance = MODEL.size[0] / (2 * Math.tan(horizontalFov / 2));
+    const distance = Math.max(heightDistance, widthDistance) * 1.12;
+    camera.up.set(0, 0, -1);
+    camera.position.set(0, distance, 0);
+    controls.target.set(0, 0, 0);
+    controls.update();
+  }}
+
+  document.getElementById("view-reset").onclick = resetView;
+  document.getElementById("view-top").onclick = topView;
+  resetView();
 
   let rotatingBoard = false;
   let pointerX = 0;

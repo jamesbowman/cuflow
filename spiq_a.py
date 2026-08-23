@@ -16,6 +16,7 @@ def mean(L):
     return sum(L) / len(L)
 
 ROUTE2 = 1
+USE_EDITED_HEADER_ART = True
 
 used_pins = [
 # Module_Serial_Debug
@@ -563,24 +564,48 @@ def spiq_a():
         p.setname(nm)
     for i in (0,1):
         j2.pads[i].w("o -")
-    label_x = j2.center.xy[0] + 7.1
-    label_text_x = label_x + 3.0
-    pair_centers = []
-    for pair, label in zip((j2.pads[0:2], j2.pads[2:4], j2.pads[4:6]),
-                           ("GND", "3.3V", "5V")):
-        y = sum(p.xy[1] for p in pair) / 2
-        pair_centers.append(y)
-        brd.DC((label_text_x, y)).rtext(label, scale = 1.452)
-    bar_ys = [pair_centers[0] + j2.pitch]
-    bar_ys += [(a + b) / 2 for a, b in zip(pair_centers, pair_centers[1:])]
-    bar_ys.append(pair_centers[-1] - j2.pitch)
-    bar_width = 0.4
-    bar_length = 6.3
-    half_line = (bar_length - bar_width) / 2
-    for y in bar_ys:
-        line = sg.LineString(((label_x - half_line, y),
-                              (label_x + half_line, y)))
-        brd.layers["GTO"].add(line.buffer(bar_width / 2))
+    if not USE_EDITED_HEADER_ART:
+        label_x = j2.center.xy[0] + 7.1
+        label_text_x = label_x + 3.4
+        label_font_size = 1.452
+        # IBM Plex Sans Bold gives MISO an advance width of 2.589 em.
+        label_text_width = 2.589 * label_font_size
+        label_box_width = label_text_width + 1.0
+        # SVG's "middle" baseline uses half the x-height. Shift the rectangle
+        # to the centre of Plex Sans Bold's 0.698-em capital height instead.
+        label_box_y_offset = (0.698 - 0.525) / 2 * label_font_size
+        label_gap = 0.8
+
+        def svg_header_label(xy, label, box_height):
+            x, y = xy
+            brd.svg_layers["art"].rectangle(
+                (x - label_text_width / 2, y + label_box_y_offset),
+                (label_box_width, box_height), fill="green")
+            brd.svg_layers["art"].text(
+                xy, label, label_font_size,
+                anchor="end", font_family="IBM Plex Sans",
+                font_weight="bold", fill="black")
+
+        j2_label_box_height = 2 * j2.pitch - label_gap
+        pair_centers = []
+        for pair, label in zip(
+                (j2.pads[0:2], j2.pads[2:4], j2.pads[4:6]),
+                ("GND", "3.3V", "5V")):
+            y = sum(p.xy[1] for p in pair) / 2
+            pair_centers.append(y)
+            brd.DC((label_text_x, y)).rtext(label, scale = 1.452)
+            svg_header_label((label_text_x, y), label, j2_label_box_height)
+        bar_ys = [pair_centers[0] + j2.pitch]
+        bar_ys += [
+            (a + b) / 2 for a, b in zip(pair_centers, pair_centers[1:])]
+        bar_ys.append(pair_centers[-1] - j2.pitch)
+        bar_width = 0.4
+        bar_length = 6.3
+        half_line = (bar_length - bar_width) / 2
+        for y in bar_ys:
+            line = sg.LineString(((label_x - half_line, y),
+                                  (label_x + half_line, y)))
+            brd.layers["GTO"].add(line.buffer(bar_width / 2))
 
     j2_top = j2.center.xy[1] + j2.N * j2.pitch / 2
     edge_clearance = brd.size[1] - j2_top
@@ -590,7 +615,19 @@ def spiq_a():
     j3_names = ["SCK", "MOSI", "MISO", "IO2", "IO3", "CS", "A", "B"]
     for p, nm in zip(j3.pads, j3_names):
         p.setname(nm)
-        brd.DC((label_text_x, p.xy[1])).rtext(nm, scale = 1.452)
+        if not USE_EDITED_HEADER_ART:
+            brd.DC((label_text_x, p.xy[1])).rtext(nm, scale = 1.452)
+            svg_header_label(
+                (label_text_x, p.xy[1]), nm, j2.pitch - label_gap)
+
+    if USE_EDITED_HEADER_ART:
+        header_art = svg_loader.load(
+            Path(__file__).with_name("assets/spiq/spiq_a.art-edit.svg"),
+            fill="#000000", tolerance=0.002, ppi=25.4)
+        assert not header_art.is_empty, "No header art found in SVG"
+        header_art = sa.scale(header_art, 1, -1, origin=(0, 0))
+        header_art = sa.translate(header_art, yoff=brd.size[1])
+        brd.layers["GTO"].add(header_art)
 
     u3 = Module_LCD240x240(
         brd.DC((brd.size[0] / 2, brd.size[1] / 2 - 2)))
@@ -995,7 +1032,8 @@ def spiq_a():
     brd.outline(corner_radius = 2)
     brd.fill(edge_clearance = 0.4)
 
-    brd.DC((30.5, 1.2)).ctext("(C) EXCAMERA LABS 2026", scale = 1.1)
+    if 0:
+        brd.DC((30.5, 1.2)).ctext("(C) EXCAMERA LABS 2026", scale = 1.1)
 
     hexgrid(brd)
 

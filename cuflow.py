@@ -13,6 +13,7 @@ import gerber
 from excellon import excellon
 import hershey
 import hex
+import svgout
 
 def inches(x):  return x * 25.4
 def mil(x):     return inches(x / 1000)
@@ -413,7 +414,6 @@ class Draw(Turtle):
                 self.right(ea)
                 self.forward(half_edge)
         self.boundary = self.poly()
-        self.board.layers['GML'].route(self.poly())
         self.pop()
 
     def thermal(self, d):
@@ -860,6 +860,9 @@ class Board:
         self.layers['GML'] = OutlineLayer('Mechanical')
         self.layers['AIR'] = OutlineLayer('Airwires')
         self.layers['HEX'] = OutlineLayer('Hex grid')
+        self.svg_layers = {
+            'art': svgout.SVGAnnotations(),
+        }
         self.layer_extensions = {
             'GL2': 'G2L',
             'GL3': 'G3L',
@@ -987,6 +990,7 @@ class Board:
             extension = self.layer_extensions.get(id, id)
             with open(basename + "." + extension, "wt") as f:
                 l.save(f)
+        svgout.write_art(self, basename + ".art.svg")
         with open(basename + ".TXT", "wt") as f:
             excellon(f, self.holes)
 
