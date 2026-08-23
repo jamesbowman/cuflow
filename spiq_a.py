@@ -622,7 +622,8 @@ def spiq_a():
 
     if USE_EDITED_HEADER_ART:
         header_art = svg_loader.load(
-            Path(__file__).with_name("assets/spiq/spiq_a.art-edit.svg"),
+            Path(__file__).parent / "assets" / "spiq" /
+            "spiq_a.art-edit.svg",
             fill="#000000", tolerance=0.002, ppi=25.4)
         assert not header_art.is_empty, "No header art found in SVG"
         header_art = sa.scale(header_art, 1, -1, origin=(0, 0))
