@@ -213,6 +213,9 @@ def write(board, filename, generated_records, thickness=1.6):
     top_silkscreen = board.layers["GTO"].preview().intersection(body)
     bottom_silkscreen = board.layers["GBO"].preview().intersection(body)
     top_solder_paste = board.layers["GTP"].preview().intersection(body)
+    bottom_solder_paste = board.layers["GBP"].preview().intersection(body)
+    top_copper = board.layers["GTL"].preview().intersection(body)
+    bottom_copper = board.layers["GBL"].preview().intersection(body)
     exposed_top_copper = (
         board.layers["GTL"]
         .preview()
@@ -235,11 +238,14 @@ def write(board, filename, generated_records, thickness=1.6):
         "center": [(min_x + max_x) / 2, (min_y + max_y) / 2],
         "size": [max_x - min_x, max_y - min_y],
         "polygons": _polygons(body),
+        "topCopper": _polygons(top_copper),
+        "bottomCopper": _polygons(bottom_copper),
         "exposedTopCopper": _polygons(exposed_top_copper),
         "exposedBottomCopper": _polygons(exposed_bottom_copper),
         "topSilkscreen": _polygons(top_silkscreen),
         "bottomSilkscreen": _polygons(bottom_silkscreen),
         "topSolderPaste": _polygons(top_solder_paste),
+        "bottomSolderPaste": _polygons(bottom_solder_paste),
         "stepModels": step_models,
         "lcdModel": lcd_model,
         "bezelModel": bezel_model,
@@ -286,6 +292,29 @@ def _document(runtime, model_json):
     background: rgba(255,255,255,.08); font: inherit; cursor: pointer;
   }}
   button:hover {{ background: rgba(255,255,255,.16); }}
+  .layer-control {{
+    position: fixed; left: 16px; top: 50%; transform: translateY(-50%);
+    display: flex; gap: 8px; align-items: center; z-index: 2;
+    padding: 12px 11px;
+    background: rgba(15,19,28,.78); border: 1px solid rgba(255,255,255,.13);
+    border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.3);
+    backdrop-filter: blur(12px);
+  }}
+  .layer-slider-track {{ position: relative; width: 22px; height: 240px; }}
+  #layer-slider {{
+    position: absolute; top: 0; left: 22px; width: 240px; height: 22px;
+    margin: 0; transform: rotate(90deg); transform-origin: 0 0;
+    accent-color: #d8e4f7; cursor: pointer;
+  }}
+  .layer-labels {{
+    display: grid; grid-template-rows: repeat(6, 1fr); height: 240px;
+  }}
+  .layer-step {{
+    align-self: center; padding: 3px 5px; color: rgba(232,237,245,.58);
+    background: transparent; text-align: left; white-space: nowrap;
+  }}
+  .layer-step:hover {{ color: #e8edf5; background: rgba(255,255,255,.08); }}
+  .layer-step.active {{ color: #fff; }}
   .help {{
     position: fixed; left: 16px; bottom: 14px; z-index: 2;
     color: rgba(232,237,245,.62); pointer-events: none;
@@ -298,6 +327,20 @@ def _document(runtime, model_json):
   <button id="view-reset" type="button">reset</button>
   <button id="view-top" type="button">top</button>
 </nav>
+<aside class="layer-control" aria-label="Layer visibility">
+  <div class="layer-slider-track">
+    <input id="layer-slider" type="range" min="0" max="5" step="1" value="0"
+      aria-label="Layer visibility depth">
+  </div>
+  <div class="layer-labels">
+    <button class="layer-step active" type="button" data-layer-level="0">Bezel</button>
+    <button class="layer-step" type="button" data-layer-level="1">Components</button>
+    <button class="layer-step" type="button" data-layer-level="2">Silkscreen</button>
+    <button class="layer-step" type="button" data-layer-level="3">Paste</button>
+    <button class="layer-step" type="button" data-layer-level="4">Solder Mask</button>
+    <button class="layer-step" type="button" data-layer-level="5">Copper</button>
+  </div>
+</aside>
 <div class="help">Drag to rotate board · right-drag to pan · scroll to zoom</div>
 <script>{runtime}</script>
 <script>
@@ -329,6 +372,18 @@ def _document(runtime, model_json):
 
   const group = new THREE.Group();
   const [cx, cy] = MODEL.center;
+  const visibilityLayers = {{
+    exposedCopper: new THREE.Group(),
+    copper: new THREE.Group(),
+    paste: new THREE.Group(),
+    silks: new THREE.Group(),
+    components: new THREE.Group(),
+    bezel: new THREE.Group()
+  }};
+  Object.entries(visibilityLayers).forEach(([name, layer]) => {{
+    layer.name = name;
+    group.add(layer);
+  }});
   const material = new THREE.MeshPhysicalMaterial({{
     color: 0x050608,
     roughness: 0.16,
@@ -381,7 +436,7 @@ def _document(runtime, model_json):
     }});
   }}
 
-  function extrudedLayer(polygons, depth, y, layerMaterial) {{
+  function extrudedLayer(polygons, depth, y, layerMaterial, parent = group) {{
     if (polygons.length === 0) return;
     const geometry = new THREE.ExtrudeGeometry(shapesFrom(polygons), {{
       depth,
@@ -391,7 +446,7 @@ def _document(runtime, model_json):
     geometry.rotateX(-Math.PI / 2);
     geometry.translate(0, y, 0);
     geometry.computeVertexNormals();
-    group.add(new THREE.Mesh(geometry, layerMaterial));
+    parent.add(new THREE.Mesh(geometry, layerMaterial));
   }}
 
   function decodeTypedArray(encoded, Type) {{
@@ -508,10 +563,10 @@ def _document(runtime, model_json):
       -(y - cy)
     );
     component.userData = componentData;
-    group.add(component);
+    visibilityLayers.components.add(component);
   }}
 
-  function placeAccessory(accessoryData) {{
+  function placeAccessory(accessoryData, parent) {{
     const model = buildStepTemplate(accessoryData);
     if (accessoryData.flip) {{
       model.rotation.x = Math.PI;
@@ -529,42 +584,73 @@ def _document(runtime, model_json):
       -(accessoryData.position[1] - cy)
     );
     accessory.userData = accessoryData;
-    group.add(accessory);
+    parent.add(accessory);
   }}
 
-  extrudedLayer(MODEL.polygons, MODEL.thickness, -MODEL.thickness / 2, material);
+  extrudedLayer(
+    MODEL.polygons,
+    MODEL.thickness,
+    -MODEL.thickness / 2,
+    material
+  );
   extrudedLayer(
     MODEL.exposedTopCopper,
     0.012,
     MODEL.thickness / 2 + 0.002,
-    exposedGoldMaterial
+    exposedGoldMaterial,
+    visibilityLayers.exposedCopper
   );
   extrudedLayer(
     MODEL.exposedBottomCopper,
     0.012,
     -MODEL.thickness / 2 - 0.014,
-    exposedGoldMaterial
+    exposedGoldMaterial,
+    visibilityLayers.exposedCopper
+  );
+  extrudedLayer(
+    MODEL.topCopper ?? MODEL.exposedTopCopper,
+    0.012,
+    MODEL.thickness / 2 + 0.002,
+    exposedGoldMaterial,
+    visibilityLayers.copper
+  );
+  extrudedLayer(
+    MODEL.bottomCopper ?? MODEL.exposedBottomCopper,
+    0.012,
+    -MODEL.thickness / 2 - 0.014,
+    exposedGoldMaterial,
+    visibilityLayers.copper
   );
   extrudedLayer(
     MODEL.topSolderPaste,
     0.05,
     MODEL.thickness / 2 + 0.016,
-    solderPasteMaterial
+    solderPasteMaterial,
+    visibilityLayers.paste
+  );
+  extrudedLayer(
+    MODEL.bottomSolderPaste ?? [],
+    0.05,
+    -MODEL.thickness / 2 - 0.066,
+    solderPasteMaterial,
+    visibilityLayers.paste
   );
   extrudedLayer(
     MODEL.topSilkscreen,
     0.018,
     MODEL.thickness / 2 + 0.006,
-    silkscreenMaterial
+    silkscreenMaterial,
+    visibilityLayers.silks
   );
   extrudedLayer(
     MODEL.bottomSilkscreen,
     0.018,
     -MODEL.thickness / 2 - 0.024,
-    silkscreenMaterial
+    silkscreenMaterial,
+    visibilityLayers.silks
   );
-  placeAccessory(MODEL.lcdModel);
-  placeAccessory(MODEL.bezelModel);
+  placeAccessory(MODEL.lcdModel, visibilityLayers.components);
+  placeAccessory(MODEL.bezelModel, visibilityLayers.bezel);
   MODEL.components.forEach(placeComponent);
   scene.add(group);
 
@@ -612,6 +698,41 @@ def _document(runtime, model_json):
   document.getElementById("view-reset").onclick = resetView;
   document.getElementById("view-top").onclick = topView;
   resetView();
+
+  const layerSlider = document.getElementById("layer-slider");
+  const layerSteps = [...document.querySelectorAll(".layer-step")];
+  const layerNames = [
+    "Bezel",
+    "Components",
+    "Silkscreen",
+    "Paste",
+    "Solder Mask",
+    "Copper"
+  ];
+
+  function setLayerLevel(requestedLevel) {{
+    const level = THREE.MathUtils.clamp(Number(requestedLevel), 0, 5);
+    visibilityLayers.bezel.visible = level <= 0;
+    visibilityLayers.components.visible = level <= 1;
+    visibilityLayers.silks.visible = level <= 2;
+    visibilityLayers.paste.visible = level <= 3;
+    visibilityLayers.exposedCopper.visible = level < 5;
+    visibilityLayers.copper.visible = level === 5;
+    layerSlider.value = String(level);
+    layerSlider.setAttribute(
+      "aria-valuetext",
+      layerNames[level] + (level === 0 ? ": all layers visible" : "")
+    );
+    layerSteps.forEach((step, index) => {{
+      step.classList.toggle("active", index === level);
+    }});
+  }}
+
+  layerSlider.addEventListener("input", () => setLayerLevel(layerSlider.value));
+  layerSteps.forEach((step) => {{
+    step.addEventListener("click", () => setLayerLevel(step.dataset.layerLevel));
+  }});
+  setLayerLevel(0);
 
   let rotatingBoard = false;
   let pointerX = 0;
