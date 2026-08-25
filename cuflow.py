@@ -1155,32 +1155,42 @@ class Board:
     def river1(self, i):
         return River(self, [i])
 
-    def enriver(self, ibank, a):
+    def enriver(self, ibank, a, pitch = None):
+        if pitch is None:
+            pitch = self.c
+        assert pitch >= self.c, "River pitch is below the board minimum"
         if a > 0:
             bank = ibank[::-1]
         else:
             bank = ibank
         bank[0].right(a)
         for i,t in enumerate(bank[1:], 1):
-            gap = (self.trace + self.space) * i
+            gap = pitch * i
             t.left(a)
             t.approach(gap, bank[0])
             t.right(2 * a)
         extend(bank[-1], bank)
-        return River(self, ibank)
+        river = River(self, ibank)
+        river.c = pitch
+        return river
 
-    def enriver90(self, ibank, a):
+    def enriver90(self, ibank, a, pitch = None):
+        if pitch is None:
+            pitch = self.c
+        assert pitch >= self.c, "River pitch is below the board minimum"
         if a < 0:
             bank = ibank[::-1]
         else:
             bank = ibank
         bank[0].right(a)
         for i,t in enumerate(bank[1:], 1):
-            gap = (self.trace + self.space) * i
+            gap = pitch * i
             t.forward(gap)
             t.right(a)
         extend(bank[0], bank)
-        return River(self, ibank)
+        river = River(self, ibank)
+        river.c = pitch
+        return river
 
     def enriverS(self, pi, a):
         rv = self.enriver(pi, a)
