@@ -86,6 +86,15 @@ class HDR14(hdr):
     def escape(self):
         return
 
+class HDR8(hdr):
+    family  = "J"
+    inBOM   = False
+    width   = cu.inches(0.1)
+    N       = 8
+
+    def escape(self):
+        return
+
 class Screw2(hdr):
     family  = "J"
     width   = 5
