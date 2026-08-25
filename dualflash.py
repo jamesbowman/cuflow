@@ -32,6 +32,7 @@ DIP_X = 24
 NORTH_DIP_Y = BOARD_SIZE[1] - 7
 SOUTH_DIP_Y = 19
 EAST_HEADER_X = 42.6
+FLASH_HEADER_Y_OFFSET = -HEADER_PITCH / 2
 FLASH_PIN_NAMES = ("CS", "MISO", "IO2", "GND", "MOSI", "SCK", "IO3", "VCC")
 FLASH_SIGNAL_PINS = (1, 2, 3, 5, 6, 7)
 
@@ -91,6 +92,7 @@ def label_power_pairs(brd, header):
 
 def connect_flash_signals(brd, flash, river, signal_overrides = None):
     signal_overrides = signal_overrides or {}
+    bus_connections = {}
     for pad, name in zip(flash.pads, FLASH_PIN_NAMES):
         pad.setname(name)
 
@@ -108,7 +110,20 @@ def connect_flash_signals(brd, flash, river, signal_overrides = None):
         river_trace = river_by_name[signal_overrides.get(pad.name, pad.name)]
         assert river_trace.dir == 0
         trace.forward(river_trace.xy[0] - trace.xy[0]).wire()
+        bus_connections[pad.name] = (river_trace, trace.copy())
         trace.via()
+        brd.addnet(pad, river_trace)
+    return bus_connections
+
+
+def connect_flash_header(brd, header, bus_connections):
+    for pad, name in zip(header.pads, FLASH_PIN_NAMES):
+        pad.setname(name)
+
+    for pin in FLASH_SIGNAL_PINS:
+        pad = header.pads[pin - 1]
+        river_trace, via = bus_connections[pad.name]
+        pad.copy().setlayer("GBL").goto(via, twist=True).wire()
         brd.addnet(pad, river_trace)
 
 
@@ -151,10 +166,14 @@ def make_board():
 
     north_flash = dip.DIP8(brd.DC((DIP_X, NORTH_DIP_Y)))
     south_flash = dip.DIP8(brd.DC((DIP_X, SOUTH_DIP_Y)))
-    north_header = FlashHeader(brd.DC((EAST_HEADER_X, NORTH_DIP_Y)))
-    south_header = FlashHeader(brd.DC((EAST_HEADER_X, SOUTH_DIP_Y)))
-    connect_flash_signals(brd, north_flash, r)
-    connect_flash_signals(brd, south_flash, r, {"CS": "A"})
+    north_header = FlashHeader(brd.DC(
+        (EAST_HEADER_X, NORTH_DIP_Y + FLASH_HEADER_Y_OFFSET)))
+    south_header = FlashHeader(brd.DC(
+        (EAST_HEADER_X, SOUTH_DIP_Y + FLASH_HEADER_Y_OFFSET)))
+    north_bus = connect_flash_signals(brd, north_flash, r)
+    south_bus = connect_flash_signals(brd, south_flash, r, {"CS": "A"})
+    connect_flash_header(brd, north_header, north_bus)
+    connect_flash_header(brd, south_header, south_bus)
 
     # CuFlow vias touch every allocated copper layer. Discard the framework's
     # two inner layers so the fabrication output remains a two-layer board.
