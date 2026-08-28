@@ -199,21 +199,22 @@ class USBC(cu.Part):
         self.s("B7").copy().w("o f 0.4 l 90").goto(
             self.s("A7"), twist=True).wire()
 
-        r8_center = self.s("B5").copy().w(
+        r6_center = self.s("B5").copy().w(
             "o f 2 l 90 f 0.65 l 90").setname(None)
-        r7_center = self.board.DC(
-            (r8_center.xy[0] + 1.1, r8_center.xy[1]), r8_center.dir)
-        r7 = cu.R0402(
-            r7_center, "5K1", source={"LCSC": "C25905"})
-        r8 = cu.R0402(
-            r8_center, "5K1", source={"LCSC": "C25905"})
+        r5_center = self.board.DC(
+            (r6_center.xy[0] + 1.1, r6_center.xy[1]), r6_center.dir)
+        r5 = cu.R0402(
+            r5_center, "5K1", source={"LCSC": "C25905"})
+        r6 = cu.R0402(
+            r6_center, "5K1", source={"LCSC": "C25905"})
 
-        self.s("A5").copy().w("o f 1 l 90 f 2").goto( r7.pads[0], twist=False).wire()
-        self.s("B5").copy().w("o").goto(r8.pads[0]).wire()
-        for resistor in (r7, r8):
+        self.s("A5").copy().w("o f 1 l 90 f 2").goto(
+            r5.pads[0], twist=False).wire()
+        self.s("B5").copy().w("o").goto(r6.pads[0]).wire()
+        for resistor in (r5, r6):
             resistor.pads[1].w("o -")
 
-        return (r7, r8)
+        return (r5, r6)
 
 
 class PZ254RS(cu.Part):
@@ -719,18 +720,9 @@ def spiq_a():
         source={"LCSC": "C25905"})
     setup_i2c_pullup(r4, "SCL")
 
-    p = hex_near(16, 46)
-    r5 = cu.R0402(p, "5K1", source={"LCSC": "C25905"})
-    r6 = cu.R0402(
-        p.forward(-1.1), "5K1", source={"LCSC": "C25905"})
-    r5.pads[1].w("l 90 f 1.7").wire()
-    r6.pads[1].w("o -")
-    r5.pads[0].goto(r6.pads[0]).wire()
-    analog_vin = wire_ongrid(r6.pads[0].w("o")).hex("/ f").wire()
-
     # Construct the USB-C CC pull-downs before the USB data resistors so
-    # all six 5.1 kOhm resistors receive contiguous designators R3-R8.
-    r7, r8 = j1.hex_escape()
+    # all four 5.1 kOhm resistors receive contiguous designators R3-R6.
+    r5, r6 = j1.hex_escape()
 
     def ucap(p, val = '100nF'):
         cn = cu.C0402_nolabel(
@@ -792,18 +784,18 @@ def spiq_a():
 
     usb_body_south = j1.center.xy[1] - 8.94 / 2
     series_resistor_y = usb_body_south - 1.0 - 1.1
-    r9 = cu.R0402(
+    r7 = cu.R0402(
         brd.DC((5.2, series_resistor_y)).right(90), "27",
         source={"LCSC": "C25100"})
-    r10 = cu.R0402(
+    r8 = cu.R0402(
         brd.DC((4.1, series_resistor_y)).right(90), "27",
         source={"LCSC": "C25100"})
     j1.s("B7").copy().w("i").goto(
-        r9.pads[0], twist=True).wire()
+        r7.pads[0], twist=True).wire()
     j1.s("A6").copy().w("i").goto(
-        r10.pads[0], twist=True).wire()
+        r8.pads[0], twist=True).wire()
     if ROUTE2:
-        for r in (r9, r10):
+        for r in (r7, r8):
             wire_ongrid(r.pads[1].w("o f 0"))
 
     for parts in brd.parts.values():
@@ -828,8 +820,6 @@ def spiq_a():
         u1.s("SWCLK").hex("ff/!3f").wire()
         u1.s("GPIO0").hex("r/f").wire()
         u1.s("GPIO1").hex("2frf/f").wire()
-
-        wire_ongrid(u1.s("GPIO26/ADC0").w("o f .4 ")).hex("/ f").wire()
 
         bus = [u1.s(f"GPIO{i}") for i in range(2, 10)]
         aligner = [
@@ -868,8 +858,8 @@ def spiq_a():
         brd.hex_route(u2.s("CLK"), u1.s("QSPI_SCLK"))
         brd.hex_route(u2.s("IO3"), u1.s("QSPI_SD3"))
 
-        brd.hex_route(u1.s("USB_DM"), r9.pads[1])
-        brd.hex_route(u1.s("USB_DP"), r10.pads[1])
+        brd.hex_route(u1.s("USB_DM"), r7.pads[1])
+        brd.hex_route(u1.s("USB_DP"), r8.pads[1])
         brd.hex_route(u1.s("XIN"), y1.s("CLK"))
 
         brd.hex_route(j4.s("SWCLK"), u1.s("SWCLK"))
@@ -895,9 +885,6 @@ def spiq_a():
             u6.s("SCL"),
             r4.s("SCL"),
         ))
-        brd.hex_route(analog_vin, u1.s("GPIO26/ADC0"))
-
-
     if ROUTE2:
         brd.hex_render()
         brd.wire_routes()
@@ -938,8 +925,8 @@ def spiq_a():
     airwires.append((u1.s("XIN"), y1.s("CLK")))
 
     usb_airwires = (
-        (r9.pads[1], u1.s("USB_DM")),
-        (r10.pads[1], u1.s("USB_DP")),
+        (r7.pads[1], u1.s("USB_DM")),
+        (r8.pads[1], u1.s("USB_DP")),
     )
     airwires.extend(usb_airwires)
 
@@ -1057,7 +1044,7 @@ def spiq_a():
     expected_part_names = """
         j1 j2 j3 j4
         u1 u2 u3 u4 u5 u6
-        r1 r2 r3 r4 r5 r6 r7 r8 r9 r10
+        r1 r2 r3 r4 r5 r6 r7 r8
         c1 c2 c3 c4
         y1
     """.split()
