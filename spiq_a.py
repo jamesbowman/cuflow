@@ -170,6 +170,7 @@ class USBC(cu.Part):
             # 0.2 mm land: 1.4/1.7 mm slots in 1.8/2.1 mm lands.
             slot_length = land_length - 0.4
             slot.left(90).stadium(0.3, 60, slot_length - 0.6)
+            self.board.layers["GML"].route(slot.boundary)
             land = slot.boundary.buffer(0.2)
             for layer in ("GTL", "GTS", "GTP", "GBL", "GBS"):
                 self.board.layers[layer].add(land, "SHIELD")
@@ -1031,6 +1032,10 @@ def spiq_a():
             for column, value in enumerate(total_row)))
 
     brd.outline(corner_radius = 2)
+    gml_contour_count = (
+        len(brd.layers["GML"].lines) + len(brd.layers["GML"].routed))
+    assert gml_contour_count == 5, (
+        f"Expected 5 GML contours, found {gml_contour_count}")
     brd.fill(edge_clearance = 0.4)
 
     if 0:
