@@ -30,9 +30,11 @@ SPI_RIVER_SIGNALS = ("SCK", "MOSI", "MISO", "IO2", "IO3", "CS", "A")
 SPI_RIVER_PITCH = HEADER_PITCH
 DIP_X = 24
 NORTH_DIP_Y = BOARD_SIZE[1] - 7
-SOUTH_DIP_Y = 19
+SOUTH_DIP_Y = 16
 EAST_HEADER_X = 42.6
 FLASH_HEADER_Y_OFFSET = -HEADER_PITCH / 2
+POWER_SPOKE_LENGTH = 1.3
+RIVER_REMINDER_SCALE = 4.0
 FLASH_PIN_NAMES = ("CS", "MISO", "IO2", "GND", "MOSI", "SCK", "IO3", "VCC")
 FLASH_SIGNAL_PINS = (1, 2, 3, 5, 6, 7)
 
@@ -127,6 +129,41 @@ def connect_flash_header(brd, header, bus_connections):
         brd.addnet(pad, river_trace)
 
 
+def connect_flash_power(brd, power_header, flashes):
+    gnd_pads = power_header.pads[:2] + [flash.s("GND") for flash in flashes]
+    vcc_pads = power_header.pads[2:4] + [flash.s("VCC") for flash in flashes]
+
+    for pad in power_header.pads[:2]:
+        trace = pad.copy().setlayer("GBL").setname("GND")
+        trace.dir = 90
+        trace.forward(POWER_SPOKE_LENGTH).wire()
+    for pad in power_header.pads[2:4]:
+        trace = pad.copy().setlayer("GTL").setname("VCC")
+        trace.dir = 90
+        trace.forward(POWER_SPOKE_LENGTH).wire()
+
+    for flash in flashes:
+        gnd = flash.s("GND").copy().setlayer("GBL").setname("GND")
+        gnd.dir = 180
+        gnd.forward(POWER_SPOKE_LENGTH).wire()
+
+        vcc = flash.s("VCC").copy().setlayer("GTL").setname("VCC")
+        vcc.dir = 0
+        vcc.forward(POWER_SPOKE_LENGTH).wire()
+
+    for pad in gnd_pads[1:]:
+        brd.addnet(pad, gnd_pads[0])
+    for pad in vcc_pads[1:]:
+        brd.addnet(pad, vcc_pads[0])
+
+
+def label_cs_lines(brd, river, headers):
+    river_center_x = sum(trace.xy[0] for trace in river.tt) / len(river.tt)
+    for header, label in zip(headers, ("CS", "A")):
+        brd.DC((river_center_x, header.center.xy[1])).ctext(
+            label, scale=RIVER_REMINDER_SCALE)
+
+
 def make_board():
     brd = HexBoard(
         BOARD_SIZE,
@@ -174,6 +211,13 @@ def make_board():
     south_bus = connect_flash_signals(brd, south_flash, r, {"CS": "A"})
     connect_flash_header(brd, north_header, north_bus)
     connect_flash_header(brd, south_header, south_bus)
+    label_cs_lines(brd, r, (north_header, south_header))
+    connect_flash_power(
+        brd, power_header,
+        (north_flash, south_flash, north_header, south_header))
+
+    brd.fill_any("GTL", "VCC")
+    brd.fill_any("GBL", "GND")
 
     # CuFlow vias touch every allocated copper layer. Discard the framework's
     # two inner layers so the fabrication output remains a two-layer board.
@@ -187,6 +231,7 @@ def make_board():
 def dualflash():
     brd = make_board()
     brd.save("dualflash")
+    brd.postscript("dualflash.ps")
     print("Saved")
     return brd
 
