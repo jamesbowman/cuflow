@@ -20,19 +20,18 @@ class ModelFetchError(RuntimeError):
     pass
 
 
-def lcsc_codes(bom_path: Path) -> list[str]:
-    """Return unique LCSC codes in BOM order."""
+def lcsc_parts(bom_path: Path) -> list[tuple[str, str]]:
+    """Return unique LCSC codes and their designators in BOM order."""
     with bom_path.open(newline="", encoding="utf-8-sig") as bom_file:
         reader = csv.DictReader(bom_file)
-        required = {"vendor", "code"}
+        required = {"parts", "vendor", "code"}
         missing = required.difference(reader.fieldnames or ())
         if missing:
             raise ValueError(
                 f"{bom_path} is missing BOM column(s): {', '.join(sorted(missing))}"
             )
 
-        codes = []
-        seen = set()
+        designators_by_code = {}
         for line_number, row in enumerate(reader, start=2):
             if (row.get("vendor") or "").strip().upper() != "LCSC":
                 continue
@@ -41,10 +40,27 @@ def lcsc_codes(bom_path: Path) -> list[str]:
                 raise ValueError(
                     f"{bom_path}:{line_number}: invalid LCSC part number {code!r}"
                 )
-            if code not in seen:
-                seen.add(code)
-                codes.append(code)
-    return codes
+            designators = (row.get("parts") or "").strip()
+            if not designators:
+                raise ValueError(
+                    f"{bom_path}:{line_number}: missing part designator"
+                )
+            existing = designators_by_code.setdefault(code, [])
+            if designators not in existing:
+                existing.append(designators)
+    return [
+        (code, ",".join(designators))
+        for code, designators in designators_by_code.items()
+    ]
+
+
+def lcsc_codes(bom_path: Path) -> list[str]:
+    """Return unique LCSC codes in BOM order."""
+    return [code for code, _designators in lcsc_parts(bom_path)]
+
+
+def report_name(code: str, designators: str) -> str:
+    return f"{code} [{designators}]"
 
 
 def atomic_write(path: Path, data: bytes) -> None:
@@ -164,20 +180,21 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     arguments = parser().parse_args()
     try:
-        codes = lcsc_codes(arguments.bom)
+        parts = lcsc_parts(arguments.bom)
     except (OSError, ValueError) as error:
         print(f"error: {error}")
         return 2
 
-    if not codes:
+    if not parts:
         print(f"No LCSC parts found in {arguments.bom}")
         return 0
 
     if arguments.dry_run:
-        for code in codes:
-            print(arguments.output_dir / f"{code}.step")
-            print(arguments.output_dir / f"{code}.wrl")
-        print(f"{len(codes)} unique LCSC part(s)")
+        for code, designators in parts:
+            name = report_name(code, designators)
+            print(f"{name}: {arguments.output_dir / f'{code}.step'}")
+            print(f"{name}: {arguments.output_dir / f'{code}.wrl'}")
+        print(f"{len(parts)} unique LCSC part(s)")
         return 0
 
     try:
@@ -202,7 +219,8 @@ def main() -> int:
     fetched = 0
     skipped = 0
     failures = []
-    for index, code in enumerate(codes, start=1):
+    for index, (code, designators) in enumerate(parts, start=1):
+        name = report_name(code, designators)
         step_path = arguments.output_dir / f"{code}.step"
         wrl_path = arguments.output_dir / f"{code}.wrl"
         step_complete = step_path.is_file() and step_path.stat().st_size > 0
@@ -212,15 +230,18 @@ def main() -> int:
                 if code not in manifest["models"]:
                     imported = import_model(api, code, download=False)
                     manifest["models"][code] = model_metadata(code, imported)
-                print(f"[{index}/{len(codes)}] {code}: already present")
+                print(f"[{index}/{len(parts)}] {name}: already present")
                 skipped += 1
                 continue
             except (ModelFetchError, OSError, ValueError) as error:
-                failures.append((code, str(error)))
-                print(f"[{index}/{len(codes)}] {code}: metadata unavailable: {error}")
+                failures.append((code, designators, str(error)))
+                print(
+                    f"[{index}/{len(parts)}] {name}: "
+                    f"metadata unavailable: {error}"
+                )
                 continue
 
-        print(f"[{index}/{len(codes)}] {code}: fetching")
+        print(f"[{index}/{len(parts)}] {name}: fetching")
         try:
             step_data, wrl_data, metadata = fetch_model(api, code)
             if arguments.overwrite or not step_complete:
@@ -230,12 +251,13 @@ def main() -> int:
             manifest["models"][code] = metadata
             fetched += 1
             print(
-                f"           wrote {step_path.name} ({len(step_data):,} bytes), "
+                f"[{index}/{len(parts)}] {name}: "
+                f"wrote {step_path.name} ({len(step_data):,} bytes), "
                 f"{wrl_path.name} ({len(wrl_data):,} bytes)"
             )
         except (ModelFetchError, OSError, ValueError) as error:
-            failures.append((code, str(error)))
-            print(f"           unavailable: {error}")
+            failures.append((code, designators, str(error)))
+            print(f"[{index}/{len(parts)}] {name}: unavailable: {error}")
 
     atomic_write(
         manifest_path,
@@ -248,8 +270,8 @@ def main() -> int:
     )
     if failures:
         print("Unavailable models:")
-        for code, reason in failures:
-            print(f"  {code}: {reason}")
+        for code, designators, reason in failures:
+            print(f"  {report_name(code, designators)}: {reason}")
         return 1
     return 0
 

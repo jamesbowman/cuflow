@@ -196,6 +196,36 @@
       ],
       "wrl": "C454611.wrl"
     },
+    "C46061679": {
+      "easyedaName": "HDR-SMD_HX-PZ2.54-1X6P-WT",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C46061679.step",
+      "translation": [
+        -0.127,
+        -5.461,
+        0.0
+      ],
+      "wrl": "C46061679.wrl"
+    },
+    "C46061681": {
+      "easyedaName": "HDR-SMD_8P-P2.54-H-M-W13.3-N-1",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C46061681.step",
+      "translation": [
+        0.0,
+        -5.407990199999966,
+        0.0
+      ],
+      "wrl": "C46061681.wrl"
+    },
     "C49851": {
       "easyedaName": "MSOP-10_L3.0-W3.0-H1.1-LS5.0-P0.50",
       "rotation": [
