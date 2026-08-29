@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import re
 import subprocess
 import sys
@@ -31,6 +32,7 @@ class Audit:
     def __init__(self) -> None:
         self.checks: list[Check] = []
         self.bom_rows: list[dict[str, str]] = []
+        self.topology_rows: list[dict[str, str]] = []
 
     def add(self, name: str, passed: bool, detail: str) -> None:
         self.checks.append(Check(name, passed, detail))
@@ -352,6 +354,161 @@ def audit_manufacturing_files(
             )
 
 
+def audit_copper_topology(
+        audit: Audit, profile: dict[str, Any]) -> None:
+    config = profile.get("topology")
+    if config is None:
+        return
+    if __package__:
+        from .pcb_topology import (
+            InterlayerConnector,
+            TopologyFormatError,
+            build_topology,
+            internal_closed_contours,
+            parse_cuflow_gerber,
+            parse_cuflow_paths_text,
+            parse_excellon,
+        )
+    else:
+        from pcb_topology import (
+            InterlayerConnector,
+            TopologyFormatError,
+            build_topology,
+            internal_closed_contours,
+            parse_cuflow_gerber,
+            parse_cuflow_paths_text,
+            parse_excellon,
+        )
+
+    board = profile["board"]
+    copper_layers = tuple(config.get(
+        "copper_layers", ("GTL", "G2L", "G3L", "GBL")))
+    try:
+        layer_geometry = {
+            layer: parse_cuflow_gerber(ROOT / f"{board}.{layer}")
+            for layer in copper_layers
+        }
+        drill_hits = parse_excellon(relative_path(profile["drill_file"]))
+    except (OSError, TopologyFormatError, ValueError) as error:
+        audit.add("Copper topology", False, f"cannot parse outputs: {error}")
+        return
+
+    interlayer_connectors: list[InterlayerConnector] = []
+    expected_slots = config.get("plated_internal_gml_contours")
+    if expected_slots is not None:
+        gml_path = ROOT / f"{board}.GML"
+        try:
+            paths = parse_cuflow_paths_text(gml_path.read_text(encoding="ascii"))
+            slot_contours = internal_closed_contours(paths)
+        except OSError as error:
+            audit.add("Topology plated slots", False, str(error))
+            slot_contours = ()
+        expected_slots = int(expected_slots)
+        audit.add(
+            "Topology plated slots",
+            len(slot_contours) == expected_slots,
+            f"found {len(slot_contours)} internal plated contours; "
+            f"expected {expected_slots}",
+        )
+        interlayer_connectors.extend(
+            InterlayerConnector(
+                f"GML plated slot {index}", contour,
+                kind="plated-slot")
+            for index, contour in enumerate(slot_contours, 1)
+        )
+
+    topology = build_topology(
+        layer_geometry, drill_hits, interlayer_connectors)
+    component_count = sum(
+        len(components)
+        for components in topology.components_by_layer.values())
+    mapped_drills = len(drill_hits) - len(topology.unmapped_drill_indices)
+    audit.add(
+        "Copper topology",
+        bool(topology.nets),
+        f"{component_count} layer components, {mapped_drills}/"
+        f"{len(drill_hits)} drills touching copper, "
+        f"{len(interlayer_connectors)} plated slots, "
+        f"{len(topology.nets)} physical nets",
+    )
+
+    named_nets: dict[str, set[str]] = {}
+    seed_errors: list[str] = []
+    for name, seeds in config.get("net_seeds", {}).items():
+        net_ids: set[str] = set()
+        for seed_index, seed in enumerate(seeds, 1):
+            layer = seed.get("layer")
+            try:
+                if seed.get("selector") == "largest":
+                    component = topology.largest_component(layer)
+                elif "point" in seed:
+                    point = tuple(float(value) for value in seed["point"])
+                    if len(point) != 2:
+                        raise ValueError("point must have two coordinates")
+                    component = topology.component_at(layer, point)
+                else:
+                    raise ValueError("seed needs selector=largest or point")
+                net_ids.add(topology.net_for_component(component))
+            except (KeyError, LookupError, TypeError, ValueError) as error:
+                seed_errors.append(f"{name} seed {seed_index}: {error}")
+        named_nets[name] = net_ids
+
+    if named_nets:
+        seed_detail = ", ".join(
+            f"{name}={len(net_ids)} physical net"
+            f"{'s' if len(net_ids) != 1 else ''}"
+            for name, net_ids in named_nets.items())
+        audit.add(
+            "Topology net seeds",
+            not seed_errors,
+            seed_detail if not seed_errors else "; ".join(seed_errors),
+        )
+
+    labels_by_net: dict[str, list[str]] = {}
+    for name, net_ids in named_nets.items():
+        for net_id in net_ids:
+            labels_by_net.setdefault(net_id, []).append(name)
+
+    for pair in config.get("forbidden_connections", []):
+        if not isinstance(pair, list) or len(pair) != 2:
+            audit.add(
+                "Topology forbidden connection", False,
+                f"invalid configured pair: {pair!r}")
+            continue
+        first, second = pair
+        if first not in named_nets or second not in named_nets:
+            audit.add(
+                f"{first}/{second} copper isolation", False,
+                "one or both named seed sets are missing")
+            continue
+        shared = sorted(named_nets[first] & named_nets[second])
+        audit.add(
+            f"{first}/{second} copper isolation",
+            not shared,
+            "no shared physical net" if not shared else
+            "shared physical net" + ("s " if len(shared) != 1 else " ") +
+            ", ".join(shared),
+        )
+
+    for net in topology.nets:
+        connector_kinds: dict[str, int] = {}
+        for connector_index in net.connector_indices:
+            kind = topology.connectors[connector_index].kind
+            connector_kinds[kind] = connector_kinds.get(kind, 0) + 1
+        audit.topology_rows.append({
+            "net": net.net_id,
+            "labels": ", ".join(sorted(labels_by_net.get(net.net_id, ()))),
+            "layers": ", ".join(net.layers),
+            "components": str(len(net.components)),
+            "connectors": ", ".join(
+                f"{kind}={count}"
+                for kind, count in sorted(connector_kinds.items())) or "-",
+            "area": ", ".join(
+                f"{layer}={area:.3f}"
+                for layer, area in net.area_by_layer.items()),
+        })
+
+
 def markdown_cell(value: object) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ")
 
@@ -378,6 +535,27 @@ def write_report(
         lines.append(
             f"| {'PASS' if check.passed else 'FAIL'} | "
             f"{markdown_cell(check.name)} | {markdown_cell(check.detail)} |")
+
+    if audit.topology_rows:
+        lines.extend([
+            "",
+            "## Copper topology",
+            "",
+            "Physical nets are reconstructed from connected copper regions, "
+            "drill hits, and configured plated slots before logical seed names "
+            "are applied.",
+            "",
+            "| Net | Logical seeds | Layers | Components | Connectors | "
+            "Copper area (mm^2) |",
+            "| --- | --- | --- | ---: | --- | --- |",
+        ])
+        for row in audit.topology_rows:
+            cells = {
+                key: markdown_cell(value) for key, value in row.items()
+            }
+            lines.append(
+                "| {net} | {labels} | {layers} | {components} | "
+                "{connectors} | {area} |".format(**cells))
 
     lines.extend([
         "",
@@ -441,6 +619,14 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def configured_python(
+        args: argparse.Namespace, profile: dict[str, Any]) -> Path:
+    configured = (
+        args.python_executable or Path(profile.get("python", sys.executable)))
+    executable = configured.expanduser()
+    return executable if executable.is_absolute() else ROOT / executable
+
+
 def main() -> int:
     args = parse_args()
     profile_path = (
@@ -459,17 +645,33 @@ def main() -> int:
             f"{args.board!r}", file=sys.stderr)
         return 2
 
+    python_executable = configured_python(args, profile)
+    if profile.get("topology") is not None:
+        try:
+            __import__("shapely")
+        except ModuleNotFoundError:
+            if Path(sys.executable).absolute() == python_executable.absolute():
+                print(
+                    "preflight: topology checks require Shapely in "
+                    f"{python_executable}", file=sys.stderr)
+                return 2
+            try:
+                os.execv(
+                    str(python_executable),
+                    [str(python_executable), str(Path(__file__).resolve()),
+                     *sys.argv[1:]])
+            except OSError as error:
+                print(
+                    f"preflight: cannot restart with {python_executable}: "
+                    f"{error}", file=sys.stderr)
+                return 2
+
     audit = Audit()
     generation_output = ""
     if args.no_generate:
         audit.add("Board generation", True, "skipped by explicit --no-generate")
     else:
         source = relative_path(profile["source"])
-        configured_python = (
-            args.python_executable or Path(profile.get("python", sys.executable)))
-        python_executable = configured_python.expanduser()
-        if not python_executable.is_absolute():
-            python_executable = ROOT / python_executable
         try:
             result = subprocess.run(
                 [str(python_executable), str(source)], cwd=ROOT, text=True,
@@ -490,6 +692,7 @@ def main() -> int:
     catalog = load_catalog(audit, relative_path(profile["part_catalog"]))
     audit_bom_and_pnp(audit, profile, catalog)
     audit_manufacturing_files(audit, profile)
+    audit_copper_topology(audit, profile)
 
     report_path = args.report or ROOT / f"{args.board}-preflight.md"
     if not report_path.is_absolute():

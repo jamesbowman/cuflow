@@ -635,9 +635,11 @@ def spiq_a():
         for filename, layer in (
                 ("spiq_a.art-t.svg", "GTO"),
                 ("spiq_a.art-b.svg", "GBO")):
+            art_path = Path(__file__).parent / "assets" / "spiq" / filename
+            if not art_path.exists():
+                continue
             custom_art = svg_loader.load(
-                Path(__file__).parent / "assets" / "spiq" / filename,
-                fill="#000000", tolerance=0.002, ppi=25.4)
+                art_path, fill="#000000", tolerance=0.002, ppi=25.4)
             assert not custom_art.is_empty, (
                 f"No custom art found in {filename}")
             custom_art = sa.scale(custom_art, 1, -1, origin=(0, 0))
