@@ -129,6 +129,7 @@ class HexW25Q128(cu.SOIC8):
 
 class USBC(cu.Part):
     mfr = "USB-TYPE-C-018"
+    footprint = "USB-C_SMD-TYPE-C-31-M-12"
     source = {'LCSC': 'C2927038'}   # Also C2765186 (better datasheet)
     family = "J"
     body_width = 8.94
@@ -221,10 +222,13 @@ class PZ254RS(cu.Part):
     family = "J"
     footprint = "PZ254RS-11-NP-01"
     lcsc_by_pin_count = {
-        # 6: "C52191418",
-        # 8: "C52191420",
-        7: "C46061679", # Hanxia parts are better supported
-        8: "C46061681",
+        # Hanxia parts are better supported than the XFCN alternatives.
+        6: (
+            "C46061679", "HX PZ2.54-1x6P WT",
+            "SMD,P=2.54mm,Surface Mount,Right Angle"),
+        8: (
+            "C46061681", "HX PZ2.54-1x8P WT",
+            "SMD,P=2.54mm,Surface Mount,Right Angle"),
     }
     pitch = 2.54
     body_width = 2.5
@@ -239,7 +243,9 @@ class PZ254RS(cu.Part):
         assert 2 <= self.N <= 40
         self.mfr = f"PZ254RS-11-{self.N:02d}P-01"
         if self.N in self.lcsc_by_pin_count:
-            self.source = {"LCSC": self.lcsc_by_pin_count[self.N]}
+            lcsc, self.mfr, self.footprint = (
+                self.lcsc_by_pin_count[self.N])
+            self.source = {"LCSC": lcsc}
         self.val = ""
 
         self.chamfered(dc, self.body_width, self.N * self.pitch)
@@ -322,6 +328,7 @@ class Module_LCD240x240(cu.Part):
 class LDO_1117_3V3(cu.SOT223):
     source = {'LCSC': 'C26537'}
     mfr = "NCP1117ST33T3G"
+    footprint = "SOT-223"
     idoffset = (0, -4.3)
 
     def place(self, dc):

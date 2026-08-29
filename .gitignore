@@ -16,6 +16,8 @@ __pycache__
 *.svg
 !assets/*.svg
 *.csv
+!preflight/*.csv
+*-preflight.md
 *.AIR
 *.G2L
 *.G3L

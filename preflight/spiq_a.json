@@ -1,0 +1,32 @@
+{
+  "board": "spiq_a",
+  "source": "spiq_a.py",
+  "python": "~/.pyenv/versions/py13/bin/python",
+  "bom": "spiq_a-jlcpcb-bom.csv",
+  "pnp": "spiq_a-jlcpcb-pnp.csv",
+  "part_catalog": "preflight/spiq_a-jlcpcb-parts.csv",
+  "gerber_layers": {
+    "GTL": true,
+    "G2L": true,
+    "G3L": true,
+    "GBL": true,
+    "GTO": true,
+    "GBO": true,
+    "GTS": true,
+    "GBS": true,
+    "GTP": true,
+    "GBP": false,
+    "GML": true
+  },
+  "drill_file": "spiq_a.TXT",
+  "airwire_file": "spiq_a.AIR",
+  "excluded_designators": ["J4", "U3"],
+  "expected_gml_contours": 5,
+  "expected_gml_contours_reason": "one rounded board perimeter plus J1's four plated USB-C mounting slots",
+  "manual_checks": [
+    "In a CAM viewer, identify the five GML contours as one rounded board perimeter and J1's four closed mounting slots.",
+    "Confirm each J1 routed slot is surrounded by its intended copper and solder-mask land on both board sides.",
+    "Compare the J1, J2, and J3 pad geometry and orientation with the exact selected manufacturer packages.",
+    "Inspect the imported top and bottom custom artwork for clipping, exposed copper, mask openings, and interference with pads."
+  ]
+}
