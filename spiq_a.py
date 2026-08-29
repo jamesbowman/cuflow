@@ -221,8 +221,10 @@ class PZ254RS(cu.Part):
     family = "J"
     footprint = "PZ254RS-11-NP-01"
     lcsc_by_pin_count = {
-        6: "C52191418",
-        8: "C52191420",
+        # 6: "C52191418",
+        # 8: "C52191420",
+        7: "C46061679", # Hanxia parts are better supported
+        8: "C46061681",
     }
     pitch = 2.54
     body_width = 2.5
