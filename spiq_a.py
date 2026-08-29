@@ -625,14 +625,17 @@ def spiq_a():
                 (label_text_x, p.xy[1]), nm, j2.pitch - label_gap)
 
     if USE_EDITED_HEADER_ART:
-        header_art = svg_loader.load(
-            Path(__file__).parent / "assets" / "spiq" /
-            "spiq_a.art-edit.svg",
-            fill="#000000", tolerance=0.002, ppi=25.4)
-        assert not header_art.is_empty, "No header art found in SVG"
-        header_art = sa.scale(header_art, 1, -1, origin=(0, 0))
-        header_art = sa.translate(header_art, yoff=brd.size[1])
-        brd.layers["GTO"].add(header_art)
+        for filename, layer in (
+                ("spiq_a.art-t.svg", "GTO"),
+                ("spiq_a.art-b.svg", "GBO")):
+            custom_art = svg_loader.load(
+                Path(__file__).parent / "assets" / "spiq" / filename,
+                fill="#000000", tolerance=0.002, ppi=25.4)
+            assert not custom_art.is_empty, (
+                f"No custom art found in {filename}")
+            custom_art = sa.scale(custom_art, 1, -1, origin=(0, 0))
+            custom_art = sa.translate(custom_art, yoff=brd.size[1])
+            brd.layers[layer].add(custom_art)
 
     u3 = Module_LCD240x240(
         brd.DC((brd.size[0] / 2, brd.size[1] / 2 - 2)))
