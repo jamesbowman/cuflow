@@ -27,6 +27,7 @@ class Check:
     name: str
     passed: bool
     detail: str
+    detail_html: str | None = None
 
 
 class Audit:
@@ -38,8 +39,10 @@ class Audit:
         self.net_rows: list[dict[str, str]] = []
         self.device_rows: list[dict[str, Any]] = []
 
-    def add(self, name: str, passed: bool, detail: str) -> None:
-        self.checks.append(Check(name, passed, detail))
+    def add(
+            self, name: str, passed: bool, detail: str,
+            detail_html: str | None = None) -> None:
+        self.checks.append(Check(name, passed, detail, detail_html))
 
     @property
     def passed(self) -> bool:
@@ -455,14 +458,30 @@ def audit_copper_topology(
         f"{len(clearance_violations)} violation(s) at {clearance:.3f} mm: " +
         "; ".join(
             f"{violation.layer} {violation.net_id} intersects buffered "
-            f"{'/'.join(violation.conflicting_net_ids)}"
+            f"{'/'.join(violation.conflicting_net_ids)} at "
+            f"({violation.centroid[0]:.3f}, {violation.centroid[1]:.3f}) mm"
             for violation in clearance_violations[:20]
         ) + (" ..." if len(clearance_violations) > 20 else "")
     )
+    clearance_detail_html = None
+    if clearance_violations:
+        clearance_detail_html = (
+            f"{len(clearance_violations)} violation(s) at "
+            f"{clearance:.3f} mm: " +
+            "; ".join(
+                f"{html_cell(violation.layer)} "
+                f"{net_report_link(violation.net_id)} intersects buffered "
+                f"{'/'.join(net_report_link(net_id) for net_id in violation.conflicting_net_ids)} "
+                f"at ({violation.centroid[0]:.3f}, "
+                f"{violation.centroid[1]:.3f}) mm"
+                for violation in clearance_violations[:20]
+            ) + (" ..." if len(clearance_violations) > 20 else "")
+        )
     audit.add(
         "Net-to-net clearance",
         not clearance_violations,
         clearance_detail,
+        clearance_detail_html,
     )
 
     named_nets: dict[str, set[str]] = {}
@@ -841,6 +860,16 @@ def html_status(value: str) -> str:
     return f'<span class="status {css_class}">{html_cell(value)}</span>'
 
 
+def net_anchor(net_id: str) -> str:
+    return f"net-{net_id.lower()}"
+
+
+def net_report_link(net_id: str) -> str:
+    return (
+        f'<a class="net-link" href="#{html_cell(net_anchor(net_id))}">'
+        f'<code>{html_cell(net_id)}</code></a>')
+
+
 def write_report(
         path: Path, profile: dict[str, Any], audit: Audit,
         generation_output: str) -> None:
@@ -981,10 +1010,13 @@ def write_report(
     <tbody>"""]
     for check in audit.checks:
         status = "PASS" if check.passed else "FAIL"
+        detail = (
+            check.detail_html
+            if check.detail_html is not None else html_cell(check.detail))
         lines.append(
             f"<tr><td>{html_status(status)}</td>"
             f"<td>{html_cell(check.name)}</td>"
-            f'<td class="detail">{html_cell(check.detail)}</td></tr>')
+            f'<td class="detail">{detail}</td></tr>')
     lines.append("</tbody></table></div></section>")
 
     if audit.device_rows:
@@ -1040,8 +1072,11 @@ def write_report(
         previous_net = None
         for row in audit.net_rows:
             repeated = row["net"] == previous_net
+            row_id = (
+                "" if repeated else
+                f' id="{html_cell(net_anchor(row["net"]))}"')
             lines.append(
-                "<tr>"
+                f"<tr{row_id}>"
                 f"<td><code>{'' if repeated else html_cell(row['net'])}</code></td>"
                 f"<td>{'' if repeated else html_cell(row['labels'])}</td>"
                 f"<td><code>{html_cell(row['device_pad'])}</code></td>"

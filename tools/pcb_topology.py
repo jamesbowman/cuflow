@@ -93,6 +93,7 @@ class ClearanceViolation:
     layer: str
     net_id: str
     conflicting_net_ids: tuple[str, ...]
+    centroid: tuple[float, float]
 
 
 @dataclass
@@ -454,13 +455,15 @@ def net_clearance_violations(
                 continue
             buffered = geometry.buffer(radius)
             if buffered.intersects(running_sum):
+                intersection = buffered.intersection(running_sum)
                 conflicts = tuple(
                     net_id
                     for net_id, previous in accepted
                     if buffered.intersects(previous)
                 )
                 violations.append(ClearanceViolation(
-                    layer, net.net_id, conflicts))
+                    layer, net.net_id, conflicts,
+                    tuple(intersection.centroid.coords[0])))
                 continue
             running_sum = running_sum.union(buffered)
             accepted.append((net.net_id, buffered))

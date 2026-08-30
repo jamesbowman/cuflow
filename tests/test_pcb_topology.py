@@ -107,6 +107,8 @@ class TopologyTests(unittest.TestCase):
         self.assertEqual(violations[0].layer, "GTL")
         self.assertEqual(violations[0].net_id, "N002")
         self.assertEqual(violations[0].conflicting_net_ids, ("N001",))
+        self.assertAlmostEqual(violations[0].centroid[0], 1.045)
+        self.assertAlmostEqual(violations[0].centroid[1], 0.5)
 
     def test_overlapping_layers_are_separate_without_a_drill(self):
         copper = sg.box(0, 0, 1, 1)

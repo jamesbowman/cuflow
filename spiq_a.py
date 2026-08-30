@@ -776,11 +776,11 @@ def spiq_a():
         return cn
     def ldo_cap(
             package, center, value, supply, ldo_pad, twist = False,
-            lcsc = None):
+            lcsc = None, ground_run = 0):
         source = {"LCSC": lcsc} if lcsc else None
         capacitor = package(center, value, source=source)
-        capacitor.pads[0].setname("GND").setwidth(
-            2 * brd.trace).w("o -")
+        ground = capacitor.pads[0].setname("GND").setwidth(2 * brd.trace)
+        ground.w(f"o f {ground_run} -")
         capacitor.pads[1].setname(supply).setwidth(2 * brd.trace)
         capacitor.pads[1].copy().goto(ldo_pad, twist).wire()
         brd.addnet(capacitor.pads[1], ldo_pad)
@@ -792,7 +792,7 @@ def spiq_a():
         "10uF", "5V", u4.s("5V"), True, "C15850")
     c2 = ldo_cap(
         cu.C0805_nolabel, brd.DC((59.3, u4.pads[2].xy[1])).right(90),
-        "10uF", "VCC", u4.pads[0], lcsc="C15850")
+        "10uF", "VCC", u4.pads[0], lcsc="C15850", ground_run=4)
 
     # U5: use 1 uF input capacitance and a little extra output
     # capacitance for transient response.

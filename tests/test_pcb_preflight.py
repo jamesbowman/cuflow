@@ -17,6 +17,11 @@ class HtmlReportTests(unittest.TestCase):
     def test_report_is_html_and_escapes_external_values(self):
         audit = Audit()
         audit.add("Example <check>", True, "safe & complete")
+        audit.add(
+            "Clearance", False, "N001 intersects N002",
+            '<a class="net-link" href="#net-n001"><code>N001</code></a> '
+            'intersects <a class="net-link" href="#net-n002"><code>N002</code></a>',
+        )
         audit.net_rows.append({
             "net": "N001",
             "labels": "GND",
@@ -67,6 +72,9 @@ class HtmlReportTests(unittest.TestCase):
         self.assertTrue(output.startswith("<!doctype html>"))
         self.assertIn("Example &lt;check&gt;", output)
         self.assertIn("safe &amp; complete", output)
+        self.assertIn('id="net-n001"', output)
+        self.assertIn('href="#net-n001"', output)
+        self.assertIn('<code>N001</code></a> intersects', output)
         self.assertIn("RP2040.GPIO20", output)
         self.assertIn("U6</code><span class=\"device-part-name\">INA226", output)
         self.assertIn('id="device-r3-pad-2"', output)
