@@ -228,6 +228,8 @@ def write(board, filename, generated_records, thickness=1.6):
         .intersection(board.layers["GBS"].preview())
         .intersection(body)
     )
+    masked_top_copper = top_copper.difference(exposed_top_copper)
+    masked_bottom_copper = bottom_copper.difference(exposed_bottom_copper)
     step_models, components, skipped = _step_library(board, generated_records)
     lcd_model = _lcd_model(board)
     bezel_model = _bezel_model(board)
@@ -240,6 +242,8 @@ def write(board, filename, generated_records, thickness=1.6):
         "polygons": _polygons(body),
         "topCopper": _polygons(top_copper),
         "bottomCopper": _polygons(bottom_copper),
+        "maskedTopCopper": _polygons(masked_top_copper),
+        "maskedBottomCopper": _polygons(masked_bottom_copper),
         "exposedTopCopper": _polygons(exposed_top_copper),
         "exposedBottomCopper": _polygons(exposed_bottom_copper),
         "topSilkscreen": _polygons(top_silkscreen),
@@ -373,6 +377,7 @@ def _document(runtime, model_json):
   const group = new THREE.Group();
   const [cx, cy] = MODEL.center;
   const visibilityLayers = {{
+    traceRelief: new THREE.Group(),
     exposedCopper: new THREE.Group(),
     copper: new THREE.Group(),
     paste: new THREE.Group(),
@@ -415,6 +420,11 @@ def _document(runtime, model_json):
     clearcoatRoughness: 0.07,
     side: THREE.DoubleSide
   }});
+  const copperThickness = 0.050;
+  const surfaceGap = 0.002;
+  const topCopperBase = MODEL.thickness / 2 + surfaceGap;
+  const bottomCopperBase = -MODEL.thickness / 2 - surfaceGap - copperThickness;
+  const topSurfaceBase = topCopperBase + copperThickness + surfaceGap;
 
   function pathFrom(points, PathType) {{
     const path = new PathType();
@@ -559,7 +569,7 @@ def _document(runtime, model_json):
     );
     component.position.set(
       x - cx,
-      MODEL.thickness / 2 + 0.006,
+      topSurfaceBase,
       -(y - cy)
     );
     component.userData = componentData;
@@ -580,7 +590,7 @@ def _document(runtime, model_json):
     accessory.rotation.y = -THREE.MathUtils.degToRad(accessoryData.rotation);
     accessory.position.set(
       accessoryData.position[0] - cx,
-      MODEL.thickness / 2 + 0.006,
+      topSurfaceBase,
       -(accessoryData.position[1] - cy)
     );
     accessory.userData = accessoryData;
@@ -594,58 +604,72 @@ def _document(runtime, model_json):
     material
   );
   extrudedLayer(
+    MODEL.maskedTopCopper ?? MODEL.topCopper ?? [],
+    copperThickness,
+    topCopperBase,
+    material,
+    visibilityLayers.traceRelief
+  );
+  extrudedLayer(
+    MODEL.maskedBottomCopper ?? MODEL.bottomCopper ?? [],
+    copperThickness,
+    bottomCopperBase,
+    material,
+    visibilityLayers.traceRelief
+  );
+  extrudedLayer(
     MODEL.exposedTopCopper,
-    0.012,
-    MODEL.thickness / 2 + 0.002,
+    copperThickness,
+    topCopperBase,
     exposedGoldMaterial,
     visibilityLayers.exposedCopper
   );
   extrudedLayer(
     MODEL.exposedBottomCopper,
-    0.012,
-    -MODEL.thickness / 2 - 0.014,
+    copperThickness,
+    bottomCopperBase,
     exposedGoldMaterial,
     visibilityLayers.exposedCopper
   );
   extrudedLayer(
     MODEL.topCopper ?? MODEL.exposedTopCopper,
-    0.012,
-    MODEL.thickness / 2 + 0.002,
+    copperThickness,
+    topCopperBase,
     exposedGoldMaterial,
     visibilityLayers.copper
   );
   extrudedLayer(
     MODEL.bottomCopper ?? MODEL.exposedBottomCopper,
-    0.012,
-    -MODEL.thickness / 2 - 0.014,
+    copperThickness,
+    bottomCopperBase,
     exposedGoldMaterial,
     visibilityLayers.copper
   );
   extrudedLayer(
     MODEL.topSolderPaste,
     0.05,
-    MODEL.thickness / 2 + 0.016,
+    topSurfaceBase,
     solderPasteMaterial,
     visibilityLayers.paste
   );
   extrudedLayer(
     MODEL.bottomSolderPaste ?? [],
     0.05,
-    -MODEL.thickness / 2 - 0.066,
+    bottomCopperBase - surfaceGap - 0.05,
     solderPasteMaterial,
     visibilityLayers.paste
   );
   extrudedLayer(
     MODEL.topSilkscreen,
     0.018,
-    MODEL.thickness / 2 + 0.006,
+    topSurfaceBase,
     silkscreenMaterial,
     visibilityLayers.silks
   );
   extrudedLayer(
     MODEL.bottomSilkscreen,
     0.018,
-    -MODEL.thickness / 2 - 0.024,
+    bottomCopperBase - surfaceGap - 0.018,
     silkscreenMaterial,
     visibilityLayers.silks
   );
@@ -716,6 +740,7 @@ def _document(runtime, model_json):
     visibilityLayers.components.visible = level <= 1;
     visibilityLayers.silks.visible = level <= 2;
     visibilityLayers.paste.visible = level <= 3;
+    visibilityLayers.traceRelief.visible = level < 5;
     visibilityLayers.exposedCopper.visible = level < 5;
     visibilityLayers.copper.visible = level === 5;
     layerSlider.value = String(level);
