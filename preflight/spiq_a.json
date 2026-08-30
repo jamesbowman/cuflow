@@ -23,7 +23,9 @@
   "external_footprints": {
     "cache_dir": "preflight/easyeda-footprints",
     "name_atlas_source": "spiq_a.py",
-    "name_atlas_variable": "PREFLIGHT_NAME_ATLAS"
+    "name_atlas_variable": "PREFLIGHT_NAME_ATLAS",
+    "placement_manifest": "spiq_a-preflight-placements.json",
+    "supplemental_designators": ["J4"]
   },
   "excluded_designators": ["J4", "U3"],
   "expected_gml_contours": 5,

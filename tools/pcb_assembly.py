@@ -23,6 +23,7 @@ else:
 
 
 FOOTPRINT_FORMAT = "cuflow-easyeda-part-2"
+PREFLIGHT_PLACEMENT_FORMAT = "cuflow-preflight-placements-1"
 
 
 @dataclass(frozen=True)
@@ -228,6 +229,44 @@ def read_jlc_pnp(path: Path, lcsc_by_designator: Mapping[str, str]
                 side,
                 float(row["Rotation"]),
             ))
+    return tuple(placements)
+
+
+def read_preflight_placements(path: Path) -> tuple[Placement, ...]:
+    """Read all physical LCSC-backed placements emitted by CuFlow."""
+    with path.open(encoding="utf-8") as source:
+        value = json.load(source)
+    if not isinstance(value, dict):
+        raise ValueError(f"{path}: expected an object")
+    if value.get("format") != PREFLIGHT_PLACEMENT_FORMAT:
+        raise ValueError(f"{path}: unsupported placement manifest format")
+    records = value.get("placements")
+    if not isinstance(records, list):
+        raise ValueError(f"{path}: placements must be a list")
+
+    placements: list[Placement] = []
+    seen: set[str] = set()
+    for index, record in enumerate(records, 1):
+        if not isinstance(record, dict):
+            raise ValueError(f"{path}: placement {index} must be an object")
+        try:
+            designator = str(record["designator"]).strip()
+            lcsc = str(record["lcsc"]).strip().upper()
+            side = str(record["side"]).strip().title()
+            xy = (float(record["x"]), float(record["y"]))
+            rotation = float(record["rotation"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError(
+                f"{path}: invalid placement {index}: {error}") from error
+        if not designator or not lcsc:
+            raise ValueError(
+                f"{path}: placement {index} needs designator and LCSC code")
+        if designator in seen:
+            raise ValueError(f"{path}: duplicate {designator}")
+        if side not in ("Top", "Bottom"):
+            raise ValueError(f"{path}: invalid layer {side!r} for {designator}")
+        seen.add(designator)
+        placements.append(Placement(designator, lcsc, xy, side, rotation))
     return tuple(placements)
 
 

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import shapely.geometry as sg
 
+import cuflow as cu
 from tools.pcb_assembly import (
     DeviceNameAtlas,
     ExternalFootprint,
@@ -16,6 +17,7 @@ from tools.pcb_assembly import (
     place_footprint,
     read_jlc_bom,
     read_jlc_pnp,
+    read_preflight_placements,
 )
 from tools.pcb_topology import DrillHit, build_topology
 
@@ -115,6 +117,30 @@ class AttachmentTests(unittest.TestCase):
 
 
 class CsvTests(unittest.TestCase):
+    def test_cuflow_manifest_includes_part_excluded_from_assembly(self):
+        board = cu.Board((10, 10), 0.1, 0.1, 0.3, 0.6, 0.1, 0.1)
+
+        class PhysicalPart:
+            id = "J4"
+            inBOM = False
+            source = {"LCSC": "C46061679"}
+
+            def pnp_jlc(self):
+                return board.DC((3, 4)).setlayer("GBL").right(90)
+
+        board.parts["J"].append(PhysicalPart())
+        with tempfile.TemporaryDirectory() as directory:
+            basename = str(Path(directory) / "board")
+            board.pnp(basename)
+            placements = read_preflight_placements(
+                Path(basename + "-preflight-placements.json"))
+            assembly_pnp = Path(
+                basename + "-jlcpcb-pnp.csv").read_text(encoding="utf-8")
+
+        self.assertEqual(placements, (
+            Placement("J4", "C46061679", (3, 4), "Bottom", 270),))
+        self.assertNotIn("J4", assembly_pnp)
+
     def test_literal_name_atlas_maps_external_header_numbers(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "board.py"
@@ -150,6 +176,21 @@ class CsvTests(unittest.TestCase):
         self.assertEqual(mapping, {"R1": "C123", "R2": "C123"})
         self.assertEqual(placements[0].xy, (1.2, 3.4))
         self.assertEqual(placements[1].side, "Bottom")
+
+    def test_preflight_manifest_includes_unpopulated_placement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = Path(directory) / "placements.json"
+            manifest.write_text(
+                '{"format": "cuflow-preflight-placements-1", '
+                '"placements": [{"designator": "J4", "lcsc": "C46061679", '
+                '"x": 30.5, "y": 29.5, "side": "Bottom", '
+                '"rotation": 0}]}',
+                encoding="utf-8",
+            )
+            placements = read_preflight_placements(manifest)
+
+        self.assertEqual(placements, (
+            Placement("J4", "C46061679", (30.5, 29.5), "Bottom", 0),))
 
 
 if __name__ == "__main__":

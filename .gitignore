@@ -18,6 +18,7 @@ __pycache__
 *.csv
 !preflight/*.csv
 *-preflight.md
+*-preflight-placements.json
 *.AIR
 *.G2L
 *.G3L

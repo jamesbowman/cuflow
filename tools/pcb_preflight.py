@@ -579,6 +579,7 @@ def audit_external_footprints(
             place_footprint,
             read_jlc_bom,
             read_jlc_pnp,
+            read_preflight_placements,
         )
     else:
         from pcb_assembly import (
@@ -589,6 +590,7 @@ def audit_external_footprints(
             place_footprint,
             read_jlc_bom,
             read_jlc_pnp,
+            read_preflight_placements,
         )
 
     try:
@@ -598,6 +600,46 @@ def audit_external_footprints(
     except (OSError, ValueError, csv.Error) as error:
         audit.add("External footprint placements", False, str(error))
         return
+
+    supplemental_designators = set(config.get("supplemental_designators", ()))
+    if supplemental_designators:
+        try:
+            manifest_placements = read_preflight_placements(
+                relative_path(config["placement_manifest"]))
+            manifest_by_designator = {
+                placement.designator: placement
+                for placement in manifest_placements
+            }
+            missing = sorted(
+                supplemental_designators - manifest_by_designator.keys())
+            populated = sorted(
+                supplemental_designators & {
+                    placement.designator for placement in placements})
+            if missing or populated:
+                issues = []
+                if missing:
+                    issues.append("missing: " + ", ".join(missing))
+                if populated:
+                    issues.append(
+                        "already in assembly PNP: " + ", ".join(populated))
+                raise ValueError("; ".join(issues))
+            supplemental = tuple(
+                manifest_by_designator[designator]
+                for designator in sorted(supplemental_designators))
+            placements += supplemental
+            lcsc_by_designator = dict(lcsc_by_designator)
+            lcsc_by_designator.update({
+                placement.designator: placement.lcsc
+                for placement in supplemental
+            })
+        except (KeyError, OSError, ValueError, json.JSONDecodeError) as error:
+            audit.add("Supplemental physical placements", False, str(error))
+            return
+        audit.add(
+            "Supplemental physical placements", True,
+            f"included {', '.join(sorted(supplemental_designators))} from "
+            f"{len(manifest_placements)} generated physical placements",
+        )
 
     footprints, cache_errors = load_footprints(
         relative_path(config["cache_dir"]), lcsc_by_designator.values())
