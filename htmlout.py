@@ -210,24 +210,26 @@ def write(board, filename, generated_records, thickness=1.6):
         )
 
     body = board.body()
-    top_silkscreen = board.layers["GTO"].preview().intersection(body)
-    bottom_silkscreen = board.layers["GBO"].preview().intersection(body)
+    top_solder_mask_openings = board.layers["GTS"].preview().intersection(body)
+    bottom_solder_mask_openings = board.layers["GBS"].preview().intersection(body)
+    top_silkscreen = (
+        board.layers["GTO"]
+        .preview()
+        .intersection(body)
+        .difference(top_solder_mask_openings)
+    )
+    bottom_silkscreen = (
+        board.layers["GBO"]
+        .preview()
+        .intersection(body)
+        .difference(bottom_solder_mask_openings)
+    )
     top_solder_paste = board.layers["GTP"].preview().intersection(body)
     bottom_solder_paste = board.layers["GBP"].preview().intersection(body)
     top_copper = board.layers["GTL"].preview().intersection(body)
     bottom_copper = board.layers["GBL"].preview().intersection(body)
-    exposed_top_copper = (
-        board.layers["GTL"]
-        .preview()
-        .intersection(board.layers["GTS"].preview())
-        .intersection(body)
-    )
-    exposed_bottom_copper = (
-        board.layers["GBL"]
-        .preview()
-        .intersection(board.layers["GBS"].preview())
-        .intersection(body)
-    )
+    exposed_top_copper = top_copper.intersection(top_solder_mask_openings)
+    exposed_bottom_copper = bottom_copper.intersection(bottom_solder_mask_openings)
     masked_top_copper = top_copper.difference(exposed_top_copper)
     masked_bottom_copper = bottom_copper.difference(exposed_bottom_copper)
     step_models, components, skipped = _step_library(board, generated_records)
@@ -339,10 +341,10 @@ def _document(runtime, model_json):
   <div class="layer-labels">
     <button class="layer-step active" type="button" data-layer-level="0">Bezel</button>
     <button class="layer-step" type="button" data-layer-level="1">Components</button>
-    <button class="layer-step" type="button" data-layer-level="2">Silkscreen</button>
-    <button class="layer-step" type="button" data-layer-level="3">Paste</button>
+    <button class="layer-step" type="button" data-layer-level="2">Paste</button>
+    <button class="layer-step" type="button" data-layer-level="3">Silkscreen</button>
     <button class="layer-step" type="button" data-layer-level="4">Solder Mask</button>
-    <button class="layer-step" type="button" data-layer-level="5">Copper</button>
+    <button class="layer-step" type="button" data-layer-level="5">Gold</button>
   </div>
 </aside>
 <div class="help">Drag to rotate board · right-drag to pan · scroll to zoom</div>
@@ -443,6 +445,14 @@ def _document(runtime, model_json):
   const topCopperBase = MODEL.thickness / 2 + surfaceGap;
   const bottomCopperBase = -MODEL.thickness / 2 - surfaceGap - copperThickness;
   const topSurfaceBase = topCopperBase + copperThickness + surfaceGap;
+  const silkscreenThickness = 0.018;
+  const pasteThickness = 0.05;
+  const topSilkscreenBase = topSurfaceBase;
+  const bottomSilkscreenBase = (
+    bottomCopperBase - surfaceGap - silkscreenThickness
+  );
+  const topPasteBase = topSurfaceBase;
+  const bottomPasteBase = bottomCopperBase - surfaceGap - pasteThickness;
 
   function pathFrom(points, PathType) {{
     const path = new PathType();
@@ -665,32 +675,32 @@ def _document(runtime, model_json):
     visibilityLayers.copper
   );
   extrudedLayer(
-    MODEL.topSolderPaste,
-    0.05,
-    topSurfaceBase,
-    solderPasteMaterial,
-    visibilityLayers.paste
-  );
-  extrudedLayer(
-    MODEL.bottomSolderPaste ?? [],
-    0.05,
-    bottomCopperBase - surfaceGap - 0.05,
-    solderPasteMaterial,
-    visibilityLayers.paste
-  );
-  extrudedLayer(
     MODEL.topSilkscreen,
-    0.018,
-    topSurfaceBase,
+    silkscreenThickness,
+    topSilkscreenBase,
     silkscreenMaterial,
     visibilityLayers.silks
   );
   extrudedLayer(
     MODEL.bottomSilkscreen,
-    0.018,
-    bottomCopperBase - surfaceGap - 0.018,
+    silkscreenThickness,
+    bottomSilkscreenBase,
     silkscreenMaterial,
     visibilityLayers.silks
+  );
+  extrudedLayer(
+    MODEL.topSolderPaste,
+    pasteThickness,
+    topPasteBase,
+    solderPasteMaterial,
+    visibilityLayers.paste
+  );
+  extrudedLayer(
+    MODEL.bottomSolderPaste ?? [],
+    pasteThickness,
+    bottomPasteBase,
+    solderPasteMaterial,
+    visibilityLayers.paste
   );
   placeAccessory(MODEL.lcdModel, visibilityLayers.components);
   placeAccessory(MODEL.bezelModel, visibilityLayers.bezel);
@@ -747,18 +757,18 @@ def _document(runtime, model_json):
   const layerNames = [
     "Bezel",
     "Components",
-    "Silkscreen",
     "Paste",
+    "Silkscreen",
     "Solder Mask",
-    "Copper"
+    "Gold"
   ];
 
   function setLayerLevel(requestedLevel) {{
     const level = THREE.MathUtils.clamp(Number(requestedLevel), 0, 5);
     visibilityLayers.bezel.visible = level <= 0;
     visibilityLayers.components.visible = level <= 1;
-    visibilityLayers.silks.visible = level <= 2;
-    visibilityLayers.paste.visible = level <= 3;
+    visibilityLayers.paste.visible = level <= 2;
+    visibilityLayers.silks.visible = level <= 3;
     visibilityLayers.traceRelief.visible = level < 5;
     visibilityLayers.exposedCopper.visible = level < 5;
     visibilityLayers.copper.visible = level === 5;

@@ -1,4 +1,4 @@
-gerbv \
+gerbv-app -u mm \
 -f '#FFFFFF' $1.GTO \
 -f '#FF0000' $1.TXT \
 -f '#a0a000' $1.GTL \

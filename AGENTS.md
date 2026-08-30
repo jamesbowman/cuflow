@@ -1,3 +1,10 @@
+## General
+
+Always use this Python on Mac:
+/Users/jamesb/.pyenv/versions/3.13.0/envs/py13/bin/python
+and this Python on Linux:
+/home/jamesb/py313/bin/python
+
 ## PCB manufacturing preflight
 
 When the user asks to preflight a PCB, check it before manufacture, or decide
