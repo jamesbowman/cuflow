@@ -30,6 +30,7 @@
   "expected_gml_contours_reason": "one rounded board perimeter plus J1's four plated USB-C mounting slots",
   "topology": {
     "copper_layers": ["GTL", "G2L", "G3L", "GBL"],
+    "net_clearance_mm": 0.1,
     "plated_internal_gml_contours": 4,
     "net_seeds": {
       "GND": [

@@ -378,6 +378,7 @@ def audit_copper_topology(
             TopologyFormatError,
             build_topology,
             internal_closed_contours,
+            net_clearance_violations,
             parse_cuflow_gerber,
             parse_cuflow_paths_text,
             parse_excellon,
@@ -388,6 +389,7 @@ def audit_copper_topology(
             TopologyFormatError,
             build_topology,
             internal_closed_contours,
+            net_clearance_violations,
             parse_cuflow_gerber,
             parse_cuflow_paths_text,
             parse_excellon,
@@ -443,6 +445,24 @@ def audit_copper_topology(
         f"{len(drill_hits)} drills touching copper, "
         f"{len(interlayer_connectors)} plated slots, "
         f"{len(topology.nets)} physical nets",
+    )
+
+    clearance = float(config.get("net_clearance_mm", 0.1))
+    clearance_violations = net_clearance_violations(topology, clearance)
+    clearance_detail = (
+        f"all physical nets are separated by at least {clearance:.3f} mm"
+        if not clearance_violations else
+        f"{len(clearance_violations)} violation(s) at {clearance:.3f} mm: " +
+        "; ".join(
+            f"{violation.layer} {violation.net_id} intersects buffered "
+            f"{'/'.join(violation.conflicting_net_ids)}"
+            for violation in clearance_violations[:20]
+        ) + (" ..." if len(clearance_violations) > 20 else "")
+    )
+    audit.add(
+        "Net-to-net clearance",
+        not clearance_violations,
+        clearance_detail,
     )
 
     named_nets: dict[str, set[str]] = {}

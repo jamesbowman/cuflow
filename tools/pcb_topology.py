@@ -88,6 +88,13 @@ class PhysicalNet:
         return sum(self.area_by_layer.values())
 
 
+@dataclass(frozen=True)
+class ClearanceViolation:
+    layer: str
+    net_id: str
+    conflicting_net_ids: tuple[str, ...]
+
+
 @dataclass
 class BoardTopology:
     layer_order: tuple[str, ...]
@@ -428,3 +435,33 @@ def build_topology(
         tuple(nets),
         component_to_net,
     )
+
+
+def net_clearance_violations(
+        topology: BoardTopology,
+        clearance: float) -> tuple[ClearanceViolation, ...]:
+    """Find different-net copper closer than the requested clearance."""
+    if clearance < 0:
+        raise ValueError("clearance must not be negative")
+    violations: list[ClearanceViolation] = []
+    radius = clearance / 2
+    for layer in topology.layer_order:
+        running_sum: BaseGeometry = sg.Polygon()
+        accepted: list[tuple[str, BaseGeometry]] = []
+        for net in topology.nets:
+            geometry = topology.geometry_for_net(net.net_id, layer)
+            if geometry.is_empty:
+                continue
+            buffered = geometry.buffer(radius)
+            if buffered.intersects(running_sum):
+                conflicts = tuple(
+                    net_id
+                    for net_id, previous in accepted
+                    if buffered.intersects(previous)
+                )
+                violations.append(ClearanceViolation(
+                    layer, net.net_id, conflicts))
+                continue
+            running_sum = running_sum.union(buffered)
+            accepted.append((net.net_id, buffered))
+    return tuple(violations)

@@ -7,6 +7,7 @@ from tools.pcb_topology import (
     InterlayerConnector,
     build_topology,
     internal_closed_contours,
+    net_clearance_violations,
     parse_cuflow_gerber_text,
     parse_cuflow_paths_text,
     parse_excellon_text,
@@ -82,6 +83,31 @@ M30
 
 
 class TopologyTests(unittest.TestCase):
+    def test_net_clearance_accepts_gap_larger_than_threshold(self):
+        topology = build_topology({
+            "GTL": sg.MultiPolygon((
+                sg.box(0, 0, 1, 1),
+                sg.box(1.11, 0, 2.11, 1),
+            )),
+        }, ())
+
+        self.assertEqual(net_clearance_violations(topology, 0.1), ())
+
+    def test_net_clearance_reports_buffer_intersection(self):
+        topology = build_topology({
+            "GTL": sg.MultiPolygon((
+                sg.box(0, 0, 1, 1),
+                sg.box(1.09, 0, 2.09, 1),
+            )),
+        }, ())
+
+        violations = net_clearance_violations(topology, 0.1)
+
+        self.assertEqual(len(violations), 1)
+        self.assertEqual(violations[0].layer, "GTL")
+        self.assertEqual(violations[0].net_id, "N002")
+        self.assertEqual(violations[0].conflicting_net_ids, ("N001",))
+
     def test_overlapping_layers_are_separate_without_a_drill(self):
         copper = sg.box(0, 0, 1, 1)
         topology = build_topology({"GTL": copper, "GBL": copper}, ())
