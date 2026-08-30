@@ -9,6 +9,19 @@ Run the repository's deterministic checks, then perform the checks that require
 engineering judgment in a CAM view. A passing script is necessary but is not by
 itself approval to manufacture.
 
+Boards with `external_footprints` in their profile also map package pads to
+physical copper nets using cached EasyEDA footprints selected by the JLCPCB BOM
+and placed by the JLCPCB PNP file. Normal preflight is cache-only. Refresh that
+independent source explicitly when a BOM selection changes:
+
+```sh
+python3 tools/fetch_easyeda_footprints.py <board>-jlcpcb-bom.csv
+```
+
+The cache includes official EasyEDA symbol pin names. The report joins those
+names to the package pads and physical nets while retaining reference designator
+and pad number as provenance.
+
 ## Automated gate
 
 From the repository root, run:
@@ -18,7 +31,7 @@ python3 tools/pcb_preflight.py <board-name>
 ```
 
 This regenerates the board unless `--no-generate` is explicitly appropriate.
-Read the generated `<board-name>-preflight.md` report and resolve every failure.
+Read the generated `<board-name>-preflight.html` report and resolve every failure.
 Use the selected board's profile in `preflight/`; do not generalize profile-only
 requirements to other boards. For example, `spiq_a` requires five GML contours
 because it has one perimeter and four routed USB-C mounting slots.

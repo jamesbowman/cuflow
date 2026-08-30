@@ -1,7 +1,7 @@
 {
   "board": "spiq_a",
   "source": "spiq_a.py",
-  "python": "~/.pyenv/versions/py13/bin/python",
+  "python": "/home/jamesb/py313/bin/python",
   "bom": "spiq_a-jlcpcb-bom.csv",
   "pnp": "spiq_a-jlcpcb-pnp.csv",
   "part_catalog": "preflight/spiq_a-jlcpcb-parts.csv",
@@ -20,9 +20,28 @@
   },
   "drill_file": "spiq_a.TXT",
   "airwire_file": "spiq_a.AIR",
+  "external_footprints": {
+    "cache_dir": "preflight/easyeda-footprints",
+    "name_atlas_source": "spiq_a.py",
+    "name_atlas_variable": "PREFLIGHT_NAME_ATLAS"
+  },
   "excluded_designators": ["J4", "U3"],
   "expected_gml_contours": 5,
   "expected_gml_contours_reason": "one rounded board perimeter plus J1's four plated USB-C mounting slots",
+  "topology": {
+    "copper_layers": ["GTL", "G2L", "G3L", "GBL"],
+    "plated_internal_gml_contours": 4,
+    "net_seeds": {
+      "GND": [
+        {"layer": "G2L", "selector": "largest"}
+      ],
+      "VCC": [
+        {"layer": "G3L", "selector": "largest"},
+        {"layer": "GBL", "point": [54.0, 27.04]}
+      ]
+    },
+    "forbidden_connections": [["GND", "VCC"]]
+  },
   "manual_checks": [
     "In a CAM viewer, identify the five GML contours as one rounded board perimeter and J1's four closed mounting slots.",
     "Confirm each J1 routed slot is surrounded by its intended copper and solder-mask land on both board sides.",
