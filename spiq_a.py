@@ -223,17 +223,20 @@ class USBC(cu.Part):
         self.s("B6").copy().w("o f 0.4 l 90").goto(
             self.s("A6"), twist=True).wire()
 
-        def cc_pulldown(pin):
+        def cc_pulldown(pin, north=0):
             center = self.s(pin).copy().w(
                 "o f 2 l 90 f 0.65 l 90").setname(None)
+            center = self.board.DC(
+                (center.xy[0], center.xy[1] + north), center.dir)
             resistor = cu.R0402(
                 center, "5K1", source={"LCSC": "C25905"})
-            self.s(pin).copy().w("o").goto(resistor.pads[0]).wire()
+            self.s(pin).copy().w("o").goto(
+                resistor.pads[0], twist=True).wire()
             resistor.pads[1].w("o -")
             return resistor
 
-        r5 = cc_pulldown("A5")
-        r6 = cc_pulldown("B5")
+        r5 = cc_pulldown("A5", north=0.4)
+        r6 = cc_pulldown("B5", north=0.2)
 
         return (r5, r6)
 
