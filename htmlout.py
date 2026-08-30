@@ -350,7 +350,7 @@ def _document(runtime, model_json):
 <script>
 (() => {{
   const MODEL = {model_json};
-  const {{ THREE, OrbitControls }} = window.CuflowViewerRuntime;
+  const {{ THREE, OrbitControls, RoomEnvironment }} = window.CuflowViewerRuntime;
   const host = document.getElementById("viewer");
   const scene = new THREE.Scene();
 
@@ -365,6 +365,20 @@ def _document(runtime, model_json):
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   host.appendChild(renderer.domElement);
+
+  const studioEnvironment = new RoomEnvironment();
+  const pmremGenerator = new THREE.PMREMGenerator(renderer);
+  const environmentTarget = pmremGenerator.fromScene(
+    studioEnvironment,
+    0,
+    0.1,
+    100,
+    {{ size: 512 }}
+  );
+  scene.environment = environmentTarget.texture;
+  scene.environmentIntensity = 0.25;
+  studioEnvironment.dispose();
+  pmremGenerator.dispose();
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
@@ -391,16 +405,18 @@ def _document(runtime, model_json):
   }});
   const material = new THREE.MeshPhysicalMaterial({{
     color: 0x050608,
-    roughness: 0.16,
+    roughness: 0.08,
     metalness: 0,
+    envMapIntensity: 0.8,
     clearcoat: 1,
-    clearcoatRoughness: 0.055,
+    clearcoatRoughness: 0.003,
     side: THREE.DoubleSide
   }});
   const silkscreenMaterial = new THREE.MeshPhysicalMaterial({{
     color: 0xf4f3ec,
     roughness: 0.52,
     metalness: 0,
+    envMapIntensity: 1.6,
     clearcoat: 0.08,
     side: THREE.DoubleSide
   }});
@@ -408,6 +424,7 @@ def _document(runtime, model_json):
     color: 0xe0a11a,
     metalness: 0.96,
     roughness: 0.18,
+    envMapIntensity: 4,
     clearcoat: 0.2,
     clearcoatRoughness: 0.12,
     side: THREE.DoubleSide
@@ -416,6 +433,7 @@ def _document(runtime, model_json):
     color: 0xb8bec5,
     metalness: 0.96,
     roughness: 0.14,
+    envMapIntensity: 4,
     clearcoat: 0.3,
     clearcoatRoughness: 0.07,
     side: THREE.DoubleSide
@@ -480,6 +498,7 @@ def _document(runtime, model_json):
       color,
       metalness: looksMetallic ? 0.72 : 0,
       roughness: looksMetallic ? 0.3 : (high < 0.2 ? 0.34 : 0.46),
+      envMapIntensity: looksMetallic ? 3.2 : (high < 0.2 ? 0.8 : 2.2),
       clearcoat: looksMetallic ? 0.08 : (high < 0.2 ? 0.18 : 0.03),
       clearcoatRoughness: 0.35,
       side: THREE.DoubleSide
