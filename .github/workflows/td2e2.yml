@@ -39,5 +39,8 @@ jobs:
             td2e2.gtl.pov td2e2.gtl-covered.pov td2e2.gts.pov
           )
           for output in "${outputs[@]}"; do
-            test -s "$output"
+            if ! test -s "$output"; then
+              echo "Missing or empty output: $output"
+              exit 1
+            fi
           done
