@@ -878,85 +878,8 @@ def spiq_a():
     )
     airwires.extend(current_measurement_airwires)
 
-    airwire_rows = []
-    total_airwire_distance = 0.0
-
-    completed_connections = {
-        frozenset(connection)
-        for connection in brd.nets
-    }
-
-    def minimum_spanning_tree(net):
-        assert len(net) >= 2
-        parent = list(range(len(net)))
-
-        def find(index):
-            while parent[index] != index:
-                parent[index] = parent[parent[index]]
-                index = parent[index]
-            return index
-
-        def union(a, b):
-            a = find(a)
-            b = find(b)
-            if a != b:
-                parent[b] = a
-
-        endpoint = lambda pad: (pad.part, pad.name)
-        for source_index in range(len(net)):
-            for target_index in range(source_index + 1, len(net)):
-                connection = frozenset((
-                    endpoint(net[source_index]),
-                    endpoint(net[target_index]),
-                ))
-                if connection in completed_connections:
-                    union(source_index, target_index)
-
-        tree = []
-        edges = sorted(
-            (net[source_index].distance(net[target_index]),
-             source_index, target_index)
-            for source_index in range(len(net))
-            for target_index in range(source_index + 1, len(net))
-        )
-        for distance, source_index, target_index in edges:
-            if find(source_index) != find(target_index):
-                union(source_index, target_index)
-                tree.append((
-                    net[source_index], net[target_index], distance))
-        return tree
-
-    for net in airwires:
-        for source, target, distance in minimum_spanning_tree(net):
-            brd.layers["AIR"].add(sg.LineString((source.xy, target.xy)))
-            airwire_rows.append((
-                f"{source.part}.{source.name}",
-                f"{target.part}.{target.name}",
-                f"{distance:.3f}" if distance else "",
-            ))
-            total_airwire_distance += distance
-
-    if airwire_rows:
-        airwire_headers = ("src", "dest", "distance (mm)")
-        airwire_widths = [
-            max(len(header), *(len(row[column]) for row in airwire_rows))
-            for column, header in enumerate(airwire_headers)
-        ]
-        print("  ".join(
-            header.ljust(airwire_widths[column])
-            for column, header in enumerate(airwire_headers)))
-        print("  ".join("-" * width for width in airwire_widths))
-        for row in airwire_rows:
-            print("  ".join(
-                value.rjust(airwire_widths[column]) if column == 2 else
-                value.ljust(airwire_widths[column])
-                for column, value in enumerate(row)))
-        print("  ".join("-" * width for width in airwire_widths))
-        total_row = ("total", "", f"{total_airwire_distance:.3f}")
-        print("  ".join(
-            value.rjust(airwire_widths[column]) if column == 2 else
-            value.ljust(airwire_widths[column])
-            for column, value in enumerate(total_row)))
+    airwire_records = brd.add_airwires(airwires)
+    brd.print_airwire_report(airwire_records)
 
     brd.outline(corner_radius = 2)
     gml_contour_count = (

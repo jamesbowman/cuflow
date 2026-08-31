@@ -945,6 +945,94 @@ class Board:
     def addnet(self, a, b):
         self.nets.append(((a.part, a.name), (b.part, b.name)))
 
+    def add_airwires(self, nets):
+        completed_connections = {
+            frozenset(connection)
+            for connection in self.nets
+        }
+
+        def minimum_spanning_tree(net):
+            assert len(net) >= 2
+            parent = list(range(len(net)))
+
+            def find(index):
+                while parent[index] != index:
+                    parent[index] = parent[parent[index]]
+                    index = parent[index]
+                return index
+
+            def union(a, b):
+                a = find(a)
+                b = find(b)
+                if a != b:
+                    parent[b] = a
+
+            endpoint = lambda pad: (pad.part, pad.name)
+            for source_index in range(len(net)):
+                for target_index in range(source_index + 1, len(net)):
+                    connection = frozenset((
+                        endpoint(net[source_index]),
+                        endpoint(net[target_index]),
+                    ))
+                    if connection in completed_connections:
+                        union(source_index, target_index)
+
+            tree = []
+            edges = sorted(
+                (net[source_index].distance(net[target_index]),
+                 source_index, target_index)
+                for source_index in range(len(net))
+                for target_index in range(source_index + 1, len(net))
+            )
+            for distance, source_index, target_index in edges:
+                if find(source_index) != find(target_index):
+                    union(source_index, target_index)
+                    tree.append((
+                        net[source_index], net[target_index], distance))
+            return tree
+
+        records = []
+        for net in nets:
+            for source, target, distance in minimum_spanning_tree(net):
+                self.layers["AIR"].add(
+                    sg.LineString((source.xy, target.xy)))
+                records.append((source, target, distance))
+        return records
+
+    def print_airwire_report(self, records):
+        if not records:
+            return
+
+        rows = [
+            (
+                f"{source.part}.{source.name}",
+                f"{target.part}.{target.name}",
+                f"{distance:.3f}" if distance else "",
+            )
+            for source, target, distance in records
+        ]
+        headers = ("src", "dest", "distance (mm)")
+        widths = [
+            max(len(header), *(len(row[column]) for row in rows))
+            for column, header in enumerate(headers)
+        ]
+        print("  ".join(
+            header.ljust(widths[column])
+            for column, header in enumerate(headers)))
+        print("  ".join("-" * width for width in widths))
+        for row in rows:
+            print("  ".join(
+                value.rjust(widths[column]) if column == 2 else
+                value.ljust(widths[column])
+                for column, value in enumerate(row)))
+        print("  ".join("-" * width for width in widths))
+        total_row = (
+            "total", "", f"{sum(distance for _, _, distance in records):.3f}")
+        print("  ".join(
+            value.rjust(widths[column]) if column == 2 else
+            value.ljust(widths[column])
+            for column, value in enumerate(total_row)))
+
     def body(self):
         # Return the board outline with holes and slots removed.
         # This is the shape of the resin subtrate.
