@@ -326,6 +326,15 @@ def _document(runtime, model_json):
     position: fixed; left: 16px; bottom: 14px; z-index: 2;
     color: rgba(232,237,245,.62); pointer-events: none;
   }}
+  .capture-status {{
+    position: fixed; right: 16px; bottom: 14px; z-index: 2;
+    padding: 7px 10px; border-radius: 7px;
+    color: #e8edf5; background: rgba(15,19,28,.82);
+    border: 1px solid rgba(255,255,255,.13);
+    opacity: 0; transform: translateY(4px); pointer-events: none;
+    transition: opacity .15s ease, transform .15s ease;
+  }}
+  .capture-status.visible {{ opacity: 1; transform: translateY(0); }}
 </style>
 </head>
 <body>
@@ -348,7 +357,8 @@ def _document(runtime, model_json):
     <button class="layer-step" type="button" data-layer-level="5">Gold</button>
   </div>
 </aside>
-<div class="help">Drag to rotate board · right-drag to pan · scroll to zoom</div>
+<div class="help">Drag or flick to spin board · right-drag to pan · scroll to zoom · S copies screenshot</div>
+<div id="capture-status" class="capture-status" role="status" aria-live="polite"></div>
 <script>{runtime}</script>
 <script>
 (() => {{
@@ -361,7 +371,8 @@ def _document(runtime, model_json):
   const renderer = new THREE.WebGLRenderer({{
     antialias: true,
     alpha: true,
-    logarithmicDepthBuffer: true
+    logarithmicDepthBuffer: true,
+    preserveDrawingBuffer: true
   }});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -729,8 +740,16 @@ def _document(runtime, model_json):
     span * 0.82,
     span * 0.92
   );
+  let spinYaw = 0;
+  let spinPitch = 0;
+
+  function stopSpin() {{
+    spinYaw = 0;
+    spinPitch = 0;
+  }}
 
   function resetView() {{
+    stopSpin();
     group.quaternion.identity();
     camera.up.set(0, 1, 0);
     camera.position.copy(dramaticPosition);
@@ -739,6 +758,7 @@ def _document(runtime, model_json):
   }}
 
   function topView() {{
+    stopSpin();
     group.quaternion.identity();
     const verticalFov = THREE.MathUtils.degToRad(camera.fov);
     const horizontalFov = 2 * Math.atan(
@@ -796,39 +816,70 @@ def _document(runtime, model_json):
   let rotatingBoard = false;
   let pointerX = 0;
   let pointerY = 0;
+  let lastPointerTime = 0;
+  let lastFrameTime = performance.now();
   const yaw = new THREE.Quaternion();
   const pitch = new THREE.Quaternion();
   const worldUp = new THREE.Vector3(0, 1, 0);
   const cameraRight = new THREE.Vector3();
+  const rotationPerPixel = 0.008;
+  const maximumSpinSpeed = 6;
+  const spinDamping = 0.22;
+
+  function rotateBoard(yawAngle, pitchAngle) {{
+    cameraRight.set(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
+    yaw.setFromAxisAngle(worldUp, yawAngle);
+    pitch.setFromAxisAngle(cameraRight, pitchAngle);
+    group.quaternion.premultiply(yaw).premultiply(pitch).normalize();
+  }}
 
   renderer.domElement.addEventListener("pointerdown", (event) => {{
     if (event.button !== 0 || !event.isPrimary) return;
+    stopSpin();
     rotatingBoard = true;
     pointerX = event.clientX;
     pointerY = event.clientY;
+    lastPointerTime = event.timeStamp;
     renderer.domElement.setPointerCapture(event.pointerId);
   }});
   renderer.domElement.addEventListener("pointermove", (event) => {{
     if (!rotatingBoard || !event.isPrimary) return;
     const dx = event.clientX - pointerX;
     const dy = event.clientY - pointerY;
+    const elapsed = Math.max((event.timeStamp - lastPointerTime) / 1000, 1 / 240);
     pointerX = event.clientX;
     pointerY = event.clientY;
+    lastPointerTime = event.timeStamp;
 
-    cameraRight.set(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
-    yaw.setFromAxisAngle(worldUp, dx * 0.008);
-    pitch.setFromAxisAngle(cameraRight, dy * 0.008);
-    group.quaternion.premultiply(yaw).premultiply(pitch).normalize();
+    const yawAngle = dx * rotationPerPixel;
+    const pitchAngle = dy * rotationPerPixel;
+    const blend = Math.min(1, elapsed * 24);
+    spinYaw = THREE.MathUtils.lerp(
+      spinYaw,
+      THREE.MathUtils.clamp(yawAngle / elapsed, -maximumSpinSpeed, maximumSpinSpeed),
+      blend
+    );
+    spinPitch = THREE.MathUtils.lerp(
+      spinPitch,
+      THREE.MathUtils.clamp(pitchAngle / elapsed, -maximumSpinSpeed, maximumSpinSpeed),
+      blend
+    );
+    rotateBoard(yawAngle, pitchAngle);
   }});
-  function stopBoardRotation(event) {{
+  function stopBoardRotation(event, keepSpinning) {{
     if (!rotatingBoard || !event.isPrimary) return;
     rotatingBoard = false;
+    if (!keepSpinning || event.timeStamp - lastPointerTime > 100) stopSpin();
     if (renderer.domElement.hasPointerCapture(event.pointerId)) {{
       renderer.domElement.releasePointerCapture(event.pointerId);
     }}
   }}
-  renderer.domElement.addEventListener("pointerup", stopBoardRotation);
-  renderer.domElement.addEventListener("pointercancel", stopBoardRotation);
+  renderer.domElement.addEventListener(
+    "pointerup", (event) => stopBoardRotation(event, true)
+  );
+  renderer.domElement.addEventListener(
+    "pointercancel", (event) => stopBoardRotation(event, false)
+  );
 
   function resize() {{
     const width = host.clientWidth;
@@ -840,7 +891,89 @@ def _document(runtime, model_json):
   window.addEventListener("resize", resize);
   resize();
 
-  renderer.setAnimationLoop(() => {{
+  const captureStatus = document.getElementById("capture-status");
+  let captureStatusTimer;
+  function showCaptureStatus(message) {{
+    captureStatus.textContent = message;
+    captureStatus.classList.add("visible");
+    clearTimeout(captureStatusTimer);
+    captureStatusTimer = setTimeout(() => {{
+      captureStatus.classList.remove("visible");
+    }}, 1800);
+  }}
+
+  function screenshotBlob() {{
+    renderer.render(scene, camera);
+    const source = renderer.domElement;
+    const output = document.createElement("canvas");
+    output.width = source.width;
+    output.height = source.height;
+    const context = output.getContext("2d");
+    const centerX = output.width * 0.5;
+    const centerY = output.height * 0.38;
+    const radius = Math.max(
+      Math.hypot(centerX, centerY),
+      Math.hypot(output.width - centerX, centerY),
+      Math.hypot(centerX, output.height - centerY),
+      Math.hypot(output.width - centerX, output.height - centerY)
+    );
+    const background = context.createRadialGradient(
+      centerX, centerY, 0, centerX, centerY, radius
+    );
+    background.addColorStop(0, "#27354b");
+    background.addColorStop(0.38, "#151d2b");
+    background.addColorStop(0.72, "#090d15");
+    background.addColorStop(1, "#05070b");
+    context.fillStyle = background;
+    context.fillRect(0, 0, output.width, output.height);
+    context.drawImage(source, 0, 0);
+    return new Promise((resolve, reject) => {{
+      output.toBlob((blob) => {{
+        if (blob) resolve(blob);
+        else reject(new Error("PNG capture failed"));
+      }}, "image/png");
+    }});
+  }}
+
+  async function copyScreenshot() {{
+    if (!navigator.clipboard?.write || !window.ClipboardItem) {{
+      showCaptureStatus("Image clipboard is unavailable");
+      return;
+    }}
+    try {{
+      const blob = screenshotBlob();
+      await navigator.clipboard.write([
+        new ClipboardItem({{ "image/png": blob }})
+      ]);
+      showCaptureStatus("Screenshot copied");
+    }} catch (error) {{
+      console.error("Screenshot copy failed", error);
+      showCaptureStatus("Could not copy screenshot");
+    }}
+  }}
+
+  window.addEventListener("keydown", (event) => {{
+    const target = event.target;
+    const isTextInput = target instanceof HTMLInputElement &&
+      !["button", "checkbox", "radio", "range"].includes(target.type);
+    const isEditing = isTextInput || target instanceof HTMLTextAreaElement ||
+      target?.isContentEditable;
+    if (isEditing || event.metaKey || event.ctrlKey || event.altKey ||
+        event.key.toLowerCase() !== "s") return;
+    event.preventDefault();
+    copyScreenshot();
+  }});
+
+  renderer.setAnimationLoop((frameTime) => {{
+    const elapsed = Math.min((frameTime - lastFrameTime) / 1000, 0.05);
+    lastFrameTime = frameTime;
+    if (!rotatingBoard &&
+        (Math.abs(spinYaw) > 0.001 || Math.abs(spinPitch) > 0.001)) {{
+      rotateBoard(spinYaw * elapsed, spinPitch * elapsed);
+      const decay = Math.exp(-spinDamping * elapsed);
+      spinYaw *= decay;
+      spinPitch *= decay;
+    }}
     controls.update();
     renderer.render(scene, camera);
   }});
