@@ -56,7 +56,7 @@ used_pins = [
 # "VCC",
 # "DVDD",
 "SWCLK",
-"SWD",
+"SWDIO",
 # "RUN",
 # "GPIO16",
 # "GPIO17",
@@ -139,6 +139,7 @@ class USBmicro(eagle.LibraryPart):
     footprint = "SMD"
     source = {"LCSC": "C132563"}
     family = "J"
+    hole_keepout = 0.2
 
     def pnp_jlc(self):
         return self.center.copy().forward(1.3)
@@ -466,7 +467,7 @@ def td2e():
         x1.hex_escape()
         p = brd.DC((15, 15)).setlayer("GBO")
         p.copy().rect(*lcdsz).wire()
-        p.goxy(lcdsz[0] / 2, -lcdsz[1] / 2).mark()
+        p.goxy(lcdsz[0] / 2, -lcdsz[1] / 2)
         h0 = p.copy().goxy(-(10.3 + 1), 9.13)
         brd.layers['GBO'].add(sg.Point(h0.xy).buffer(0.5))
         h0.goxy(-10, 0)
@@ -603,7 +604,7 @@ def td2e():
         brd.hex_route(u1.s("XIN"), y1.s("CLK"))
 
         if HAVEUSB:
-            brd.hex_route(u1.s("SWD"), j3.s("SWD"))
+            brd.hex_route(u1.s("SWDIO"), j3.s("SWD"))
             brd.hex_route(u1.s("SWCLK"), j3.s("SWCLK"))
 
         # Hack, rescue a ground island

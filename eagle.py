@@ -13,6 +13,7 @@ class LibraryPart(cu.Part):
     partname = None
     use_silk = True
     use_pad_text = True
+    hole_keepout = 0.5
     def __init__(self, dc, val = None, source = None):
         tree = ET.parse(self.libraryfile)
         root = tree.getroot()
@@ -34,11 +35,11 @@ class LibraryPart(cu.Part):
             elif c.tag == "hole":
                 (x, y, drill) = [float(attr[t]) for t in "x y drill".split()]
                 p = dc.copy().goxy(x, y)
-                dc.board.hole(p.xy, drill)
+                dc.board.hole(p.xy, drill, ko = self.hole_keepout)
             elif c.tag == "circle" and attr["layer"] == "51":
                 (x, y, radius) = [float(attr[t]) for t in "x y radius".split()]
                 p = dc.copy().goxy(x, y)
-                dc.board.hole(p.xy, 2 * radius)
+                dc.board.hole(p.xy, 2 * radius, ko = self.hole_keepout)
             elif c.tag == "smd":
                 (x, y, dx, dy) = [float(attr[t]) for t in "x y dx dy".split()]
                 print((x, y, dx, dy))
@@ -59,7 +60,7 @@ class LibraryPart(cu.Part):
 
                 dc.push()
                 dc.goxy(x, y)
-                dc.board.hole(dc.xy, drill)
+                dc.board.hole(dc.xy, drill, ko = self.hole_keepout)
                 shape = attr.get("shape", "circle")
                 n = {"long" : 60, "circle" : 60, "octagon" : 8, "square" : 4}[shape]
                 if shape == "square":
