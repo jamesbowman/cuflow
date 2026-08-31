@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import html
 import json
 import os
 import re
@@ -26,6 +27,7 @@ class Check:
     name: str
     passed: bool
     detail: str
+    detail_html: str | None = None
 
 
 class Audit:
@@ -33,9 +35,14 @@ class Audit:
         self.checks: list[Check] = []
         self.bom_rows: list[dict[str, str]] = []
         self.topology_rows: list[dict[str, str]] = []
+        self.pad_rows: list[dict[str, str]] = []
+        self.net_rows: list[dict[str, str]] = []
+        self.device_rows: list[dict[str, Any]] = []
 
-    def add(self, name: str, passed: bool, detail: str) -> None:
-        self.checks.append(Check(name, passed, detail))
+    def add(
+            self, name: str, passed: bool, detail: str,
+            detail_html: str | None = None) -> None:
+        self.checks.append(Check(name, passed, detail, detail_html))
 
     @property
     def passed(self) -> bool:
@@ -72,6 +79,15 @@ def duplicate_values(values: list[str]) -> list[str]:
             duplicates.add(value)
         seen.add(value)
     return sorted(duplicates)
+
+
+def natural_pad_number_key(value: str) -> tuple[tuple[int, int | str], ...]:
+    """Sort official pad numbers naturally, including alphanumeric names."""
+    return tuple(
+        (0, int(token)) if token.isdigit() else (1, token.upper())
+        for token in re.split(r"(\d+)", value)
+        if token
+    )
 
 
 def gerber_paths(text: str) -> list[list[tuple[str, str]]]:
@@ -365,6 +381,7 @@ def audit_copper_topology(
             TopologyFormatError,
             build_topology,
             internal_closed_contours,
+            net_clearance_violations,
             parse_cuflow_gerber,
             parse_cuflow_paths_text,
             parse_excellon,
@@ -375,6 +392,7 @@ def audit_copper_topology(
             TopologyFormatError,
             build_topology,
             internal_closed_contours,
+            net_clearance_violations,
             parse_cuflow_gerber,
             parse_cuflow_paths_text,
             parse_excellon,
@@ -430,6 +448,40 @@ def audit_copper_topology(
         f"{len(drill_hits)} drills touching copper, "
         f"{len(interlayer_connectors)} plated slots, "
         f"{len(topology.nets)} physical nets",
+    )
+
+    clearance = float(config.get("net_clearance_mm", 0.1))
+    clearance_violations = net_clearance_violations(topology, clearance)
+    clearance_detail = (
+        f"all physical nets are separated by at least {clearance:.3f} mm"
+        if not clearance_violations else
+        f"{len(clearance_violations)} violation(s) at {clearance:.3f} mm: " +
+        "; ".join(
+            f"{violation.layer} {violation.net_id} intersects buffered "
+            f"{'/'.join(violation.conflicting_net_ids)} at "
+            f"({violation.centroid[0]:.3f}, {violation.centroid[1]:.3f}) mm"
+            for violation in clearance_violations[:20]
+        ) + (" ..." if len(clearance_violations) > 20 else "")
+    )
+    clearance_detail_html = None
+    if clearance_violations:
+        clearance_detail_html = (
+            f"{len(clearance_violations)} violation(s) at "
+            f"{clearance:.3f} mm: " +
+            "; ".join(
+                f"{html_cell(violation.layer)} "
+                f"{net_report_link(violation.net_id)} intersects buffered "
+                f"{'/'.join(net_report_link(net_id) for net_id in violation.conflicting_net_ids)} "
+                f"at ({violation.centroid[0]:.3f}, "
+                f"{violation.centroid[1]:.3f}) mm"
+                for violation in clearance_violations[:20]
+            ) + (" ..." if len(clearance_violations) > 20 else "")
+        )
+    audit.add(
+        "Net-to-net clearance",
+        not clearance_violations,
+        clearance_detail,
+        clearance_detail_html,
     )
 
     named_nets: dict[str, set[str]] = {}
@@ -508,95 +560,683 @@ def audit_copper_topology(
                 for layer, area in net.area_by_layer.items()),
         })
 
+    audit_external_footprints(
+        audit, profile, topology, labels_by_net)
 
-def markdown_cell(value: object) -> str:
-    return str(value).replace("|", "\\|").replace("\n", " ")
+
+def audit_external_footprints(
+        audit: Audit, profile: dict[str, Any], topology: Any,
+        labels_by_net: dict[str, list[str]]) -> None:
+    config = profile.get("external_footprints")
+    if config is None:
+        return
+    if __package__:
+        from .pcb_assembly import (
+            format_device_pad,
+            load_footprints,
+            load_name_atlas,
+            map_pads_to_topology,
+            place_footprint,
+            read_jlc_bom,
+            read_jlc_pnp,
+            read_preflight_placements,
+        )
+    else:
+        from pcb_assembly import (
+            format_device_pad,
+            load_footprints,
+            load_name_atlas,
+            map_pads_to_topology,
+            place_footprint,
+            read_jlc_bom,
+            read_jlc_pnp,
+            read_preflight_placements,
+        )
+
+    try:
+        lcsc_by_designator = read_jlc_bom(relative_path(profile["bom"]))
+        placements = read_jlc_pnp(
+            relative_path(profile["pnp"]), lcsc_by_designator)
+    except (OSError, ValueError, csv.Error) as error:
+        audit.add("External footprint placements", False, str(error))
+        return
+
+    supplemental_designators = set(config.get("supplemental_designators", ()))
+    if supplemental_designators:
+        try:
+            manifest_placements = read_preflight_placements(
+                relative_path(config["placement_manifest"]))
+            manifest_by_designator = {
+                placement.designator: placement
+                for placement in manifest_placements
+            }
+            missing = sorted(
+                supplemental_designators - manifest_by_designator.keys())
+            populated = sorted(
+                supplemental_designators & {
+                    placement.designator for placement in placements})
+            if missing or populated:
+                issues = []
+                if missing:
+                    issues.append("missing: " + ", ".join(missing))
+                if populated:
+                    issues.append(
+                        "already in assembly PNP: " + ", ".join(populated))
+                raise ValueError("; ".join(issues))
+            supplemental = tuple(
+                manifest_by_designator[designator]
+                for designator in sorted(supplemental_designators))
+            placements += supplemental
+            lcsc_by_designator = dict(lcsc_by_designator)
+            lcsc_by_designator.update({
+                placement.designator: placement.lcsc
+                for placement in supplemental
+            })
+        except (KeyError, OSError, ValueError, json.JSONDecodeError) as error:
+            audit.add("Supplemental physical placements", False, str(error))
+            return
+        audit.add(
+            "Supplemental physical placements", True,
+            f"included {', '.join(sorted(supplemental_designators))} from "
+            f"{len(manifest_placements)} generated physical placements",
+        )
+
+    footprints, cache_errors = load_footprints(
+        relative_path(config["cache_dir"]), lcsc_by_designator.values())
+    audit.add(
+        "External footprint cache",
+        not cache_errors,
+        f"{len(footprints)} unique LCSC footprints loaded"
+        if not cache_errors else "; ".join(cache_errors),
+    )
+    if cache_errors:
+        return
+
+    try:
+        name_atlas = load_name_atlas(
+            relative_path(config["name_atlas_source"]),
+            config["name_atlas_variable"],
+        )
+    except (KeyError, OSError, SyntaxError, TypeError, ValueError) as error:
+        audit.add("Device name atlas", False, str(error))
+        return
+    audit.add(
+        "Device name atlas", True,
+        f"loaded {len(name_atlas.ic_roots_by_lcsc)} IC roots and "
+        f"{len(name_atlas.header_pins)} header pin maps",
+    )
+
+    placed_pads = []
+    placement_errors: list[str] = []
+    for placement in placements:
+        try:
+            placed_pads.extend(place_footprint(
+                footprints[placement.lcsc], placement,
+                topology.layer_order))
+        except (KeyError, ValueError) as error:
+            placement_errors.append(f"{placement.designator}: {error}")
+    audit.add(
+        "External footprint placement",
+        not placement_errors,
+        f"{len(placements)} parts placed with {len(placed_pads)} copper pads"
+        if not placement_errors else "; ".join(placement_errors),
+    )
+    if placement_errors:
+        return
+
+    attachments = map_pads_to_topology(topology, placed_pads)
+    display_names: dict[tuple[str, int], str] = {}
+    naming_errors: list[str] = []
+    for attachment in attachments:
+        key = (attachment.pad.designator, attachment.pad.pad_index)
+        try:
+            display_names[key] = format_device_pad(attachment.pad, name_atlas)
+        except ValueError as error:
+            naming_errors.append(str(error))
+    audit.add(
+        "Device pad naming",
+        not naming_errors,
+        f"all {len(attachments)} pads use the report naming schema"
+        if not naming_errors else "; ".join(naming_errors),
+    )
+    if naming_errors:
+        return
+
+    def display_name(attachment: Any) -> str:
+        return display_names[
+            (attachment.pad.designator, attachment.pad.pad_index)]
+
+    def device_anchor(designator: str) -> str:
+        return f"device-{designator.lower()}"
+
+    def pad_anchor(attachment: Any) -> str:
+        return (
+            f"{device_anchor(attachment.pad.designator)}-"
+            f"pad-{attachment.pad.pad_index}"
+        )
+
+    bad_attachments = [
+        attachment for attachment in attachments
+        if len(attachment.net_ids) != 1
+    ]
+    audit.add(
+        "External pad attachment",
+        not bad_attachments,
+        f"all {len(attachments)} EasyEDA-derived pads touch exactly one "
+        "physical copper net"
+        if not bad_attachments else
+        f"{len(bad_attachments)}/{len(attachments)} pads do not touch exactly "
+        "one physical net: " + ", ".join(
+            f"{display_name(attachment)}=" +
+            ("/".join(attachment.net_ids) or "none")
+            for attachment in bad_attachments[:20]) +
+        (" ..." if len(bad_attachments) > 20 else ""),
+    )
+    for attachment in attachments:
+        center_x, center_y = attachment.pad.center
+        audit.pad_rows.append({
+            "status": "PASS" if len(attachment.net_ids) == 1 else "FAIL",
+            "pad": attachment.pad.number,
+            "device_pad": display_name(attachment),
+            "lcsc": attachment.pad.lcsc,
+            "layers": ", ".join(attachment.pad.layers),
+            "center": f"{center_x:.3f}, {center_y:.3f}",
+            "nets": ", ".join(attachment.net_ids) or "-",
+            "overlap": f"{attachment.overlap_area:.4f}",
+        })
+
+    attachments_by_net: dict[str, list[Any]] = {}
+    for attachment in attachments:
+        if len(attachment.net_ids) == 1:
+            attachments_by_net.setdefault(
+                attachment.net_ids[0], []).append(attachment)
+    for net in topology.nets:
+        net_attachments = sorted(
+            attachments_by_net.get(net.net_id, ()),
+            key=lambda item: (
+                item.pad.designator,
+                item.pad.pad_index,
+                item.pad.number,
+            ),
+        )
+        common = {
+            "net": net.net_id,
+            "labels": ", ".join(sorted(labels_by_net.get(net.net_id, ()))) or "-",
+            "layers": ", ".join(net.layers),
+        }
+        if not net_attachments:
+            audit.net_rows.append({
+                **common,
+                "device_pad": "-",
+                "footprint_pad": "-",
+                "lcsc": "-",
+            })
+            continue
+        for attachment in net_attachments:
+            audit.net_rows.append({
+                **common,
+                "device_pad": display_name(attachment),
+                "footprint_pad": attachment.pad.number,
+                "lcsc": attachment.pad.lcsc,
+            })
+    audit.add(
+        "Net list",
+        len({row["net"] for row in audit.net_rows}) == len(topology.nets),
+        f"all {len(topology.nets)} physical nets listed with "
+        f"{len(attachments) - len(bad_attachments)} attached named pads",
+    )
+
+    family_order = {"J": 0, "U": 1, "Y": 2, "R": 3}
+
+    def designator_key(designator: str) -> tuple[int, str, int, str]:
+        match = re.fullmatch(r"([A-Za-z]+)(\d+)", designator)
+        family = match.group(1) if match else designator
+        return (
+            family_order.get(family, len(family_order)),
+            family,
+            int(match.group(2)) if match else 0,
+            designator,
+        )
+
+    attachments_by_designator: dict[str, list[Any]] = {}
+    for attachment in attachments:
+        attachments_by_designator.setdefault(
+            attachment.pad.designator, []).append(attachment)
+    omitted_power_capacitors = 0
+    listed_pad_count = 0
+    for designator in sorted(attachments_by_designator, key=designator_key):
+        device_attachments = sorted(
+            attachments_by_designator[designator],
+            key=lambda item: (
+                natural_pad_number_key(item.pad.number),
+                item.pad.pad_index,
+            ))
+        first_pad = device_attachments[0].pad
+        pad_rows: list[dict[str, Any]] = []
+        for attachment in device_attachments:
+            if not attachment.net_ids:
+                connection_kind = "none"
+                connections = ("no physical net",)
+            elif len(attachment.net_ids) != 1:
+                connection_kind = "error"
+                connections = (
+                    "multiple physical nets: " +
+                    ", ".join(attachment.net_ids),)
+            else:
+                net_id = attachment.net_ids[0]
+                logical_names = set(labels_by_net.get(net_id, ()))
+                power_names = tuple(
+                    name for name in ("GND", "VCC")
+                    if name in logical_names)
+                if power_names:
+                    connection_kind = "power"
+                    connections = power_names
+                else:
+                    peers_by_name: dict[str, dict[str, str]] = {}
+                    for peer in sorted(
+                        attachments_by_net.get(net_id, ()),
+                        key=lambda item: (
+                            display_name(item),
+                            item.pad.designator,
+                            item.pad.pad_index,
+                        ),
+                    ):
+                        if peer is attachment:
+                            continue
+                        label = display_name(peer)
+                        peers_by_name.setdefault(label, {
+                            "label": label,
+                            "anchor": pad_anchor(peer),
+                        })
+                    peers = tuple(peers_by_name.values())
+                    if peers:
+                        connection_kind = "pads"
+                        connections = peers
+                    else:
+                        connection_kind = "none"
+                        connections = ("no other device pads",)
+            pad_rows.append({
+                "device_pad": display_name(attachment),
+                "anchor": pad_anchor(attachment),
+                "connection_kind": connection_kind,
+                "connections": connections,
+            })
+        power_connections = {
+            connection
+            for row in pad_rows
+            if row["connection_kind"] == "power"
+            for connection in row["connections"]
+        }
+        if (
+            designator.startswith("C")
+            and all(row["connection_kind"] == "power" for row in pad_rows)
+            and power_connections == {"GND", "VCC"}
+        ):
+            omitted_power_capacitors += 1
+            continue
+        audit.device_rows.append({
+            "designator": designator,
+            "anchor": device_anchor(designator),
+            "part_name": name_atlas.ic_roots_by_lcsc.get(first_pad.lcsc, ""),
+            "manufacturer": first_pad.manufacturer,
+            "lcsc": first_pad.lcsc,
+            "lcsc_url": first_pad.lcsc_url,
+            "pads": pad_rows,
+        })
+        listed_pad_count += len(pad_rows)
+    audit.add(
+        "Device connection list",
+        len(audit.device_rows) + omitted_power_capacitors == len(placements),
+        f"{len(audit.device_rows)} devices listed with {listed_pad_count} pads; "
+        f"{omitted_power_capacitors} VCC-to-GND capacitors omitted",
+    )
+
+
+def html_cell(value: object) -> str:
+    return html.escape(str(value), quote=True)
+
+
+def html_status(value: str) -> str:
+    passed = value.startswith("PASS")
+    css_class = "pass" if passed else "fail"
+    return f'<span class="status {css_class}">{html_cell(value)}</span>'
+
+
+def net_anchor(net_id: str) -> str:
+    return f"net-{net_id.lower()}"
+
+
+def net_report_link(net_id: str) -> str:
+    return (
+        f'<a class="net-link" href="#{html_cell(net_anchor(net_id))}">'
+        f'<code>{html_cell(net_id)}</code></a>')
 
 
 def write_report(
         path: Path, profile: dict[str, Any], audit: Audit,
         generation_output: str) -> None:
     result = "PASS" if audit.passed else "FAIL"
-    lines = [
-        f"# {profile['board']} manufacturing preflight",
-        "",
-        f"Generated: {datetime.now(timezone.utc).isoformat(timespec='seconds')}",
-        "",
-        f"Automated result: **{result}**",
-        "",
-        "A passing automated result does not complete the manual CAM gate.",
-        "",
-        "## Automated checks",
-        "",
-        "| Result | Check | Detail |",
-        "| --- | --- | --- |",
+    generated = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    result_class = "pass" if audit.passed else "fail"
+    toc_items = [
+        ("automated-checks", "Automated Checks"),
+        ("nets-by-device", "Nets By Device"),
+        ("nets", "Nets"),
+        ("copper-topology", "Copper Topology"),
+        ("external-pad-attachment", "External Pad Attachment"),
+        ("jlcpcb-bom-audit", "JLCPCB BOM Audit"),
+        ("manual-checks", "Manual Checks"),
     ]
+    if generation_output.strip():
+        toc_items.append(("generator-output", "Generator Output"))
+    toc_links = "".join(
+        f'<li><a href="#{html_cell(anchor)}">{html_cell(label)}</a></li>'
+        for anchor, label in toc_items)
+    lines = [f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{html_cell(profile['board'])} manufacturing preflight</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+      font-size: 14px;
+      letter-spacing: 0;
+      color: #182026;
+      background: #f4f6f7;
+    }}
+    * {{ box-sizing: border-box; }}
+    html, body {{ max-width: 100%; overflow-x: hidden; }}
+    body {{ width: 100vw; margin: 0; background: #f4f6f7; }}
+    header {{ background: #172126; color: #f7fafb; border-bottom: 4px solid #2f8f62; }}
+    .container {{ width: auto; max-width: 1480px; margin: 0 16px; }}
+    header .container {{ padding: 24px 0 20px; }}
+    h1 {{ margin: 0 0 8px; font-size: 24px; line-height: 1.2; letter-spacing: 0; }}
+    h2 {{ margin: 0 0 12px; font-size: 18px; line-height: 1.3; letter-spacing: 0; }}
+    h3 {{ margin: 0 0 8px; font-size: 15px; line-height: 1.4; letter-spacing: 0; }}
+    p {{ margin: 6px 0; line-height: 1.5; }}
+    main {{ padding: 8px 0 40px; }}
+    section {{ padding: 22px 0; border-bottom: 1px solid #cbd3d7; }}
+    .summary {{ display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }}
+    .toc {{ padding: 22px 0; border-bottom: 1px solid #cbd3d7; }}
+    .toc h2 {{ margin-bottom: 8px; }}
+    .toc ul {{ margin: 0; padding-left: 22px; }}
+    .toc li {{ margin: 5px 0; line-height: 1.4; }}
+    .toc a {{ color: #16623f; font-weight: 600; text-decoration: underline;
+      text-underline-offset: 2px; }}
+    .toc a:hover, .toc a:focus {{ color: #0b3d27; }}
+    .muted {{ width: calc(100vw - 32px); color: #aebbc1; white-space: normal;
+      overflow-wrap: anywhere; }}
+    .warning {{ color: #39474e; }}
+    .status {{ display: inline-block; min-width: 48px; font-weight: 700; }}
+    .status.pass {{ color: #18794e; }}
+    .status.fail {{ color: #b42318; }}
+    header .status {{ padding: 4px 9px; color: white; border: 1px solid currentColor; }}
+    header .status.pass {{ background: #18794e; color: white; }}
+    header .status.fail {{ background: #b42318; color: white; }}
+    .table-wrap {{ width: 100%; max-width: 100%; overflow-x: auto;
+      border: 1px solid #cbd3d7; }}
+    table {{ width: 100%; border-collapse: collapse; background: white; }}
+    th, td {{ padding: 7px 9px; text-align: left; vertical-align: top;
+      border-bottom: 1px solid #e0e5e7; white-space: nowrap; }}
+    th {{ position: sticky; top: 0; z-index: 1; background: #e8edef;
+      color: #26343b; font-size: 12px; font-weight: 700; }}
+    tbody tr:nth-child(even) {{ background: #f8fafb; }}
+    td.detail {{ white-space: normal; min-width: 320px; }}
+    .device {{ padding: 14px 0; border-top: 1px solid #d9e0e3; }}
+    .device:first-of-type {{ border-top: 0; }}
+    .device h3 {{ display: flex; align-items: baseline; gap: 9px; margin-bottom: 8px; }}
+    .device-identity {{ display: inline-flex; align-items: baseline; gap: 7px; }}
+    .device-designator {{ font-size: 16px; font-weight: 800; color: #18252b; }}
+    .device-part-name {{ font-size: 14px; font-weight: 650; color: #34434a; }}
+    .device-meta {{ color: #68777e; font-size: 12px; font-weight: 400; }}
+    .device-meta a {{ color: #3c6b55; text-underline-offset: 2px; }}
+    .device-pads {{ margin: 0; padding-left: 32px; }}
+    .device-pads li {{ margin: 5px 0; padding: 2px 4px; line-height: 1.45;
+      scroll-margin-top: 12px; }}
+    .pad-link {{ color: #16623f; text-decoration: underline;
+      text-underline-offset: 2px; }}
+    .pad-link:hover, .pad-link:focus {{ color: #0b3d27; }}
+    .device-pads li.pad-highlight {{ animation: pad-highlight 10s ease-out; }}
+    @keyframes pad-highlight {{
+      0% {{ background-color: #ffe36e; }}
+      12% {{ background-color: #ffe36e; }}
+      100% {{ background-color: transparent; }}
+    }}
+    .connection {{ margin-left: 6px; }}
+    code {{ font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 12px; }}
+    pre {{ margin: 0; padding: 14px; overflow: auto; background: #11191d;
+      color: #e8edef; border: 1px solid #334148; line-height: 1.45; }}
+    ul.checklist {{ margin: 0; padding: 0; list-style: none; }}
+    ul.checklist li {{ margin: 7px 0; line-height: 1.45; }}
+    ul.checklist input {{ margin: 0 8px 0 0; vertical-align: middle; }}
+    .mobile-break {{ display: none; }}
+    @media (min-width: 1512px) {{
+      .container {{ margin-left: auto; margin-right: auto; }}
+    }}
+    @media (max-width: 700px) {{
+      .container {{ margin-left: 10px; margin-right: 10px; }}
+      .muted {{ width: calc(100vw - 20px); }}
+      .mobile-break {{ display: block; }}
+      header .container {{ padding: 18px 0 16px; }}
+      h1 {{ font-size: 20px; }}
+      th, td {{ padding: 6px 7px; }}
+    }}
+  </style>
+</head>
+<body>
+<header>
+  <div class="container">
+    <h1>{html_cell(profile['board'])} manufacturing preflight</h1>
+    <div class="summary">
+      <span class="status {result_class}">{result}</span>
+      <span>Generated {html_cell(generated)}</span>
+    </div>
+    <p class="muted">A passing automated result does not complete<span
+      class="mobile-break"></span> the manual CAM gate.</p>
+  </div>
+</header>
+<main class="container">
+<nav class="toc" aria-label="Report contents">
+  <h2>Contents</h2>
+  <ul>{toc_links}</ul>
+</nav>
+<section id="automated-checks">
+  <h2>Automated Checks</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Result</th><th>Check</th><th>Detail</th></tr></thead>
+    <tbody>"""]
     for check in audit.checks:
+        status = "PASS" if check.passed else "FAIL"
+        detail = (
+            check.detail_html
+            if check.detail_html is not None else html_cell(check.detail))
         lines.append(
-            f"| {'PASS' if check.passed else 'FAIL'} | "
-            f"{markdown_cell(check.name)} | {markdown_cell(check.detail)} |")
+            f"<tr><td>{html_status(status)}</td>"
+            f"<td>{html_cell(check.name)}</td>"
+            f'<td class="detail">{detail}</td></tr>')
+    lines.append("</tbody></table></div></section>")
+
+    if audit.device_rows:
+        lines.extend(["""
+<section id="nets-by-device">
+  <h2>Nets By Device</h2>
+  <p class="warning">Each pad lists the other populated device pads on its physical net.
+  Identified ground and supply planes are abbreviated as GND and VCC.</p>
+"""])
+        for device in audit.device_rows:
+            part_name = (
+                f'<span class="device-part-name">'
+                f'{html_cell(device["part_name"])}</span>'
+                if device["part_name"] else ""
+            )
+            lines.append(
+                f'<article class="device" id="{html_cell(device["anchor"])}">'
+                f'<h3><span class="device-identity"><code class="device-designator">'
+                f"{html_cell(device['designator'])}</code>{part_name}</span>"
+                f'<span class="device-meta">{html_cell(device["manufacturer"])} · '
+                f'<a href="{html_cell(device["lcsc_url"])}" target="_blank" '
+                f'rel="noopener noreferrer">{html_cell(device["lcsc"])}</a>'
+                '</span></h3><ol class="device-pads">')
+            for pad in device["pads"]:
+                if pad["connection_kind"] == "power":
+                    connections = " / ".join(
+                        f"<strong>{html_cell(name)}</strong>"
+                        for name in pad["connections"])
+                elif pad["connection_kind"] == "pads":
+                    connections = ", ".join(
+                        f'<a class="pad-link" href="#{html_cell(peer["anchor"])}">'
+                        f'<code>{html_cell(peer["label"])}</code></a>'
+                        for peer in pad["connections"])
+                else:
+                    connections = html_cell("; ".join(pad["connections"]))
+                lines.append(
+                    f'<li id="{html_cell(pad["anchor"])}">'
+                    f"<code>{html_cell(pad['device_pad'])}</code>"
+                    f'<span class="connection">&rarr; {connections}</span></li>')
+            lines.append("</ol></article>")
+        lines.append("</section>")
+
+    if audit.net_rows:
+        lines.extend(["""
+<section id="nets">
+  <h2>Nets</h2>
+  <p class="warning">Physical nets list every attached populated pad using the
+  common report naming schema. Footprint pad number preserves placement provenance.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Physical net</th><th>Logical seed</th><th>Device.pad</th>
+      <th>Footprint pad</th><th>LCSC</th><th>Layers</th></tr></thead>
+    <tbody>"""])
+        previous_net = None
+        for row in audit.net_rows:
+            repeated = row["net"] == previous_net
+            row_id = (
+                "" if repeated else
+                f' id="{html_cell(net_anchor(row["net"]))}"')
+            lines.append(
+                f"<tr{row_id}>"
+                f"<td><code>{'' if repeated else html_cell(row['net'])}</code></td>"
+                f"<td>{'' if repeated else html_cell(row['labels'])}</td>"
+                f"<td><code>{html_cell(row['device_pad'])}</code></td>"
+                f"<td><code>{html_cell(row['footprint_pad'])}</code></td>"
+                f"<td><code>{html_cell(row['lcsc'])}</code></td>"
+                f"<td>{'' if repeated else html_cell(row['layers'])}</td>"
+                "</tr>")
+            previous_net = row["net"]
+        lines.append("</tbody></table></div></section>")
 
     if audit.topology_rows:
-        lines.extend([
-            "",
-            "## Copper topology",
-            "",
-            "Physical nets are reconstructed from connected copper regions, "
-            "drill hits, and configured plated slots before logical seed names "
-            "are applied.",
-            "",
-            "| Net | Logical seeds | Layers | Components | Connectors | "
-            "Copper area (mm^2) |",
-            "| --- | --- | --- | ---: | --- | --- |",
-        ])
+        lines.extend(["""
+<section id="copper-topology">
+  <h2>Copper Topology</h2>
+  <p class="warning">Physical nets are reconstructed from connected copper regions,
+  drill hits, and configured plated slots before logical seed names are applied.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Net</th><th>Logical seeds</th><th>Layers</th>
+      <th>Components</th><th>Connectors</th><th>Copper area (mm²)</th></tr></thead>
+    <tbody>"""])
         for row in audit.topology_rows:
-            cells = {
-                key: markdown_cell(value) for key, value in row.items()
-            }
             lines.append(
-                "| {net} | {labels} | {layers} | {components} | "
-                "{connectors} | {area} |".format(**cells))
+                f"<tr><td><code>{html_cell(row['net'])}</code></td>"
+                f"<td>{html_cell(row['labels'] or '-')}</td>"
+                f"<td>{html_cell(row['layers'])}</td>"
+                f"<td>{html_cell(row['components'])}</td>"
+                f"<td>{html_cell(row['connectors'])}</td>"
+                f"<td>{html_cell(row['area'])}</td></tr>")
+        lines.append("</tbody></table></div></section>")
 
-    lines.extend([
-        "",
-        "## JLCPCB BOM audit",
-        "",
-        "For `discrete` rows, Comment is the electrical value; for `part` rows, "
-        "it is the manufacturer part number.",
-        "",
-        "| Result | Designator | LCSC | Kind | Comment | BOM footprint | "
-        "Manufacturer part | Manufacturer package | JLCPCB class |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-    ])
+    if audit.pad_rows:
+        lines.extend(["""
+<section id="external-pad-attachment">
+  <h2>External Pad Attachment</h2>
+  <p class="warning">Pad geometry comes from cached EasyEDA footprints selected by
+  the JLCPCB BOM, independently placed using the JLCPCB PNP file, and intersected
+  with manufacturing copper.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Result</th><th>Device.pad</th><th>Footprint pad</th>
+      <th>LCSC</th><th>Copper layers</th><th>Center (mm)</th>
+      <th>Physical net</th><th>Overlap (mm²)</th></tr></thead>
+    <tbody>"""])
+        for row in audit.pad_rows:
+            lines.append(
+                f"<tr><td>{html_status(row['status'])}</td>"
+                f"<td><code>{html_cell(row['device_pad'])}</code></td>"
+                f"<td><code>{html_cell(row['pad'])}</code></td>"
+                f"<td><code>{html_cell(row['lcsc'])}</code></td>"
+                f"<td>{html_cell(row['layers'])}</td>"
+                f"<td>{html_cell(row['center'])}</td>"
+                f"<td><code>{html_cell(row['nets'])}</code></td>"
+                f"<td>{html_cell(row['overlap'])}</td></tr>")
+        lines.append("</tbody></table></div></section>")
+
+    lines.extend(["""
+<section id="jlcpcb-bom-audit">
+  <h2>JLCPCB BOM Audit</h2>
+  <p class="warning">For discrete rows, Comment is the electrical value; for part
+  rows, it is the manufacturer part number.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Result</th><th>Designator</th><th>LCSC</th><th>Kind</th>
+      <th>Comment</th><th>BOM footprint</th><th>Manufacturer part</th>
+      <th>Manufacturer package</th><th>JLCPCB class</th></tr></thead>
+    <tbody>"""])
     for row in audit.bom_rows:
-        cells = {key: markdown_cell(value) for key, value in row.items()}
         lines.append(
-            "| {status} | {designator} | {lcsc} | {kind} | {comment} | "
-            "{footprint} | {mpn} | {manufacturer_footprint} | "
-            "{jlcpcb_class} |".format(
-                **cells))
+            f"<tr><td>{html_status(row['status'])}</td>"
+            f"<td>{html_cell(row['designator'])}</td>"
+            f"<td><code>{html_cell(row['lcsc'])}</code></td>"
+            f"<td>{html_cell(row['kind'])}</td>"
+            f"<td>{html_cell(row['comment'])}</td>"
+            f"<td>{html_cell(row['footprint'])}</td>"
+            f"<td>{html_cell(row['mpn'])}</td>"
+            f"<td>{html_cell(row['manufacturer_footprint'])}</td>"
+            f"<td>{html_cell(row['jlcpcb_class'])}</td></tr>")
+    lines.append("</tbody></table></div></section>")
 
-    lines.extend([
-        "",
-        "## Board-specific manual checks",
-        "",
-    ])
+    lines.extend(['<section id="manual-checks">'
+                  "<h2>Board-Specific Manual Checks</h2>",
+                  '<ul class="checklist">'])
     manual_checks = profile.get("manual_checks", [])
     if manual_checks:
-        lines.extend(f"- [ ] {item}" for item in manual_checks)
+        lines.extend(
+            f'<li><input type="checkbox" disabled>{html_cell(item)}</li>'
+            for item in manual_checks)
     else:
         lines.append(
-            "- [ ] No profile-specific items; complete the skill's general CAM gate.")
+            '<li><input type="checkbox" disabled>No profile-specific items; '
+            "complete the skill's general CAM gate.</li>")
+    lines.append("</ul></section>")
 
     if generation_output.strip():
         lines.extend([
-            "",
-            "## Generator output",
-            "",
-            "```text",
-            generation_output.rstrip(),
-            "```",
+            '<section id="generator-output"><h2>Generator Output</h2><pre>',
+            html_cell(generation_output.rstrip()),
+            "</pre></section>",
         ])
+    lines.extend(["""
+</main>
+<script>
+  function highlightPad(anchor) {
+    const target = document.getElementById(anchor);
+    if (!target || !target.closest('.device-pads')) return;
+    target.classList.remove('pad-highlight');
+    void target.offsetWidth;
+    target.classList.add('pad-highlight');
+  }
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('a.pad-link');
+    if (link) highlightPad(decodeURIComponent(link.hash.slice(1)));
+  });
+  window.addEventListener('hashchange', () => {
+    highlightPad(decodeURIComponent(location.hash.slice(1)));
+  });
+  if (location.hash) highlightPad(decodeURIComponent(location.hash.slice(1)));
+</script>
+</body>
+</html>"""])
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -615,7 +1255,7 @@ def parse_args() -> argparse.Namespace:
         help="Python interpreter for the board generator (overrides profile)")
     parser.add_argument(
         "--report", type=Path,
-        help="report path (default: <board>-preflight.md)")
+        help="report path (default: <board>-preflight.html)")
     return parser.parse_args()
 
 
@@ -694,7 +1334,7 @@ def main() -> int:
     audit_manufacturing_files(audit, profile)
     audit_copper_topology(audit, profile)
 
-    report_path = args.report or ROOT / f"{args.board}-preflight.md"
+    report_path = args.report or ROOT / f"{args.board}-preflight.html"
     if not report_path.is_absolute():
         report_path = ROOT / report_path
     write_report(report_path, profile, audit, generation_output)

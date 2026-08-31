@@ -2,6 +2,7 @@ from collections import defaultdict
 import re
 import math
 import csv
+import json
 
 from PIL import Image
 import shapely.geometry as sg
@@ -1025,8 +1026,22 @@ class Board:
 
         records = []
         jlcpcb_records = []
+        preflight_records = []
         for _, parts in self.parts.items():
             for part in parts:
+                jlc_center = part.pnp_jlc()
+                jlc_x, jlc_y = jlc_center.xy
+                lcsc = (getattr(part, "source", {}) or {}).get("LCSC")
+                if lcsc:
+                    preflight_records.append({
+                        "designator": part.id,
+                        "lcsc": lcsc,
+                        "x": float(flt(jlc_x)),
+                        "y": float(flt(jlc_y)),
+                        "side": (
+                            "Bottom" if jlc_center.layer == "GBL" else "Top"),
+                        "rotation": int(360 - jlc_center.dir) % 360,
+                    })
                 if not part.inBOM:
                     continue
 
@@ -1041,8 +1056,6 @@ class Board:
                     "Note": part.footprint + "-" + part.mfr + part.val,
                 })
 
-                jlc_center = part.pnp_jlc()
-                jlc_x, jlc_y = jlc_center.xy
                 jlcpcb_records.append({
                     "Designator": part.id,
                     "Mid X": flt(jlc_x) + "mm",
@@ -1067,9 +1080,16 @@ class Board:
             ["Designator", "Mid X", "Mid Y", "Layer", "Rotation"],
             jlcpcb_records,
         )
+        with open(fn + "-preflight-placements.json", "wt") as output:
+            json.dump({
+                "format": "cuflow-preflight-placements-1",
+                "placements": preflight_records,
+            }, output, indent=2)
+            output.write("\n")
         return {
             "pnp": records,
             "jlcpcb": jlcpcb_records,
+            "preflight": preflight_records,
         }
 
     def bom(self, fn):

@@ -18,6 +18,30 @@ def mean(L):
 ROUTE2 = 1
 USE_EDITED_HEADER_ART = True
 
+PREFLIGHT_NAME_ATLAS = {
+    "ic_roots_by_lcsc": {
+        "C2040": "RP2040",
+        "C131025": "W25Q16",
+        "C26537": "NCP1117",
+        "C49851": "INA226",
+        "C81233": "ME6212",
+    },
+    "header_pins": {
+        "J2": {
+            "names": ("GND", "GND", "VCC", "VCC", "5V", "5V"),
+            "external_pad_numbers": (6, 5, 4, 3, 2, 1),
+        },
+        "J3": {
+            "names": ("SCK", "MOSI", "MISO", "IO2", "IO3", "CS", "A", "B"),
+            "external_pad_numbers": (8, 7, 6, 5, 4, 3, 2, 1),
+        },
+        "J4": {
+            "names": ("GND", "SWDIO", "VCC", "RX", "TX", "SWCLK"),
+            "external_pad_numbers": (1, 2, 3, 4, 5, 6),
+        },
+    },
+}
+
 used_pins = [
 # Module_Serial_Debug
 "SWCLK",
@@ -144,6 +168,7 @@ class USBC(cu.Part):
             self.body_width,
             self.body_depth,
         )
+        dc.copy().forward(self.body_depth).silk()
 
         holes = dc.copy().forward(6.28)
         for d in (-1, 1):
@@ -158,11 +183,13 @@ class USBC(cu.Part):
         self.train(a.left(90), 2, lambda: self.rpad(a, 0.6, 1.1), 0.8)
 
         pad_names = (
-            "B8", "A5", "B7", "A6", "A7", "B6", "A8", "B5",
+            "B5", "A8", "B6", "A7", "A6", "B7", "A5", "B8",
             "A1/B12", "A4/B9", "B4/A9", "B1/A12",
         )
         for pad, name in zip(self.pads, pad_names):
             pad.setname(name)
+
+        self.s("A6").mark()
 
         baseline = dc.copy().goxy(0, 2.6)
 
@@ -195,25 +222,25 @@ class USBC(cu.Part):
         vbus1.w(f"o f {via_escape} /")
         vbus0.left(90).goto(vbus1).wire()
 
-        self.s("A6").copy().w("i f 0.6 r 90").goto(
-            self.s("B6"), twist=True).wire()
-        self.s("B7").copy().w("o f 0.4 l 90").goto(
-            self.s("A7"), twist=True).wire()
+        self.s("A7").copy().w("i f 0.6 r 90").goto(
+            self.s("B7"), twist=True).wire()
+        self.s("B6").copy().w("o f 0.4 l 90").goto(
+            self.s("A6"), twist=True).wire()
 
-        r6_center = self.s("B5").copy().w(
-            "o f 2 l 90 f 0.65 l 90").setname(None)
-        r5_center = self.board.DC(
-            (r6_center.xy[0] + 1.1, r6_center.xy[1]), r6_center.dir)
-        r5 = cu.R0402(
-            r5_center, "5K1", source={"LCSC": "C25905"})
-        r6 = cu.R0402(
-            r6_center, "5K1", source={"LCSC": "C25905"})
-
-        self.s("A5").copy().w("o f 1 l 90 f 2").goto(
-            r5.pads[0], twist=False).wire()
-        self.s("B5").copy().w("o").goto(r6.pads[0]).wire()
-        for resistor in (r5, r6):
+        def cc_pulldown(pin, north=0):
+            center = self.s(pin).copy().w(
+                "o f 2 l 90 f 0.65 l 90").setname(None)
+            center = self.board.DC(
+                (center.xy[0], center.xy[1] + north), center.dir)
+            resistor = cu.R0402(
+                center, "5K1", source={"LCSC": "C25905"})
+            self.s(pin).copy().w("o").goto(
+                resistor.pads[0], twist=True).wire()
             resistor.pads[1].w("o -")
+            return resistor
+
+        r5 = cc_pulldown("A5", north=0.4)
+        r6 = cc_pulldown("B5", north=0.2)
 
         return (r5, r6)
 
@@ -571,7 +598,8 @@ def spiq_a():
     j1 = USBC(brd.DC((0, brd.size[1] - 6.25)).right(90))
 
     j2 = PZ254RS(brd.DC((50.0, 38.65)), 6)
-    for p, nm in zip(j2.pads, ("GND", "GND", "VCC", "VCC", "5V", "5V")):
+    for p, nm in zip(
+            j2.pads, PREFLIGHT_NAME_ATLAS["header_pins"]["J2"]["names"]):
         p.setname(nm)
     for i in (0,1):
         j2.pads[i].w("o -")
@@ -623,7 +651,7 @@ def spiq_a():
     j3_pins = 8
     j3_y = edge_clearance + j3_pins * j2.pitch / 2
     j3 = Module_SPI_Header(brd.DC((j2.center.xy[0], j3_y)), j3_pins)
-    j3_names = ["SCK", "MOSI", "MISO", "IO2", "IO3", "CS", "A", "B"]
+    j3_names = PREFLIGHT_NAME_ATLAS["header_pins"]["J3"]["names"]
     for p, nm in zip(j3.pads, j3_names):
         p.setname(nm)
         if not USE_EDITED_HEADER_ART:
@@ -752,11 +780,11 @@ def spiq_a():
         return cn
     def ldo_cap(
             package, center, value, supply, ldo_pad, twist = False,
-            lcsc = None):
+            lcsc = None, ground_run = 0):
         source = {"LCSC": lcsc} if lcsc else None
         capacitor = package(center, value, source=source)
-        capacitor.pads[0].setname("GND").setwidth(
-            2 * brd.trace).w("o -")
+        ground = capacitor.pads[0].setname("GND").setwidth(2 * brd.trace)
+        ground.w(f"o f {ground_run} -")
         capacitor.pads[1].setname(supply).setwidth(2 * brd.trace)
         capacitor.pads[1].copy().goto(ldo_pad, twist).wire()
         brd.addnet(capacitor.pads[1], ldo_pad)
@@ -768,7 +796,7 @@ def spiq_a():
         "10uF", "5V", u4.s("5V"), True, "C15850")
     c2 = ldo_cap(
         cu.C0805_nolabel, brd.DC((59.3, u4.pads[2].xy[1])).right(90),
-        "10uF", "VCC", u4.pads[0], lcsc="C15850")
+        "10uF", "VCC", u4.pads[0], lcsc="C15850", ground_run=4)
 
     # U5: use 1 uF input capacitance and a little extra output
     # capacitance for transient response.
@@ -804,13 +832,17 @@ def spiq_a():
     r8 = cu.R0402(
         brd.DC((4.1, series_resistor_y)).right(90), "27",
         source={"LCSC": "C25100"})
-    j1.s("B7").copy().w("i").goto(
-        r7.pads[0], twist=True).wire()
-    j1.s("A6").copy().w("i").goto(
-        r8.pads[0], twist=True).wire()
+    for resistor in (r7, r8):
+        for pad, name in zip(resistor.pads, ("1", "2")):
+            pad.setname(name)
     if ROUTE2:
         for r in (r7, r8):
             wire_ongrid(r.pads[1].w("o f 0"))
+    r7.pads[0].goto(j1.s("A7"), twist = True).wire()
+    brd.addnet(r7.pads[0], j1.s("B7"))
+    j1.s("B6").w("i l 45 f 1 /")
+    r8.pads[0].w("o f 1 /").goto(j1.s("B6"), twist = True).wire()
+    brd.addnet(r8.pads[0], j1.s("B6"))
 
     for parts in brd.parts.values():
         for part in parts:
@@ -939,6 +971,8 @@ def spiq_a():
     airwires.append((u1.s("XIN"), y1.s("CLK")))
 
     usb_airwires = (
+        (j1.s("B7"), r7.pads[0]),
+        (j1.s("B6"), r8.pads[0]),
         (r7.pads[1], u1.s("USB_DM")),
         (r8.pads[1], u1.s("USB_DP")),
     )
