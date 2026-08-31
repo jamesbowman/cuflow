@@ -237,6 +237,9 @@ class LDO_23_5(SOT23_5):
     source = {'LCSC': 'C81233'}
     mfr = "AP2127N-3.3TRG1"
 
+    def step_adjust(self):
+        return 180
+
     def hex_hookup(self, names):
         for (p,nm) in zip(self.pads, names):
             p.setname(nm) 
