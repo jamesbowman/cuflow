@@ -8,6 +8,7 @@ import shapely.geometry as sg
 from PIL import Image
 
 import cuflow as cu
+import htmlout
 import svgout
 import dip
 import sot
@@ -478,10 +479,15 @@ def td2e():
         # GND is on *right*, viewed from this side
         x2 = SMT6(brd.DC((15, 10)))
         x2.hex_escape()
-        x2.inBOM = False
+        # x2.inBOM = False
 
+    capacitor_lcsc = {
+        "100nF": "C1525",
+        "1uF": "C52923",
+    }
     def ucap(p, val = '100nF'):
-        cn = cu.C0402_nolabel(p, val)
+        cn = cu.C0402_nolabel(
+            p, val, source={"LCSC": capacitor_lcsc[val]})
         cn.pads[0].setname("GND").w("o f .5 / f .6").wire()
         return cn
     def cap(p, val = '100nF'):
@@ -505,7 +511,9 @@ def td2e():
         ci = hcap(brd.DC((22, 26.5)).left(180), '1uF')
         u1.s("VREG_VOUT").hex("r 5 f").wire()
 
-        cx = cu.C0603(brd.DC((6, 5)).left(90), '10 uF, 16V')
+        cx = cu.C0603(
+            brd.DC((6, 5)).left(90), '10 uF, 16V',
+            source={"LCSC": "C70225"})
         cx.pads[0].setname("GND").w("o f .5 / f .6").wire()
         cx.pads[1].setname("VCC").w("o f 1").wire()
 
@@ -515,16 +523,20 @@ def td2e():
 
     if 1:
         # ST7789_12 backlight power
-        r1 = cu.R0402(brd.DC((6, 11)).right(90), "7.5")
+        r1 = cu.R0402(
+            brd.DC((6, 11)).right(90), "7.5",
+            source={"LCSC": "C47764"})
 
         r1.pads[1].setname("VCC").w("o f 1").wire()
         wire_ongrid(r1.pads[0].w("o / f .4"))
 
     if 1:
         h = Hex.from_xy(12, 23.5)
-        r3 = cu.R0402(brd.DC(h.to_plane()), "270")
+        r3 = cu.R0402(
+            brd.DC(h.to_plane()), "270", source={"LCSC": "C25099"})
         h += Hex(0, -3)
-        r4 = cu.R0402(brd.DC(h.to_plane()), "270")
+        r4 = cu.R0402(
+            brd.DC(h.to_plane()), "270", source={"LCSC": "C25099"})
         for p in r3.pads + r4.pads:
             wire_ongrid(p.w("o f 0"))
 
@@ -634,7 +646,8 @@ def td2e():
 
     # hexgrid(brd, origin)
 
-    brd.save("td2e2")
+    generated_records = brd.save("td2e2")
+    htmlout.write(brd, "td2e2.html", generated_records)
     print("Saved")
 
 if __name__ == "__main__":

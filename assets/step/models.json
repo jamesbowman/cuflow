@@ -16,6 +16,21 @@
       ],
       "wrl": "C131025.wrl"
     },
+    "C132563": {
+      "easyedaName": "MICRO-USB-SMD_10118194-0001LF",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C132563.step",
+      "translation": [
+        0.0,
+        -1.2549886,
+        -0.5999988
+      ],
+      "wrl": "C132563.wrl"
+    },
     "C1525": {
       "easyedaName": "C0402_L1.0-W0.5-H0.5",
       "rotation": [
@@ -120,6 +135,21 @@
         0.0
       ],
       "wrl": "C23210.wrl"
+    },
+    "C25099": {
+      "easyedaName": "R0402_L1.0-W0.5-H0.4",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C25099.step",
+      "translation": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "wrl": "C25099.wrl"
     },
     "C25100": {
       "easyedaName": "R0402_L1.0-W0.5-H0.4",
@@ -226,6 +256,21 @@
       ],
       "wrl": "C46061681.wrl"
     },
+    "C47764": {
+      "easyedaName": "R0402_L1.0-W0.5-H0.4",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C47764.step",
+      "translation": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "wrl": "C47764.wrl"
+    },
     "C49851": {
       "easyedaName": "MSOP-10_L3.0-W3.0-H1.1-LS5.0-P0.50",
       "rotation": [
@@ -241,6 +286,21 @@
       ],
       "wrl": "C49851.wrl"
     },
+    "C5142239": {
+      "easyedaName": "HDR-SMD_6P-P2.54-H-F-L11.5",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C5142239.step",
+      "translation": [
+        0.0,
+        -4.976977599999987,
+        0.0
+      ],
+      "wrl": "C5142239.wrl"
+    },
     "C52191420": {
       "easyedaName": "HDR-SMD_PZ254RS-11-08P-01",
       "rotation": [
@@ -255,6 +315,36 @@
         0.0
       ],
       "wrl": "C52191420.wrl"
+    },
+    "C52923": {
+      "easyedaName": "C0402_L1.0-W0.5-H0.5",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C52923.step",
+      "translation": [
+        0.0,
+        -0.0,
+        0.0
+      ],
+      "wrl": "C52923.wrl"
+    },
+    "C70225": {
+      "easyedaName": "C0603_L1.6-W0.8-H0.8",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "step": "C70225.step",
+      "translation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "wrl": "C70225.wrl"
     },
     "C81233": {
       "easyedaName": "SOT-23-5_L2.9-W1.6-H1.1-LS2.8-P0.95",

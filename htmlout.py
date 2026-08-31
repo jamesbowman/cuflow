@@ -202,6 +202,7 @@ def _bezel_model(board):
 
 def write(board, filename, generated_records, thickness=1.6):
     """Write ``filename`` without changing any manufacturing layers."""
+    part_name = Path(filename).stem
     runtime_path = Path(__file__).with_name("webviewer") / "viewer-runtime.min.js"
     if not runtime_path.exists():
         raise FileNotFoundError(
@@ -233,11 +234,11 @@ def write(board, filename, generated_records, thickness=1.6):
     masked_top_copper = top_copper.difference(exposed_top_copper)
     masked_bottom_copper = bottom_copper.difference(exposed_bottom_copper)
     step_models, components, skipped = _step_library(board, generated_records)
-    lcd_model = _lcd_model(board)
-    bezel_model = _bezel_model(board)
+    lcd_model = _lcd_model(board) if part_name == "spiq_a" else None
+    bezel_model = _bezel_model(board) if part_name == "spiq_a" else None
     min_x, min_y, max_x, max_y = body.bounds
     model = {
-        "name": Path(filename).stem,
+        "name": part_name,
         "thickness": thickness,
         "center": [(min_x + max_x) / 2, (min_y + max_y) / 2],
         "size": [max_x - min_x, max_y - min_y],
@@ -702,8 +703,12 @@ def _document(runtime, model_json):
     solderPasteMaterial,
     visibilityLayers.paste
   );
-  placeAccessory(MODEL.lcdModel, visibilityLayers.components);
-  placeAccessory(MODEL.bezelModel, visibilityLayers.bezel);
+  if (MODEL.lcdModel) {{
+    placeAccessory(MODEL.lcdModel, visibilityLayers.components);
+  }}
+  if (MODEL.bezelModel) {{
+    placeAccessory(MODEL.bezelModel, visibilityLayers.bezel);
+  }}
   MODEL.components.forEach(placeComponent);
   scene.add(group);
 
