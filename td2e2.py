@@ -2,6 +2,7 @@ import sys
 import json
 import math
 import time
+from pathlib import Path
 
 import shapely.geometry as sg
 from PIL import Image
@@ -621,11 +622,13 @@ def td2e():
         brd.fill_any("GTL", "VCC")
         brd.fill_any("GBL", "GND")
 
-    logo_line = (
-        Image.open("../td2/marketing/logo_pcb.png").convert("L").
-        transpose(Image.Transpose.ROTATE_90)
-    )
-    brd.logo(2.2, 15, logo_line, .29)
+    logo_path = Path("../td2/marketing/logo_pcb.png")
+    if logo_path.exists():
+        logo_line = (
+            Image.open(logo_path).convert("L").
+            transpose(Image.Transpose.ROTATE_90)
+        )
+        brd.logo(2.2, 15, logo_line, .29)
     brd.DC((25.5, 6.4)).ctext("(C) EXCAMERA", scale = 1.1)
     brd.DC((25.5, 5.0)).ctext("LABS 2025", scale = 1.1)
 

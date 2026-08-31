@@ -1,0 +1,43 @@
+name: Build td2e2
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out CuFlow
+        uses: actions/checkout@v4
+        with:
+          path: cuflow
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: cuflow/requirements.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+        working-directory: cuflow
+
+      - name: Build td2e2
+        run: python td2e2.py
+        working-directory: cuflow
+
+      - name: Verify generated outputs
+        working-directory: cuflow
+        run: |
+          outputs=(
+            td2e2.AIR td2e2.G2L td2e2.G3L td2e2.GBL td2e2.GBO
+            td2e2.GBP td2e2.GBS td2e2.GL2 td2e2.GL3 td2e2.GML
+            td2e2.GTL td2e2.GTO td2e2.GTP td2e2.GTS td2e2.HEX
+            td2e2.TXT td2e2.art.svg td2e2.sub.pov td2e2.gto.pov
+            td2e2.gtl.pov td2e2.gtl-covered.pov td2e2.gts.pov
+          )
+          for output in "${outputs[@]}"; do
+            test -s "$output"
+          done
