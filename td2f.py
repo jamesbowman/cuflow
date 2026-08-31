@@ -18,7 +18,9 @@ from usb_c import USBC
 
 import hex
 from hex import Hex, axial_direction_vectors
-from hexboard import HexBoard, river_ongrid, wire_ongrid
+from hexboard import HexBoard, wire_ongrid
+
+hex.set_grid_size(0.3)
 
 ROUTING = 0
 
@@ -92,20 +94,25 @@ used_pins = [
 "QSPI_SS_N",
 ]
 
+def fanout_ongrid(river):
+    for trace in river.tt:
+        wire_ongrid(trace)
+    return river
+
 class HexRP2040(RP2040):
     def hex_escape(self):
         brd = self.board
 
         banks = self.escape(used_pins)
 
-        river_ongrid(cu.River(brd, banks[0][0:2]).w("f .5"))
-        river_ongrid(cu.River(brd, banks[0][-4:-2]).w("f 0.8 r 60"))
-        river_ongrid(cu.River(brd, banks[0][-2:]).w(""))
-        river_ongrid(cu.River(brd, banks[1][:4 ]).right(30))
-        river_ongrid(cu.River(brd, banks[1][5:7]).w("f 0.52 l 30")).hex("").wire()
-        river_ongrid(cu.River(brd, banks[3][:1]).w("f 0.5 r 30"))
-        river_ongrid(cu.River(brd, banks[3][1:3]).w("f 0.4 l 30"))
-        river_ongrid(cu.River(brd, banks[3][-6:]).left(30))
+        fanout_ongrid(cu.River(brd, banks[0][0:2]).w("f .5"))
+        fanout_ongrid(cu.River(brd, banks[0][-4:-2]).w("f 0.8 r 60"))
+        fanout_ongrid(cu.River(brd, banks[0][-2:]).w(""))
+        fanout_ongrid(cu.River(brd, banks[1][:4 ]).right(30))
+        fanout_ongrid(cu.River(brd, banks[1][5:7]).w("f 0.52 l 30")).hex("").wire()
+        fanout_ongrid(cu.River(brd, banks[3][:1]).w("f 0.5 r 30"))
+        fanout_ongrid(cu.River(brd, banks[3][1:3]).w("f 0.4 l 30"))
+        fanout_ongrid(cu.River(brd, banks[3][-6:]).left(30))
         for nm in ("XIN", ):
             wire_ongrid(self.s(nm))
         self.pads[0].w("-").wire()
@@ -303,22 +310,14 @@ class pogo_pads(dip.PTH):
         p.part = self.id
         self.pads.append(p)
 
-def hexgrid(b, o):
-    b.layers['GTO'].polys = []
-    def ln(xys):
-        b.layers['GBO'].add(sg.LineString(xys).buffer(.01))
-    for h in hex.inrect((0, 0), b.size):
-        ln(h.hexagon())
-
 def td2f():
-    w = .4/3   # .127 is JLCPCB minimum
-    w = 0.127
+    w = 0.1
     brd = HexBoard(
         (30, 30),
         trace = w,
-        space = .4 - w,
-        via_hole = 0.3,
-        via = 0.6,
+        space = hex.size - w,
+        via_hole = 0.15,
+        via = 0.25,
         via_space = cu.mil(5),
         silk = cu.mil(5))
 
@@ -568,7 +567,7 @@ def td2f():
     brd.DC((25.5, 6.4)).ctext("(C) EXCAMERA", scale = 1.1)
     brd.DC((25.5, 5.0)).ctext("LABS 2025", scale = 1.1)
 
-    # hexgrid(brd, origin)
+    brd.add_hex_grid()
 
     brd.save("td2f")
     print("Saved")

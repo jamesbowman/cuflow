@@ -7,6 +7,7 @@ from shapely.strtree import STRtree
 from PIL import Image, ImageDraw, ImageFont
 
 import cuflow as cu
+import hex
 from hex import Hex, axial_direction_vectors
 
 twenty_rgb = [
@@ -77,6 +78,20 @@ class HexBoard(cu.Board):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.route_keepouts = {layer: [] for layer in ('GTL', 'GBL')}
+
+    def add_hex_grid(self):
+        width, height = self.size
+        bounds = sg.box(0, 0, width, height)
+        margin_x = 2 * hex.height
+        margin_y = 2 * hex.size
+        for h in hex.inrect(
+                (-margin_x, -margin_y),
+                (width + margin_x, height + margin_y)):
+            clipped = sg.LineString(h.hexagon()).intersection(bounds)
+            lines = clipped.geoms if hasattr(clipped, "geoms") else (clipped,)
+            for line in lines:
+                if isinstance(line, sg.LineString) and not line.is_empty:
+                    self.layers["HEX"].add(line)
     
     def hex_setup(self):
         (hd, _) = (Hex(1, 0).to_plane())    # hd is the center-center distance

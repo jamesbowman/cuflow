@@ -9,7 +9,6 @@ import svg_loader
 from rp2040 import RP2040
 from usb_c import USBC
 
-import hex
 from hex import Hex
 from hexboard import HexBoard, river_ongrid, wire_ongrid
 
@@ -405,20 +404,6 @@ class Osc_12MHz(SMD_3225_4P):
         self.s("GND").w("o -")
         self.s("VDD").w("o +")
         wire_ongrid(self.s("CLK").w("o"))
-
-def hexgrid(b):
-    width, height = b.size
-    bounds = sg.box(0, 0, width, height)
-    margin_x = 2 * hex.height
-    margin_y = 2 * hex.size
-    for h in hex.inrect(
-            (-margin_x, -margin_y),
-            (width + margin_x, height + margin_y)):
-        clipped = sg.LineString(h.hexagon()).intersection(bounds)
-        lines = clipped.geoms if hasattr(clipped, "geoms") else (clipped,)
-        for line in lines:
-            if isinstance(line, sg.LineString) and not line.is_empty:
-                b.layers["HEX"].add(line)
 
 def spiq_a():
     w = .4/3   # .127 is JLCPCB minimum
@@ -983,7 +968,7 @@ def spiq_a():
     if 0:
         brd.DC((30.5, 1.2)).ctext("(C) EXCAMERA LABS 2026", scale = 1.1)
 
-    hexgrid(brd)
+    brd.add_hex_grid()
 
     missing_hex_escape = [
         part.id

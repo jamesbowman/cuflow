@@ -19,11 +19,14 @@ else:
     size = 0.4
     height = size / F
 
-def setsize(s):
+def set_grid_size(s):
     global size, height
     size = s
     height = s / F
     print(f"{height=} {size=}")
+
+def setsize(s):
+    set_grid_size(s)
 
 def cube_round(q, r, s):
     Iq = int(round(q))
