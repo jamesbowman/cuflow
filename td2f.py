@@ -11,10 +11,10 @@ import cuflow as cu
 import svgout
 import dip
 import sot
-import eagle
 from dazzler import Dazzler
 from collections import defaultdict
 from rp2040 import RP2040
+from usb_c import USBC
 
 import hex
 from hex import Hex, axial_direction_vectors
@@ -108,7 +108,7 @@ class HexRP2040(RP2040):
         river_ongrid(cu.River(brd, banks[3][-6:]).left(30))
         for nm in ("XIN", ):
             wire_ongrid(self.s(nm))
-        self.pads[0].w("/").thermal(1).wire()
+        self.pads[0].w("-").wire()
 
 class HexW25Q128(cu.SOIC8):
     source = {'LCSC': 'C131025'}
@@ -125,71 +125,15 @@ class HexW25Q128(cu.SOIC8):
 
         for p in self.pads:
             if p.name == "GND":
-                p.w("i f 1").wire().copy().w("/ f 1").wire()
+                p.w("i -")
             elif p.name == "VCC":
-                p.w("i f 1").wire()
+                p.w("i +")
             else:
                 # p.copy().w("o f 0.5").ctext(p.name, scale = 0.4)
                 p.w("o f .1")
                 wire_ongrid(p)
                 p.wire()
 
-
-class USBmicro(eagle.LibraryPart):
-    libraryfile = "10118194-0001LF.lbr"
-    partname = "AMPHENOL_10118194-0001LF"
-    mfr = "AMPHENOL_10118194-0001LF"
-    footprint = "SMD"
-    source = {"LCSC": "C132563"}
-    family = "J"
-    hole_keepout = 0.2
-
-    def pnp_jlc(self):
-        return self.center.copy().forward(1.3)
-
-    def setnames(self):
-        [p.setname(nm) for (p,nm) in zip(self.pads, ('5V', 'D-', 'D+', '', 'GND'))]
-
-    def hex_escape(self):
-        self.setnames()
-        self.s("GND").w("i f .3 l 90 f 2 / f 1").wire()
-        for nm in ('D-', 'D+'):
-            p = self.s(nm)
-            wire_ongrid(p.w("o f 0.1"))
-        wire_ongrid(self.s("5V").w("i"))
-
-class USBC(cu.Part):
-    source = {'LCSC': 'C2927038'}   # Also C2765186 (better datasheet)
-    family = "J"
-
-    def pnp_jlc(self):
-        return self.center.copy().right(90)
-
-    def place(self, dc):
-        self.chamfered(dc.copy().forward(7.35 / 2), 8.94, 7.35)
-
-        dc.mark()
-
-        holes = dc.copy().forward(6.28)
-        for d in (-1, 1):
-            holes.copy().goxy(d * 5.78 / 2, 0).hole(0.65, ko = 0.13)
-
-        p = holes.copy().goxy(0, 1.07)
-        a = p.copy().goxy(3.50 / 2, 0)
-        self.train(a.left(90), 8, lambda: self.rpad(a, 0.3, 1.1), 0.5)
-        a = p.copy().goxy(6.4 / 2, 0)
-        self.train(a.left(90), 2, lambda: self.rpad(a, 0.6, 1.1), 0.8)
-        a = p.copy().goxy(-4.8 / 2, 0)
-        self.train(a.left(90), 2, lambda: self.rpad(a, 0.6, 1.1), 0.8)
-
-        baseline = dc.copy().goxy(0, 2.6)
-        baseline.mark()
-
-        for d in (-1, 1):
-            p = baseline.copy().goxy(d * 8.65 / 2, 0)
-            p.left(90).mark().stadium(0.3, 60, 1.8 - 0.6)
-            p = baseline.copy().goxy(d * 8.65 / 2, 4.2)
-            p.left(90).stadium(0.3, 60, 2.1 - 0.6)
 
 class SOT23_LDO(sot.SOT23):
     source = {'LCSC': 'C176954'}
@@ -204,9 +148,9 @@ class SOT23_LDO(sot.SOT23):
         for (p,nm) in zip(self.pads, names):
             p.setname(nm) 
             if nm == "GND":
-                p.w("i f 0.7 / f 1")
+                p.w("i -")
             elif nm == "VCC":
-                p.w("o f 0.7")
+                p.w("o +")
             else:
                 wire_ongrid(p.w("o f 1"))
             p.wire()
@@ -242,10 +186,9 @@ class LDO_23_5(SOT23_5):
         for (p,nm) in zip(self.pads, names):
             p.setname(nm) 
             if nm == "GND":
-                p.w("i f 0.7 /").thermal(1)
+                p.w("i -")
             elif nm == "VCC":
-                # p.w("o f 0.7")
-                p.thermal(1)
+                p.w("i +")
             p.wire()
         self.s("5V").w("o f 0.1")
         self.s("CE").w("o f .4").goto(self.s("5V")).wire()
@@ -279,9 +222,9 @@ class ST7789_12(cu.Part):
         for (p, nm) in zip(self.pads, "GND  GND LEDA  VCC GND GND D/C GND SCL SDA RESET GND".split()):
             p.setname(nm)
             if nm == "GND":
-                p.w("o f 0.5").wire()
+                p.w("o -")
             elif nm == "VCC":
-                p.w("o f 5 / f 1").wire()
+                p.w("o +")
             elif nm == "RESET":
                 wire_ongrid(p.w("o f 0.2"))
             else:
@@ -303,9 +246,9 @@ class SMT6(cu.Part):
             p.setname(nm)
             p.copy().w("r 180 f 2.6").ctext(nm, scale = 1.1)
             if nm == "GND":
-                p.copy().w("o f 1 / f 1").wire()
+                p.copy().w("o -")
             elif nm == "VCC":
-                p.w("o f 0.5").wire()
+                p.w("o +")
             elif nm in ("TX", "RX", "RTS"):
                 wire_ongrid(p.w("i"))
             else:
@@ -333,9 +276,9 @@ class Osc_12MHz(SMD_3225_4P):
         return self.center.copy().right(90)
 
     def escape(self):
-        self.s("GND").w("l 90 f 1.5 / f 1").wire()
+        self.s("GND").w("o -")
         self.s("VDD").setname("VCC")
-        self.s("VCC").w("o f 0.5").wire()
+        self.s("VCC").w("o +")
         wire_ongrid(self.s("CLK").w("o"))
 
 class pogo_pads(dip.PTH):
@@ -433,17 +376,11 @@ def td2f():
         u2 = HexW25Q128(brd.DC(Hex.from_xy(9, 17.5).to_plane()).right(180))
         u2.hex_escape()
 
-    if 1:
-        j1 = USBmicro(brd.DC((15, 28.5)).right(180))
-        j1.hex_escape()
-        HAVEUSB = 1
-    else:
-        j1 = USBC(brd.DC((14, 31.0)).right(180))
-        HAVEUSB = 0
+    j1 = USBC(brd.DC((15, 30)).right(180))
 
     if 0:
         j2 = dip.SIL(brd.DC((1, 18)), "2")
-        j2.pads[0].setname("GND").w("/ f 1.2").wire()
+        j2.pads[0].setname("GND").w("o -")
         wire_ongrid(j2.pads[1].w("f 1"))
 
     j2 = pogo_pads(brd.DC((28, 19.5)).right(180), "3")
@@ -453,7 +390,7 @@ def td2f():
         p.setname(nm)
         p.copy().w("l 90 f 0.7").rtext(nm)
     wire_ongrid(j2.pads[0].w("l 90 f .7"))
-    j2.pads[1].setname("GND").w("l 135 f 1.4 / f 1.2").wire()
+    j2.pads[1].setname("GND").w("o -")
     wire_ongrid(j2.pads[2].w("l 90 f .7"))
 
     # u3 = SOT23_LDO(brd.DC((7, 27.5)).right(180).left(90))
@@ -484,11 +421,11 @@ def td2f():
 
     def ucap(p, val = '100nF'):
         cn = cu.C0402_nolabel(p, val)
-        cn.pads[0].setname("GND").w("o f .5 / f .6").wire()
+        cn.pads[0].setname("GND").w("o -")
         return cn
     def cap(p, val = '100nF'):
         cn = ucap(p, val)
-        cn.pads[1].setname("VCC").w("o f .3").wire()
+        cn.pads[1].setname("VCC").w("o +")
         return cn
     def hcap(p, val = '100nF'):
         cn = ucap(p, val)
@@ -509,8 +446,8 @@ def td2f():
         u1.s("VREG_VOUT").hex("r 5 f").wire()
 
         c10 = cu.C0603(brd.DC((6, 5)).left(90), '10 uF, 16V')
-        c10.pads[0].setname("GND").w("o f .5 / f .6").wire()
-        c10.pads[1].setname("VCC").w("o f 1").wire()
+        c10.pads[0].setname("GND").w("o -")
+        c10.pads[1].setname("VCC").w("o +")
 
     if 1:
         y1 = Osc_12MHz(brd.DC((27.5, 12)).right(180))
@@ -520,7 +457,7 @@ def td2f():
         # ST7789_12 backlight power
         r1 = cu.R0402(brd.DC((6, 11)).right(90), "7.5")
 
-        r1.pads[1].setname("VCC").w("o f 1").wire()
+        r1.pads[1].setname("VCC").w("o +")
         wire_ongrid(r1.pads[0].w("o / f .4"))
 
     if 1:
@@ -530,6 +467,8 @@ def td2f():
         r3 = cu.R0402(brd.DC(h.to_plane()), "270")
         for p in r2.pads + r3.pads:
             wire_ongrid(p.w("o f 0"))
+
+        r4, r5 = j1.hex_escape()
 
     if ROUTING:
         # Move these for VCC fill clearance
@@ -562,12 +501,10 @@ def td2f():
         t1 = time.monotonic()
         print("Starting route")
 
-        if HAVEUSB:
-            brd.hex_route(j1.s("5V"), u3.s("5V"))
+        brd.hex_route(j1.s("A4/B9"), u3.s("5V"))
         brd.hex_route(c7.pads[1], u3.s("5V"))
         brd.hex_route(c8.pads[1], c9.pads[1])
-        if HAVEUSB:
-            brd.hex_route(c9.pads[1], u1.s("VREG_VOUT"))
+        brd.hex_route(c9.pads[1], u1.s("VREG_VOUT"))
 
         if 1:
             brd.hex_route(u2.s("CS"), u1.s("QSPI_SS_N"))
@@ -579,11 +516,9 @@ def td2f():
         if 0:
             brd.hex_route(j2.pads[1], u2.s("CS"))
 
-        if HAVEUSB:
-            brd.hex_route(j1.s("D-"), r2.pads[0])
-            brd.hex_route(j1.s("D+"), r3.pads[0])
-        if HAVEUSB:
-            brd.hex_route(u1.s("USB_DM"), r2.pads[1])
+        brd.hex_route(j1.s("A7"), r2.pads[0])
+        brd.hex_route(j1.s("B6"), r3.pads[0])
+        brd.hex_route(u1.s("USB_DM"), r2.pads[1])
         brd.hex_route(u1.s("USB_DP"), r3.pads[1])
 
         for nm in "SCL SDA RESET D/C".split():
@@ -607,12 +542,11 @@ def td2f():
 
         brd.hex_route(u1.s("XIN"), y1.s("CLK"))
 
-        if HAVEUSB:
-            brd.hex_route(u1.s("SWDIO"), j2.s("SWD"))
-            brd.hex_route(u1.s("SWCLK"), j2.s("SWCLK"))
+        brd.hex_route(u1.s("SWDIO"), j2.s("SWD"))
+        brd.hex_route(u1.s("SWCLK"), j2.s("SWCLK"))
 
         # Hack, rescue a ground island
-        j3.s("GND").w("l 180 f 0.5 r 90 f 1.2 / f 1").wire()
+        j3.s("GND").w("o -")
 
         t2 = time.monotonic()
         print(f"Hex setup:   {t1-t0:.3f} s")
