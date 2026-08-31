@@ -20,6 +20,8 @@ import hex
 from hex import Hex, axial_direction_vectors
 from hexboard import HexBoard, river_ongrid, wire_ongrid
 
+ROUTING = 0
+
 used_pins = [
 # "SWCLK",    # Module_Serial_Debug.SWCLK
 # "GPIO1",    # Module_Serial_Debug.RX
@@ -365,7 +367,7 @@ def hexgrid(b, o):
     for h in hex.inrect((0, 0), b.size):
         ln(h.hexagon())
 
-def td2e():
+def td2f():
     w = .4/3   # .127 is JLCPCB minimum
     w = 0.127
     brd = HexBoard(
@@ -444,15 +446,15 @@ def td2e():
         j2.pads[0].setname("GND").w("/ f 1.2").wire()
         wire_ongrid(j2.pads[1].w("f 1"))
 
-    j3 = pogo_pads(brd.DC((28, 19.5)).right(180), "3")
-    j3.inBOM = False
+    j2 = pogo_pads(brd.DC((28, 19.5)).right(180), "3")
+    j2.inBOM = False
     names = ('SWCLK', '0', 'SWD')
-    for (p, nm) in zip(j3.pads, names):
+    for (p, nm) in zip(j2.pads, names):
         p.setname(nm)
         p.copy().w("l 90 f 0.7").rtext(nm)
-    wire_ongrid(j3.pads[0].w("l 90 f .7"))
-    j3.pads[1].setname("GND").w("l 135 f 1.4 / f 1.2").wire()
-    wire_ongrid(j3.pads[2].w("l 90 f .7"))
+    wire_ongrid(j2.pads[0].w("l 90 f .7"))
+    j2.pads[1].setname("GND").w("l 135 f 1.4 / f 1.2").wire()
+    wire_ongrid(j2.pads[2].w("l 90 f .7"))
 
     # u3 = SOT23_LDO(brd.DC((7, 27.5)).right(180).left(90))
     u3 = LDO_23_5(brd.DC((6.5, 27.5)).right(180))
@@ -464,8 +466,8 @@ def td2e():
         lcdsz = (26.16, 29.28)      # Module size
         x = (30 - lcdsz[0]) / 2 + pinxy[0]
         y = (30 - lcdsz[1]) / 2 + pinxy[1]
-        x1 = ST7789_12(brd.DC((x, y)).right(0).setlayer('GBL'))
-        x1.hex_escape()
+        u4 = ST7789_12(brd.DC((x, y)).right(0).setlayer('GBL'))
+        u4.hex_escape()
         p = brd.DC((15, 15)).setlayer("GBO")
         p.copy().rect(*lcdsz).wire()
         p.goxy(lcdsz[0] / 2, -lcdsz[1] / 2)
@@ -476,9 +478,9 @@ def td2e():
 
     if 1:
         # GND is on *right*, viewed from this side
-        x2 = SMT6(brd.DC((15, 10)))
-        x2.hex_escape()
-        x2.inBOM = False
+        j3 = SMT6(brd.DC((15, 10)))
+        j3.hex_escape()
+        j3.inBOM = False
 
     def ucap(p, val = '100nF'):
         cn = cu.C0402_nolabel(p, val)
@@ -487,27 +489,28 @@ def td2e():
     def cap(p, val = '100nF'):
         cn = ucap(p, val)
         cn.pads[1].setname("VCC").w("o f .3").wire()
+        return cn
     def hcap(p, val = '100nF'):
         cn = ucap(p, val)
         wire_ongrid(cn.pads[1].w("o f .2"))
         return cn
     if 1:
-        cap(brd.DC((9, 14)))
-        cap(brd.DC((26.5, 25.6)).right(180))
-        cap(brd.DC((26.5, 24.1)).right(180))
-        cap(brd.DC((25, 11)).left(90))
-        cap(brd.DC((15, 16.5)).left(60))
+        c1 = cap(brd.DC((9, 14)))
+        c2 = cap(brd.DC((26.5, 25.6)).right(180))
+        c3 = cap(brd.DC((26.5, 24.1)).right(180))
+        c4 = cap(brd.DC((25, 11)).left(90))
+        c5 = cap(brd.DC((15, 16.5)).left(60))
 
-        cap(brd.DC((6, 24.5)).left(0), '1uF')
-        cn = hcap(brd.DC((6, 23.0)), '1uF')
+        c6 = cap(brd.DC((6, 24.5)).left(0), '1uF')
+        c7 = hcap(brd.DC((6, 23.0)), '1uF')
 
-        ci0 = hcap(brd.DC((22, 28)).left(180), '1uF')
-        ci = hcap(brd.DC((22, 26.5)).left(180), '1uF')
+        c8 = hcap(brd.DC((22, 28)).left(180), '1uF')
+        c9 = hcap(brd.DC((22, 26.5)).left(180), '1uF')
         u1.s("VREG_VOUT").hex("r 5 f").wire()
 
-        cx = cu.C0603(brd.DC((6, 5)).left(90), '10 uF, 16V')
-        cx.pads[0].setname("GND").w("o f .5 / f .6").wire()
-        cx.pads[1].setname("VCC").w("o f 1").wire()
+        c10 = cu.C0603(brd.DC((6, 5)).left(90), '10 uF, 16V')
+        c10.pads[0].setname("GND").w("o f .5 / f .6").wire()
+        c10.pads[1].setname("VCC").w("o f 1").wire()
 
     if 1:
         y1 = Osc_12MHz(brd.DC((27.5, 12)).right(180))
@@ -522,13 +525,13 @@ def td2e():
 
     if 1:
         h = Hex.from_xy(12, 23.5)
-        r3 = cu.R0402(brd.DC(h.to_plane()), "270")
+        r2 = cu.R0402(brd.DC(h.to_plane()), "270")
         h += Hex(0, -3)
-        r4 = cu.R0402(brd.DC(h.to_plane()), "270")
-        for p in r3.pads + r4.pads:
+        r3 = cu.R0402(brd.DC(h.to_plane()), "270")
+        for p in r2.pads + r3.pads:
             wire_ongrid(p.w("o f 0"))
 
-    if 1:
+    if ROUTING:
         # Move these for VCC fill clearance
         u1.s("USB_DM").hex("6f").wire()
         u1.s("USB_DP").hex("7f").wire()
@@ -552,7 +555,7 @@ def td2e():
         note(DC, "DC")
 
         u1.s("GPIO8").hex("3f / f").wire()
-        x2.s("TX").hex("3f r f l 4f / f").wire()
+        j3.s("TX").hex("3f r f l 4f / f").wire()
 
         t0 = time.monotonic()
         brd.hex_setup()
@@ -561,10 +564,10 @@ def td2e():
 
         if HAVEUSB:
             brd.hex_route(j1.s("5V"), u3.s("5V"))
-        brd.hex_route(cn.pads[1], u3.s("5V"))
-        brd.hex_route(ci0.pads[1], ci.pads[1])
+        brd.hex_route(c7.pads[1], u3.s("5V"))
+        brd.hex_route(c8.pads[1], c9.pads[1])
         if HAVEUSB:
-            brd.hex_route(ci.pads[1], u1.s("VREG_VOUT"))
+            brd.hex_route(c9.pads[1], u1.s("VREG_VOUT"))
 
         if 1:
             brd.hex_route(u2.s("CS"), u1.s("QSPI_SS_N"))
@@ -577,39 +580,39 @@ def td2e():
             brd.hex_route(j2.pads[1], u2.s("CS"))
 
         if HAVEUSB:
-            brd.hex_route(j1.s("D-"), r3.pads[0])
-            brd.hex_route(j1.s("D+"), r4.pads[0])
+            brd.hex_route(j1.s("D-"), r2.pads[0])
+            brd.hex_route(j1.s("D+"), r3.pads[0])
         if HAVEUSB:
-            brd.hex_route(u1.s("USB_DM"), r3.pads[1])
-        brd.hex_route(u1.s("USB_DP"), r4.pads[1])
+            brd.hex_route(u1.s("USB_DM"), r2.pads[1])
+        brd.hex_route(u1.s("USB_DP"), r3.pads[1])
 
         for nm in "SCL SDA RESET D/C".split():
-            note(x1.s(nm), nm)
+            note(u4.s(nm), nm)
 
         if 1:
-            brd.hex_route(SDL, x1.s("SCL"))
-            brd.hex_route(SDA, x1.s("SDA"))
-            brd.hex_route(DC,  x1.s("D/C"))
-            brd.hex_route(RES, x1.s("RESET"))
+            brd.hex_route(SDL, u4.s("SCL"))
+            brd.hex_route(SDA, u4.s("SDA"))
+            brd.hex_route(DC,  u4.s("D/C"))
+            brd.hex_route(RES, u4.s("RESET"))
         if 1:
-            brd.hex_route(r1.pads[0], x1.s("LEDA"))
+            brd.hex_route(r1.pads[0], u4.s("LEDA"))
 
         note(u1.s("GPIO8"), "TX")
 
         if 1:
-            brd.hex_route(u1.s("GPIO8"), x2.s("TX"))
-            brd.hex_route(u1.s("GPIO9"), x2.s("RX"))
-            brd.hex_route(u1.s("GPIO13"), x2.s("RTS"))
-            brd.hex_route(u1.s("GPIO12"), x2.s("DTR"))
+            brd.hex_route(u1.s("GPIO8"), j3.s("TX"))
+            brd.hex_route(u1.s("GPIO9"), j3.s("RX"))
+            brd.hex_route(u1.s("GPIO13"), j3.s("RTS"))
+            brd.hex_route(u1.s("GPIO12"), j3.s("DTR"))
 
         brd.hex_route(u1.s("XIN"), y1.s("CLK"))
 
         if HAVEUSB:
-            brd.hex_route(u1.s("SWDIO"), j3.s("SWD"))
-            brd.hex_route(u1.s("SWCLK"), j3.s("SWCLK"))
+            brd.hex_route(u1.s("SWDIO"), j2.s("SWD"))
+            brd.hex_route(u1.s("SWCLK"), j2.s("SWCLK"))
 
         # Hack, rescue a ground island
-        x2.s("GND").w("l 180 f 0.5 r 90 f 1.2 / f 1").wire()
+        j3.s("GND").w("l 180 f 0.5 r 90 f 1.2 / f 1").wire()
 
         t2 = time.monotonic()
         print(f"Hex setup:   {t1-t0:.3f} s")
@@ -619,8 +622,7 @@ def td2e():
         brd.wire_routes()
 
     if 1:
-        brd.fill_any("GTL", "VCC")
-        brd.fill_any("GBL", "GND")
+        brd.fill()
 
     logo_path = Path("../td2/marketing/logo_pcb.png")
     if logo_path.exists():
@@ -634,8 +636,8 @@ def td2e():
 
     # hexgrid(brd, origin)
 
-    brd.save("td2e2")
+    brd.save("td2f")
     print("Saved")
 
 if __name__ == "__main__":
-    td2e()
+    td2f()
