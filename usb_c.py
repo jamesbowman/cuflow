@@ -1,4 +1,5 @@
 import cuflow as cu
+from hexboard import wire_ongrid
 
 
 class USBC(cu.Part):
@@ -60,7 +61,7 @@ class USBC(cu.Part):
             p = baseline.copy().goxy(d * 8.65 / 2, 4.2)
             plated_slot(p, 2.1)
 
-    def hex_escape(self, cc_positions=None):
+    def hex_escape(self, cc_positions=None, bridge_dplus=True):
         power_width = 2 * self.board.trace
         for name in ("A1/B12", "B1/A12"):
             self.s(name).setwidth(power_width).w("o -")
@@ -72,10 +73,17 @@ class USBC(cu.Part):
         vbus1.w(f"o f {via_escape} /")
         vbus0.left(90).goto(vbus1).wire()
 
-        self.s("A7").copy().w("i f 0.6 r 90").goto(
-            self.s("B7"), twist=True).wire()
-        self.s("B6").copy().w("o f 0.4 l 90").goto(
-            self.s("A6"), twist=True).wire()
+        a7 = self.s("A7").copy()
+        b7 = self.s("B7").copy()
+        a7.w("i f 0.6 r 90").goto(b7, twist=True).wire()
+
+        if bridge_dplus:
+            self.s("B6").copy().w("o f 0.4 l 90").goto(
+                self.s("A6"), twist=True).wire()
+        else:
+            for name in ("A6", "B6"):
+                wire_ongrid(self.s(name).w("o"))
+            wire_ongrid(self.s("B7").w("o"))
 
         def cc_pulldown(pin, north=0, position=None):
             if position is None:

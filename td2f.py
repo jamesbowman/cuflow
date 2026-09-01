@@ -29,6 +29,7 @@ FLASH_ROUTING = 1
 CLOCK_ROUTING = 1
 DEBUG_ROUTING = 1
 USB_MCU_ROUTING = 1
+USB_CONNECTOR_ROUTING = 1
 CAPS = 0
 
 used_pins = [
@@ -501,7 +502,8 @@ def td2f():
             wire_ongrid(p.w("o f 0"))
 
         r4, r5 = j1.hex_escape(
-            cc_positions=((22, 28), (22, 29)))
+            cc_positions=((22, 28), (22, 29)),
+            bridge_dplus=False)
 
     airwire_nets = (
         (j1.s("A4/B9"), u3.s("5V"), c7.pads[1]),
@@ -512,8 +514,8 @@ def td2f():
         (u2.s("IO0"), u1.s("QSPI_SD0")),
         (u2.s("CLK"), u1.s("QSPI_SCLK")),
         (u2.s("IO3"), u1.s("QSPI_SD3")),
-        (j1.s("A7"), r2.pads[0]),
-        (j1.s("B6"), r3.pads[0]),
+        (j1.s("B7"), r2.pads[0]),
+        (j1.s("A6"), j1.s("B6"), r3.pads[0]),
         (u1.s("USB_DM"), r2.pads[1]),
         (u1.s("USB_DP"), r3.pads[1]),
         (u1.s("GPIO14"), u4.s("SCL")),
@@ -565,8 +567,11 @@ def td2f():
         (u1.s("USB_DM"), r2.pads[1]),
     )
 
+    usb_dplus_net = (r3.pads[0], j1.s("A6"), j1.s("B6"))
+    usb_dminus_route = (r2.pads[0], j1.s("B7"))
     if (LCD_ROUTING or SERIAL_ROUTING or FLASH_ROUTING or
-            CLOCK_ROUTING or DEBUG_ROUTING or USB_MCU_ROUTING) and not ROUTING:
+            CLOCK_ROUTING or DEBUG_ROUTING or USB_MCU_ROUTING or
+            USB_CONNECTOR_ROUTING) and not ROUTING:
         brd.hex_setup()
         if LCD_ROUTING:
             print("Starting LCD route")
@@ -615,6 +620,13 @@ def td2f():
             for source, target in usb_mcu_routes:
                 assert source.layer == target.layer
                 brd.hex_route(source, target)
+        if USB_CONNECTOR_ROUTING:
+            print("Starting USB connector route")
+            assert all(terminal.layer == "GTL" for terminal in usb_dplus_net)
+            brd.hex_route_net(usb_dplus_net)
+            source, target = usb_dminus_route
+            assert source.layer == target.layer == "GTL"
+            brd.hex_route(source, target)
         brd.hex_render()
         brd.wire_routes()
 
