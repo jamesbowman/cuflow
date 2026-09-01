@@ -139,7 +139,7 @@ class RP2040(QFN56):
         vccs[5].w("o +")
         vccs[7].goto(vccs[6]).wire()
         vccs[9].goto(vccs[8]).wire()
-        vccs[8].w("o f 0.6 +")
+        vccs[8].w("o +")
 
         banks = ([], [], [], [])
         for i,p in enumerate(self.pads[1:]):

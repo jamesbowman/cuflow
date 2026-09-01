@@ -25,6 +25,10 @@ hex.set_grid_size(0.3)
 ROUTING = 0
 LCD_ROUTING = 1
 SERIAL_ROUTING = ("GPIO8", "GPIO9", "GPIO12", "GPIO13")
+FLASH_ROUTING = 1
+CLOCK_ROUTING = 1
+DEBUG_ROUTING = 1
+USB_MCU_ROUTING = 1
 CAPS = 0
 
 used_pins = [
@@ -114,17 +118,21 @@ class HexRP2040(RP2040):
         # fanout_ongrid(cu.River(brd, banks[1][:4 ]).right(30))
         fanout_ongrid(cu.River(brd, banks[1][5:7]).w("f 0.52 l 30")).hex("").wire()
         fanout_ongrid(cu.River(brd, banks[3][:1]).w("f 0.5 r 30"))
-        fanout_ongrid(cu.River(brd, banks[3][1:3]).w("f 0.4 l 30"))
+        # fanout_ongrid(cu.River(brd, banks[3][1:3]).w("f 0.4 l 30"))
         fanout_ongrid(cu.River(brd, banks[3][-6:]).left(30))
         for nm in ("XIN", ):
             wire_ongrid(self.s(nm))
         self.pads[0].w("-").wire()
 
+        # USB
+        wire_ongrid(self.s("USB_DM").w("o")).hex("f").wire()
+        wire_ongrid(self.s("USB_DP")).hex("f").wire()
+
         # Serial
         wire_ongrid(self.s("GPIO8")).hex("f").wire()
         wire_ongrid(self.s("GPIO9")).hex("3f").wire()
-        wire_ongrid(self.s("GPIO12")).hex("f r 3f / 3f / 12f").wire()
-        wire_ongrid(self.s("GPIO13")).hex("6f").wire()
+        wire_ongrid(self.s("GPIO12")).hex("f r 3f / 3f / 11f").wire()
+        wire_ongrid(self.s("GPIO13")).hex("3f").wire()
 
         # LCD
         wire_ongrid(self.s("GPIO10")).hex("f /")
@@ -244,9 +252,12 @@ class ST7789_12(cu.Part):
         for (p, nm) in zip(self.pads, "GND  GND LEDA  VCC GND GND D/C GND SCL SDA RESET GND".split()):
             p.setname(nm)
             if nm == "GND":
-                p.w("o -")
+                if p is self.pads[-1]:
+                    p.w("i -")
+                else:
+                    p.w("o f 3.5 -")
             elif nm == "VCC":
-                p.w("o +")
+                p.w("o f 3.5 +")
             elif nm == "RESET":
                 wire_ongrid(p.w("o f 0.2"))
             else:
@@ -301,7 +312,7 @@ class Osc_12MHz(SMD_3225_4P):
         self.s("GND").w("o -")
         self.s("VDD").setname("VCC")
         self.s("VCC").w("o +")
-        wire_ongrid(self.s("CLK").w("o"))
+        wire_ongrid(self.s("CLK").w("i"))
 
 class pogo_pads(dip.PTH):
     family  = "J"
@@ -482,8 +493,10 @@ def td2f():
         wire_ongrid(r1.pads[0].w("o / f .4"))
 
     if 1:
-        r2 = cu.R0402(brd.DC((15, 21)), "270")
-        r3 = cu.R0402(brd.DC((15, 20)), "270")
+        r3_cell = Hex.from_xy_fine(16.6, 19.8)
+        r2_cell = r3_cell + Hex(0, 4)
+        r2 = cu.R0402(brd.DC(r2_cell.to_plane()), "270")
+        r3 = cu.R0402(brd.DC(r3_cell.to_plane()), "270")
         for p in r2.pads + r3.pads:
             wire_ongrid(p.w("o f 0"))
 
@@ -518,8 +531,8 @@ def td2f():
     )
 
     lcd_routes = (
-        (u1.s("GPIO14"), u4.s("SCL")),
         (u1.s("GPIO15"), u4.s("SDA")),
+        (u1.s("GPIO14"), u4.s("SCL")),
         (u1.s("GPIO10"), u4.s("D/C")),
         (u1.s("GPIO11"), u4.s("RESET")),
     )
@@ -531,7 +544,29 @@ def td2f():
         (u1.s("GPIO12"), j3.s("DTR")),
     )
 
-    if (LCD_ROUTING or SERIAL_ROUTING) and not ROUTING:
+    flash_routes = (
+        (u2.s("CS"), u1.s("QSPI_SS_N")),
+        (u2.s("IO1"), u1.s("QSPI_SD1")),
+        (u2.s("IO2"), u1.s("QSPI_SD2")),
+        (u2.s("IO0"), u1.s("QSPI_SD0")),
+        (u2.s("CLK"), u1.s("QSPI_SCLK")),
+        (u2.s("IO3"), u1.s("QSPI_SD3")),
+    )
+
+    clock_route = (u1.s("XIN"), y1.s("CLK"))
+
+    debug_routes = (
+        (u1.s("SWDIO"), j2.s("SWD")),
+        (u1.s("SWCLK"), j2.s("SWCLK")),
+    )
+
+    usb_mcu_routes = (
+        (u1.s("USB_DP"), r3.pads[1]),
+        (u1.s("USB_DM"), r2.pads[1]),
+    )
+
+    if (LCD_ROUTING or SERIAL_ROUTING or FLASH_ROUTING or
+            CLOCK_ROUTING or DEBUG_ROUTING or USB_MCU_ROUTING) and not ROUTING:
         brd.hex_setup()
         if LCD_ROUTING:
             print("Starting LCD route")
@@ -560,6 +595,26 @@ def td2f():
                 if name in SERIAL_ROUTING:
                     source, target = serial_by_gpio[name]
                     brd.hex_route(source, target)
+        if FLASH_ROUTING:
+            print("Starting flash route")
+            for source, target in flash_routes:
+                assert source.layer == target.layer
+                brd.hex_route(source, target)
+        if CLOCK_ROUTING:
+            print("Starting clock route")
+            source, target = clock_route
+            assert source.layer == target.layer
+            brd.hex_route(source, target)
+        if DEBUG_ROUTING:
+            print("Starting debug route")
+            for source, target in debug_routes:
+                assert source.layer == target.layer
+                brd.hex_route(source, target)
+        if USB_MCU_ROUTING:
+            print("Starting USB MCU route")
+            for source, target in usb_mcu_routes:
+                assert source.layer == target.layer
+                brd.hex_route(source, target)
         brd.hex_render()
         brd.wire_routes()
 
