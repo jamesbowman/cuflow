@@ -107,7 +107,7 @@ class HexRP2040(RP2040):
     def hex_escape(self):
         brd = self.board
 
-        banks = self.escape(used_pins)
+        banks = self.escape(used_pins, four_layer=True)
 
         by_name = {pad.name: pad for bank in banks for pad in bank}
 

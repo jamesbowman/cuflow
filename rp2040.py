@@ -111,7 +111,7 @@ class RP2040(QFN56):
         for i,nm in RP2040pins:
             self.pads[i].setname(nm)
 
-    def escape(self, used_pins):
+    def escape(self, used_pins, four_layer=False):
         brd = self.board
         for p in self.pads:
             nm = p.name
@@ -134,7 +134,10 @@ class RP2040(QFN56):
         vccs[1].w("i +")
         vccs[2].w("i f .6 l 90 +")
         vccs[3].w("i +")
-        vccs[4].w("o f .2 l 45 f .3 +")
+        if four_layer:
+            vccs[4].w("o +")
+        else:
+            vccs[4].w("o f .2 l 45 f .3 +")
         vccs[6].goto(vccs[5], twist = True).wire()
         vccs[5].w("o +")
         vccs[7].goto(vccs[6]).wire()

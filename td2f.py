@@ -8,6 +8,7 @@ import shapely.geometry as sg
 from PIL import Image
 
 import cuflow as cu
+import htmlout
 import svgout
 import dip
 import sot
@@ -34,7 +35,7 @@ USB_CC_ROUTING = 1
 VREG_ROUTING = 1
 BACKLIGHT_ROUTING = 1
 POWER_ROUTING = 1
-CAPS = 0
+CAPS = 1
 
 used_pins = [
 # "SWCLK",    # Module_Serial_Debug.SWCLK
@@ -115,9 +116,9 @@ class HexRP2040(RP2040):
     def hex_escape(self):
         brd = self.board
 
-        banks = self.escape(used_pins)
+        banks = self.escape(used_pins, four_layer=True)
 
-        fanout_ongrid(cu.River(brd, banks[0][0:2]).w("f .5"))
+        # fanout_ongrid(cu.River(brd, banks[0][0:2]).w("f .5"))
         # fanout_ongrid(cu.River(brd, banks[0][-4:-2]).w("f 0.8 r 60"))
         # fanout_ongrid(cu.River(brd, banks[0][-2:]).w(""))
         # fanout_ongrid(cu.River(brd, banks[1][:4 ]).right(30))
@@ -407,7 +408,7 @@ def td2f():
 
     if 1:
         u2 = HexW25Q128(
-            brd.DC(Hex.from_xy(9, 17.5).to_plane()).goxy(1, 0).right(180))
+            brd.DC(Hex.from_xy(10, 17.5).to_plane()).right(180 + 0))
         u2.hex_escape()
 
     j1 = USBC(brd.DC((15, 30)).right(180))
@@ -451,7 +452,7 @@ def td2f():
         # GND is on *right*, viewed from this side
         j3 = SMT6(brd.DC((15, 10)))
         j3.hex_escape()
-        j3.inBOM = False
+        j3.inBOM = True
 
     def ucap(p, val = '100nF'):
         cn = cu.C0402_nolabel(p, val)
@@ -468,16 +469,26 @@ def td2f():
             signal.setwidth(width)
         wire_ongrid(signal.w("o f .2"))
         return cn
+    c6_cell = Hex.from_xy_fine(6.6, 25.2)
     if CAPS:
-        c1 = cap(brd.DC((9, 14)))
-        c2 = cap(brd.DC((26.5, 25.6)).right(180))
-        c3 = cap(brd.DC((26.5, 24.1)).right(180))
-        c4 = cap(brd.DC((25, 11)).left(90))
-        c5 = cap(brd.DC((15, 16.5)).left(60))
+        hx = Hex.from_xy_fine(25, 22.2)
+        c1 = cap(brd.DC(hx.to_plane()).right(30))
+        hx += Hex(0, 4)
+        c2 = cap(brd.DC(hx.to_plane()).right(30))
+        hx += Hex(0, 4)
+        c3 = cap(brd.DC(hx.to_plane()).right(30))
 
-        c6 = cap(brd.DC((6, 24.5)).left(0), '1uF')
+        hx = Hex.from_xy_fine(17.9, 15.0)
+        # brd.DC(hx.to_plane()).mark()
+        c4 = cap(brd.DC(hx.to_plane()).right(30))
 
-    c7 = hcap(brd.DC((6, 23.0)), '1uF', width=2 * brd.trace)
+        c5 = cap(brd.DC((9.9, 14)))
+
+        c6 = cap(brd.DC(c6_cell.to_plane()), '1uF')
+
+    c7_cell = c6_cell + Hex(2, -4)
+    c7 = hcap(
+        brd.DC(c7_cell.to_plane()), '1uF', width=2 * brd.trace)
 
     r5_cell = Hex.from_xy_fine(22, 27.5)
     block_step = Hex(2, -4)
@@ -780,7 +791,8 @@ def td2f():
 
     brd.add_hex_grid()
 
-    brd.save("td2f")
+    generated_records = brd.save("td2f")
+    htmlout.write(brd, "td2f.html", generated_records)
     print("Saved")
 
 if __name__ == "__main__":
