@@ -63,7 +63,7 @@ class USBC(cu.Part):
 
     def hex_escape(
             self, cc_positions=None, bridge_dplus=True,
-            hardwire_cc=True):
+            hardwire_cc=True, escape_left_vbus=False):
         power_width = 2 * self.board.trace
         for name in ("A1/B12", "B1/A12"):
             self.s(name).setwidth(power_width).w("o -")
@@ -74,6 +74,12 @@ class USBC(cu.Part):
         vbus0.w(f"o f {via_escape} /")
         vbus1.w(f"o f {via_escape} /")
         vbus0.left(90).goto(vbus1).wire()
+        if escape_left_vbus:
+            left_vbus = min(
+                (self.s("A4/B9"), self.s("B4/A9")),
+                key=lambda pad: pad.xy[0],
+            )
+            wire_ongrid(left_vbus.setwidth(power_width).w("o"))
 
         a7 = self.s("A7").copy()
         b7 = self.s("B7").copy()

@@ -33,6 +33,7 @@ USB_CONNECTOR_ROUTING = 1
 USB_CC_ROUTING = 1
 VREG_ROUTING = 1
 BACKLIGHT_ROUTING = 1
+POWER_ROUTING = 1
 CAPS = 0
 
 used_pins = [
@@ -226,9 +227,10 @@ class LDO_23_5(SOT23_5):
             elif nm == "VCC":
                 p.w("i +")
             p.wire()
-        self.s("5V").w("o f 0.1")
-        self.s("CE").w("o f .4").goto(self.s("5V")).wire()
-        wire_ongrid(self.s("5V"))
+        power_width = 2 * self.board.trace
+        for name in ("5V", "CE"):
+            wire_ongrid(
+                self.s(name).setwidth(power_width).w("o"))
 
     def hex_escape(self):
         self.hex_hookup(('5V', 'GND', 'CE', '', 'VCC'))
@@ -404,7 +406,8 @@ def td2f():
             dc.text(nick[nm], scale = 0.2)
 
     if 1:
-        u2 = HexW25Q128(brd.DC(Hex.from_xy(9, 17.5).to_plane()).right(180))
+        u2 = HexW25Q128(
+            brd.DC(Hex.from_xy(9, 17.5).to_plane()).goxy(1, 0).right(180))
         u2.hex_escape()
 
     j1 = USBC(brd.DC((15, 30)).right(180))
@@ -458,9 +461,12 @@ def td2f():
         cn = ucap(p, val)
         cn.pads[1].setname("VCC").w("o +")
         return cn
-    def hcap(p, val = '100nF'):
+    def hcap(p, val='100nF', width=None):
         cn = ucap(p, val)
-        wire_ongrid(cn.pads[1].w("o f .2"))
+        signal = cn.pads[1]
+        if width is not None:
+            signal.setwidth(width)
+        wire_ongrid(signal.w("o f .2"))
         return cn
     if CAPS:
         c1 = cap(brd.DC((9, 14)))
@@ -471,7 +477,7 @@ def td2f():
 
         c6 = cap(brd.DC((6, 24.5)).left(0), '1uF')
 
-    c7 = hcap(brd.DC((6, 23.0)), '1uF')
+    c7 = hcap(brd.DC((6, 23.0)), '1uF', width=2 * brd.trace)
 
     r5_cell = Hex.from_xy_fine(22, 27.5)
     block_step = Hex(2, -4)
@@ -514,10 +520,13 @@ def td2f():
         r4, r5 = j1.hex_escape(
             cc_positions=(r4_cell.to_plane(), r5_cell.to_plane()),
             bridge_dplus=False,
-            hardwire_cc=False)
+            hardwire_cc=False,
+            escape_left_vbus=True)
+
+    power_net = (j1.s("A4/B9"), u3.s("5V"), u3.s("CE"), c7.pads[1])
 
     airwire_nets = (
-        (j1.s("A4/B9"), u3.s("5V"), c7.pads[1]),
+        power_net,
         (c8.pads[1], c9.pads[1], u1.s("VREG_VOUT")),
         (u2.s("CS"), u1.s("QSPI_SS_N")),
         (u2.s("IO1"), u1.s("QSPI_SD1")),
@@ -591,8 +600,12 @@ def td2f():
     if (LCD_ROUTING or SERIAL_ROUTING or FLASH_ROUTING or
             CLOCK_ROUTING or DEBUG_ROUTING or USB_MCU_ROUTING or
             USB_CONNECTOR_ROUTING or USB_CC_ROUTING or
-            VREG_ROUTING or BACKLIGHT_ROUTING) and not ROUTING:
+            VREG_ROUTING or BACKLIGHT_ROUTING or POWER_ROUTING) and not ROUTING:
         brd.hex_setup()
+        if POWER_ROUTING:
+            print("Starting 5V route")
+            assert all(terminal.layer == "GTL" for terminal in power_net)
+            brd.hex_route_net(power_net, width=2 * brd.trace)
         if USB_CC_ROUTING:
             print("Starting USB CC route")
             for source, target in usb_cc_routes:
@@ -763,7 +776,7 @@ def td2f():
         )
         brd.logo(2.2, 15, logo_line, .29)
     brd.DC((25.5, 6.4)).ctext("(C) EXCAMERA", scale = 1.1)
-    brd.DC((25.5, 5.0)).ctext("LABS 2025", scale = 1.1)
+    brd.DC((25.5, 5.0)).ctext("LABS", scale = 1.1)
 
     brd.add_hex_grid()
 

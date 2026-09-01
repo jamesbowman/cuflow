@@ -106,6 +106,34 @@ class HexRouteNetWidthTests(unittest.TestCase):
             int(board.blocked["GTL"].sum()),
         )
 
+    def test_routes_four_terminal_net(self):
+        board = HexBoard(
+            (12, 12),
+            trace=0.1,
+            space=0.2,
+            via_hole=0.3,
+            via=0.6,
+            via_space=0.1,
+            silk=0.1,
+        )
+        terminals = list(self.terminals(board))
+        terminal = board.DC(
+            Hex.from_xy_fine(6, 6).to_plane()).setlayer("GTL")
+        terminal.part = "J4"
+        terminal.setname("1")
+        terminals.append(terminal)
+        for terminal in terminals:
+            board.layers["GTL"].add(
+                sg.Point(terminal.xy).buffer(0.2), terminal.name)
+        board.drill(terminals[0].xy, 0.3)
+        board.hex_setup()
+
+        routes = board.hex_route_net(terminals, width=0.4)
+
+        self.assertEqual(len(routes), 4)
+        self.assertEqual(board.route_widths, [0.4] * 4)
+        self.assertEqual(len(board.nets), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

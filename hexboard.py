@@ -110,16 +110,25 @@ class HexBoard(cu.Board):
         self.routes = []
         self.route_widths = []
 
-    def layer_blocks(self, nm, width=None):
+    def layer_blocks(self, nm, width=None, exempt_points=()):
         explicit_width = width is not None
         width = self.trace if width is None else width
-        copper = [p for (_, p) in self.layers[nm].polys]
+        endpoint_points = tuple(sg.Point(xy) for xy in exempt_points)
+        copper = [
+            polygon
+            for _, polygon in self.layers[nm].polys
+            if not any(polygon.intersects(point) for point in endpoint_points)
+        ]
         route_clearance = width / 2 + self.space
         drill_expansion = max(0, route_clearance - self.hr)
         drill_keepouts = [
             sg.Point(xy).buffer(diameter / 2 + drill_expansion)
             for diameter, locations in self.holes.items()
             for xy in locations
+            if not any(
+                point.distance(sg.Point(xy)) <= diameter / 2 + 1e-6
+                for point in endpoint_points
+            )
         ]
 
         if not explicit_width:
@@ -159,9 +168,8 @@ class HexBoard(cu.Board):
             h = self.route_hexes[i]
             blocked[h.q, h.r] = 1
 
-    def _blocked_for_width(self, layer, width):
-        blocked = self.layer_blocks(layer, width)
-        blocked |= self.blocked[layer]
+    def _blocked_for_width(self, layer, width, exempt_points=()):
+        blocked = self.layer_blocks(layer, width, exempt_points)
         for ((route_layer, route), route_width) in zip(
                 self.routes, self.route_widths):
             if route_layer != layer:
@@ -221,7 +229,7 @@ class HexBoard(cu.Board):
         self.addnet(source, target)
 
     def hex_route_net(self, terminals, width=None):
-        """Route a three-terminal net, optionally reserving a wide corridor.
+        """Route a multi-terminal net, optionally reserving a wide corridor.
 
         Omitting ``width`` retains the legacy one-cell routing behavior.
         An explicit width expands fixed-obstacle clearance, accounts for
@@ -229,7 +237,7 @@ class HexBoard(cu.Board):
         reserves enough space for subsequent default-width routes.
         """
         terminals = tuple(terminals)
-        assert len(terminals) == 3, "hex_route_net() currently supports 3-node nets"
+        assert len(terminals) >= 2, "hex_route_net() needs at least two terminals"
 
         route_width = self.trace if width is None else float(width)
         assert route_width > 0, "Route width must be positive"
@@ -243,7 +251,10 @@ class HexBoard(cu.Board):
         blocked = (
             self.blocked[layer]
             if width is None
-            else self._blocked_for_width(layer, route_width)
+            else self._blocked_for_width(
+                layer, route_width,
+                exempt_points=(terminal.xy for terminal in terminals),
+            )
         )
         directions = [Hex(dq, dr) for dq, dr in axial_direction_vectors]
 
