@@ -509,6 +509,9 @@ def td2f():
         c10.pads[0].setname("GND").w("o -")
         c10.pads[1].setname("VCC").w("o +")
 
+        y1_cap_cell = Hex.from_xy_fine(27.5, 9.6)
+        c11 = cap(brd.DC(y1_cap_cell.to_plane()).right(180))
+
     if 1:
         y1 = Osc_12MHz(brd.DC((27.5, 12)).right(180))
         y1.escape()
