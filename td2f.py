@@ -30,6 +30,9 @@ CLOCK_ROUTING = 1
 DEBUG_ROUTING = 1
 USB_MCU_ROUTING = 1
 USB_CONNECTOR_ROUTING = 1
+USB_CC_ROUTING = 1
+VREG_ROUTING = 1
+BACKLIGHT_ROUTING = 1
 CAPS = 0
 
 used_pins = [
@@ -118,12 +121,14 @@ class HexRP2040(RP2040):
         # fanout_ongrid(cu.River(brd, banks[0][-2:]).w(""))
         # fanout_ongrid(cu.River(brd, banks[1][:4 ]).right(30))
         fanout_ongrid(cu.River(brd, banks[1][5:7]).w("f 0.52 l 30")).hex("").wire()
-        fanout_ongrid(cu.River(brd, banks[3][:1]).w("f 0.5 r 30"))
+        # fanout_ongrid(cu.River(brd, banks[3][:1]).w("f 0.5 r 30"))
         # fanout_ongrid(cu.River(brd, banks[3][1:3]).w("f 0.4 l 30"))
         fanout_ongrid(cu.River(brd, banks[3][-6:]).left(30))
         for nm in ("XIN", ):
             wire_ongrid(self.s(nm))
         self.pads[0].w("-").wire()
+
+        wire_ongrid(self.s("VREG_VOUT")).wire()
 
         # USB
         wire_ongrid(self.s("USB_DM").w("o")).hex("f").wire()
@@ -468,14 +473,19 @@ def td2f():
 
     c7 = hcap(brd.DC((6, 23.0)), '1uF')
 
-    c8 = hcap(brd.DC((22, 27)).left(180), '1uF')
-    c9 = hcap(brd.DC((22, 26)).left(180), '1uF')
+    r5_cell = Hex.from_xy_fine(22, 27.5)
+    block_step = Hex(2, -4)
+    r4_cell = r5_cell + block_step
+    c8_cell = r4_cell + block_step
+    c9_cell = c8_cell + block_step
+
+    c8 = hcap(brd.DC(c8_cell.to_plane()).left(180), '1uF')
+    c9 = hcap(brd.DC(c9_cell.to_plane()).left(180), '1uF')
     if not CAPS:
         for capacitor, designator in ((c7, "C7"), (c8, "C8"), (c9, "C9")):
             capacitor.id = designator
             for pad in capacitor.pads:
                 pad.part = designator
-    u1.s("VREG_VOUT").hex("r 5 f").wire()
 
     if CAPS:
         c10 = cu.C0603(brd.DC((6, 5)).left(90), '10 uF, 16V')
@@ -502,8 +512,9 @@ def td2f():
             wire_ongrid(p.w("o f 0"))
 
         r4, r5 = j1.hex_escape(
-            cc_positions=((22, 28), (22, 29)),
-            bridge_dplus=False)
+            cc_positions=(r4_cell.to_plane(), r5_cell.to_plane()),
+            bridge_dplus=False,
+            hardwire_cc=False)
 
     airwire_nets = (
         (j1.s("A4/B9"), u3.s("5V"), c7.pads[1]),
@@ -516,6 +527,8 @@ def td2f():
         (u2.s("IO3"), u1.s("QSPI_SD3")),
         (j1.s("B7"), r2.pads[0]),
         (j1.s("A6"), j1.s("B6"), r3.pads[0]),
+        (j1.s("A5"), r4.pads[0]),
+        (j1.s("B5"), r5.pads[0]),
         (u1.s("USB_DM"), r2.pads[1]),
         (u1.s("USB_DP"), r3.pads[1]),
         (u1.s("GPIO14"), u4.s("SCL")),
@@ -569,15 +582,36 @@ def td2f():
 
     usb_dplus_net = (r3.pads[0], j1.s("A6"), j1.s("B6"))
     usb_dminus_route = (r2.pads[0], j1.s("B7"))
+    usb_cc_routes = (
+        (j1.s("A5"), r4.pads[0]),
+        (j1.s("B5"), r5.pads[0]),
+    )
+    vreg_net = (u1.s("VREG_VOUT"), c8.pads[1], c9.pads[1])
+    backlight_route = (r1.pads[0], u4.s("LEDA"))
     if (LCD_ROUTING or SERIAL_ROUTING or FLASH_ROUTING or
             CLOCK_ROUTING or DEBUG_ROUTING or USB_MCU_ROUTING or
-            USB_CONNECTOR_ROUTING) and not ROUTING:
+            USB_CONNECTOR_ROUTING or USB_CC_ROUTING or
+            VREG_ROUTING or BACKLIGHT_ROUTING) and not ROUTING:
         brd.hex_setup()
+        if USB_CC_ROUTING:
+            print("Starting USB CC route")
+            for source, target in usb_cc_routes:
+                assert source.layer == target.layer == "GTL"
+                brd.hex_route(source, target)
+        if VREG_ROUTING:
+            print("Starting VREG route")
+            assert all(terminal.layer == "GTL" for terminal in vreg_net)
+            brd.hex_route_net(vreg_net)
         if LCD_ROUTING:
             print("Starting LCD route")
             for source, target in lcd_routes:
                 assert source.layer == target.layer == "GBL"
                 brd.hex_route(source, target)
+        if BACKLIGHT_ROUTING:
+            print("Starting backlight route")
+            source, target = backlight_route
+            assert source.layer == target.layer == "GBL"
+            brd.hex_route(source, target)
         if SERIAL_ROUTING:
             print("Starting serial route")
             selected_serial_routes = (

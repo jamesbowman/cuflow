@@ -105,25 +105,70 @@ class HexBoard(cu.Board):
         route_disks = shapely.buffer(
             shapely.points(coordinates), self.hr, quad_segs=16)
         self.route_tree = STRtree(route_disks)
+        self.route_point_tree = STRtree(shapely.points(coordinates))
         self.blocked = {layer: self.layer_blocks(layer) for layer in ('GTL', 'GBL')}
         self.routes = []
+        self.route_widths = []
 
-    def layer_blocks(self, nm):
+    def layer_blocks(self, nm, width=None):
+        explicit_width = width is not None
+        width = self.trace if width is None else width
         copper = [p for (_, p) in self.layers[nm].polys]
-        route_clearance = self.trace / 2 + self.space
+        route_clearance = width / 2 + self.space
         drill_expansion = max(0, route_clearance - self.hr)
         drill_keepouts = [
             sg.Point(xy).buffer(diameter / 2 + drill_expansion)
             for diameter, locations in self.holes.items()
             for xy in locations
         ]
+
+        if not explicit_width:
+            layer_poly = so.unary_union(
+                copper + drill_keepouts + self.keepouts +
+                self.route_keepouts[nm]).buffer(0)
+            blocked = self.gr.zeros(np.uint8) | (self.gr.valid == 0)
+            for i in self.route_tree.query(
+                    layer_poly, predicate="intersects"):
+                h = self.route_hexes[i]
+                blocked[h.q, h.r] = 1
+            return blocked
+
+        geometry_expansion = max(0, route_clearance - self.hr)
+        fixed_geometry = so.unary_union(
+            copper + self.keepouts + self.route_keepouts[nm])
+        if geometry_expansion:
+            fixed_geometry = fixed_geometry.buffer(geometry_expansion)
         layer_poly = so.unary_union(
-            copper + drill_keepouts + self.keepouts +
-            self.route_keepouts[nm]).buffer(0)
+            [fixed_geometry] + drill_keepouts).buffer(0)
         blocked = self.gr.zeros(np.uint8) | (self.gr.valid == 0)
         for i in self.route_tree.query(layer_poly, predicate="intersects"):
             h = self.route_hexes[i]
             blocked[h.q, h.r] = 1
+        return blocked
+
+    @staticmethod
+    def _route_geometry(route):
+        points = [cell.to_plane() for cell in route]
+        if len(points) == 1:
+            return sg.Point(points[0])
+        return sg.LineString(points)
+
+    def _mark_blocked_geometry(self, blocked, geometry):
+        for i in self.route_point_tree.query(
+                geometry, predicate="intersects"):
+            h = self.route_hexes[i]
+            blocked[h.q, h.r] = 1
+
+    def _blocked_for_width(self, layer, width):
+        blocked = self.layer_blocks(layer, width)
+        blocked |= self.blocked[layer]
+        for ((route_layer, route), route_width) in zip(
+                self.routes, self.route_widths):
+            if route_layer != layer:
+                continue
+            clearance = (width + route_width) / 2 + self.space
+            corridor = self._route_geometry(route).buffer(clearance)
+            self._mark_blocked_geometry(blocked, corridor)
         return blocked
 
     def hex_route(self, a, b):
@@ -172,11 +217,22 @@ class HexBoard(cu.Board):
                     break
         route.append(a)
         self.routes.append((layer, route))
+        self.route_widths.append(self.trace)
         self.addnet(source, target)
 
-    def hex_route_net(self, terminals):
+    def hex_route_net(self, terminals, width=None):
+        """Route a three-terminal net, optionally reserving a wide corridor.
+
+        Omitting ``width`` retains the legacy one-cell routing behavior.
+        An explicit width expands fixed-obstacle clearance, accounts for
+        previously routed widths, renders the requested copper width, and
+        reserves enough space for subsequent default-width routes.
+        """
         terminals = tuple(terminals)
         assert len(terminals) == 3, "hex_route_net() currently supports 3-node nets"
+
+        route_width = self.trace if width is None else float(width)
+        assert route_width > 0, "Route width must be positive"
 
         layer = terminals[0].layer
         assert all(terminal.layer == layer for terminal in terminals)
@@ -184,7 +240,11 @@ class HexBoard(cu.Board):
         terminal_hexes = [Hex.from_xy(*terminal.xy) for terminal in terminals]
         terminal_cells = {tuple(h) for h in terminal_hexes}
         valid = self.valid_cells
-        blocked = self.blocked[layer]
+        blocked = (
+            self.blocked[layer]
+            if width is None
+            else self._blocked_for_width(layer, route_width)
+        )
         directions = [Hex(dq, dr) for dq, dr in axial_direction_vectors]
 
         def wavefront(start):
@@ -234,9 +294,18 @@ class HexBoard(cu.Board):
                 occupied.add(cell)
             routes.append(route)
 
-        for q, r in occupied:
-            self.blocked[layer][q, r] = 1
+        if width is None:
+            for q, r in occupied:
+                self.blocked[layer][q, r] = 1
+        else:
+            clearance = (route_width + self.trace) / 2 + self.space
+            corridor = so.unary_union([
+                self._route_geometry(route)
+                for route in routes
+            ]).buffer(clearance)
+            self._mark_blocked_geometry(self.blocked[layer], corridor)
         self.routes.extend((layer, route) for route in routes)
+        self.route_widths.extend(route_width for route in routes)
         for terminal in terminals[1:]:
             self.addnet(terminals[0], terminal)
 
@@ -282,11 +351,14 @@ class HexBoard(cu.Board):
         im.save("out.png")
 
     def wire_routes(self):
-        for (layer, r) in self.routes:
+        for ((layer, r), width) in zip(self.routes, self.route_widths):
             d = self.DC(r[0].to_plane()).setlayer(layer)
             for p in r[1:]:
                 d.path.append(p.to_plane())
-            d.wire()
+            if width == self.trace:
+                d.wire()
+            else:
+                d.wire(width=width)
 
 
 def best_forward(p):

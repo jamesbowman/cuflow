@@ -61,7 +61,9 @@ class USBC(cu.Part):
             p = baseline.copy().goxy(d * 8.65 / 2, 4.2)
             plated_slot(p, 2.1)
 
-    def hex_escape(self, cc_positions=None, bridge_dplus=True):
+    def hex_escape(
+            self, cc_positions=None, bridge_dplus=True,
+            hardwire_cc=True):
         power_width = 2 * self.board.trace
         for name in ("A1/B12", "B1/A12"):
             self.s(name).setwidth(power_width).w("o -")
@@ -95,9 +97,14 @@ class USBC(cu.Part):
                 center = self.board.DC(position)
             resistor = cu.R0402(
                 center, "5K1", source={"LCSC": "C25905"})
-            self.s(pin).copy().w("o").goto(
-                resistor.pads[0], twist=True).wire()
-            resistor.pads[1].w("o -")
+            if hardwire_cc:
+                self.s(pin).copy().w("o").goto(
+                    resistor.pads[0], twist=True).wire()
+                resistor.pads[1].w("o -")
+            else:
+                wire_ongrid(self.s(pin).w("i"))
+                wire_ongrid(resistor.pads[0].w("o"))
+                resistor.pads[1].w("o -")
             return resistor
 
         positions = cc_positions or (None, None)
