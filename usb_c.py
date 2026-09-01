@@ -60,7 +60,7 @@ class USBC(cu.Part):
             p = baseline.copy().goxy(d * 8.65 / 2, 4.2)
             plated_slot(p, 2.1)
 
-    def hex_escape(self):
+    def hex_escape(self, cc_positions=None):
         power_width = 2 * self.board.trace
         for name in ("A1/B12", "B1/A12"):
             self.s(name).setwidth(power_width).w("o -")
@@ -77,11 +77,14 @@ class USBC(cu.Part):
         self.s("B6").copy().w("o f 0.4 l 90").goto(
             self.s("A6"), twist=True).wire()
 
-        def cc_pulldown(pin, north=0):
-            center = self.s(pin).copy().w(
-                "o f 2 l 90 f 0.65 l 90").setname(None)
-            center = self.board.DC(
-                (center.xy[0], center.xy[1] + north), center.dir)
+        def cc_pulldown(pin, north=0, position=None):
+            if position is None:
+                center = self.s(pin).copy().w(
+                    "o f 2 l 90 f 0.65 l 90").setname(None)
+                center = self.board.DC(
+                    (center.xy[0], center.xy[1] + north), center.dir)
+            else:
+                center = self.board.DC(position)
             resistor = cu.R0402(
                 center, "5K1", source={"LCSC": "C25905"})
             self.s(pin).copy().w("o").goto(
@@ -89,7 +92,8 @@ class USBC(cu.Part):
             resistor.pads[1].w("o -")
             return resistor
 
-        r5 = cc_pulldown("A5", north=0.4)
-        r6 = cc_pulldown("B5", north=0.2)
+        positions = cc_positions or (None, None)
+        r5 = cc_pulldown("A5", north=0.4, position=positions[0])
+        r6 = cc_pulldown("B5", north=0.2, position=positions[1])
 
         return (r5, r6)

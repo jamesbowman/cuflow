@@ -23,6 +23,9 @@ from hexboard import HexBoard, wire_ongrid
 hex.set_grid_size(0.3)
 
 ROUTING = 0
+LCD_ROUTING = 1
+SERIAL_ROUTING = ("GPIO8", "GPIO9", "GPIO12", "GPIO13")
+CAPS = 0
 
 used_pins = [
 # "SWCLK",    # Module_Serial_Debug.SWCLK
@@ -106,9 +109,9 @@ class HexRP2040(RP2040):
         banks = self.escape(used_pins)
 
         fanout_ongrid(cu.River(brd, banks[0][0:2]).w("f .5"))
-        fanout_ongrid(cu.River(brd, banks[0][-4:-2]).w("f 0.8 r 60"))
-        fanout_ongrid(cu.River(brd, banks[0][-2:]).w(""))
-        fanout_ongrid(cu.River(brd, banks[1][:4 ]).right(30))
+        # fanout_ongrid(cu.River(brd, banks[0][-4:-2]).w("f 0.8 r 60"))
+        # fanout_ongrid(cu.River(brd, banks[0][-2:]).w(""))
+        # fanout_ongrid(cu.River(brd, banks[1][:4 ]).right(30))
         fanout_ongrid(cu.River(brd, banks[1][5:7]).w("f 0.52 l 30")).hex("").wire()
         fanout_ongrid(cu.River(brd, banks[3][:1]).w("f 0.5 r 30"))
         fanout_ongrid(cu.River(brd, banks[3][1:3]).w("f 0.4 l 30"))
@@ -116,6 +119,18 @@ class HexRP2040(RP2040):
         for nm in ("XIN", ):
             wire_ongrid(self.s(nm))
         self.pads[0].w("-").wire()
+
+        # Serial
+        wire_ongrid(self.s("GPIO8")).hex("f").wire()
+        wire_ongrid(self.s("GPIO9")).hex("3f").wire()
+        wire_ongrid(self.s("GPIO12")).hex("f r 3f / 3f / 12f").wire()
+        wire_ongrid(self.s("GPIO13")).hex("6f").wire()
+
+        # LCD
+        wire_ongrid(self.s("GPIO10")).hex("f /")
+        wire_ongrid(self.s("GPIO11")).hex("l /")
+        wire_ongrid(self.s("GPIO14")).hex("f /")
+        wire_ongrid(self.s("GPIO15")).hex("f /")
 
 class HexW25Q128(cu.SOIC8):
     source = {'LCSC': 'C131025'}
@@ -256,7 +271,7 @@ class SMT6(cu.Part):
                 p.copy().w("o -")
             elif nm == "VCC":
                 p.w("o +")
-            elif nm in ("TX", "RX", "RTS"):
+            elif nm == "TX":
                 wire_ongrid(p.w("i"))
             else:
                 wire_ongrid(p.w("o"))
@@ -338,7 +353,7 @@ def td2f():
 
     origin =  Hex.from_xy(21, 20)
     xy = origin.to_plane()
-    dc = brd.DC(xy)
+    dc = brd.DC((xy[0] + 1.5, xy[1] - 2.5))
 
     if 1:
         u1 = HexRP2040(dc.left(60))
@@ -382,7 +397,7 @@ def td2f():
         j2.pads[0].setname("GND").w("o -")
         wire_ongrid(j2.pads[1].w("f 1"))
 
-    j2 = pogo_pads(brd.DC((28, 19.5)).right(180), "3")
+    j2 = pogo_pads(brd.DC((28.8, 19.5)).right(180), "3")
     j2.inBOM = False
     names = ('SWCLK', '0', 'SWD')
     for (p, nm) in zip(j2.pads, names):
@@ -430,7 +445,7 @@ def td2f():
         cn = ucap(p, val)
         wire_ongrid(cn.pads[1].w("o f .2"))
         return cn
-    if 1:
+    if CAPS:
         c1 = cap(brd.DC((9, 14)))
         c2 = cap(brd.DC((26.5, 25.6)).right(180))
         c3 = cap(brd.DC((26.5, 24.1)).right(180))
@@ -438,12 +453,19 @@ def td2f():
         c5 = cap(brd.DC((15, 16.5)).left(60))
 
         c6 = cap(brd.DC((6, 24.5)).left(0), '1uF')
-        c7 = hcap(brd.DC((6, 23.0)), '1uF')
 
-        c8 = hcap(brd.DC((22, 28)).left(180), '1uF')
-        c9 = hcap(brd.DC((22, 26.5)).left(180), '1uF')
-        u1.s("VREG_VOUT").hex("r 5 f").wire()
+    c7 = hcap(brd.DC((6, 23.0)), '1uF')
 
+    c8 = hcap(brd.DC((22, 27)).left(180), '1uF')
+    c9 = hcap(brd.DC((22, 26)).left(180), '1uF')
+    if not CAPS:
+        for capacitor, designator in ((c7, "C7"), (c8, "C8"), (c9, "C9")):
+            capacitor.id = designator
+            for pad in capacitor.pads:
+                pad.part = designator
+    u1.s("VREG_VOUT").hex("r 5 f").wire()
+
+    if CAPS:
         c10 = cu.C0603(brd.DC((6, 5)).left(90), '10 uF, 16V')
         c10.pads[0].setname("GND").w("o -")
         c10.pads[1].setname("VCC").w("o +")
@@ -460,14 +482,86 @@ def td2f():
         wire_ongrid(r1.pads[0].w("o / f .4"))
 
     if 1:
-        h = Hex.from_xy(12, 23.5)
-        r2 = cu.R0402(brd.DC(h.to_plane()), "270")
-        h += Hex(0, -3)
-        r3 = cu.R0402(brd.DC(h.to_plane()), "270")
+        r2 = cu.R0402(brd.DC((15, 21)), "270")
+        r3 = cu.R0402(brd.DC((15, 20)), "270")
         for p in r2.pads + r3.pads:
             wire_ongrid(p.w("o f 0"))
 
-        r4, r5 = j1.hex_escape()
+        r4, r5 = j1.hex_escape(
+            cc_positions=((22, 28), (22, 29)))
+
+    airwire_nets = (
+        (j1.s("A4/B9"), u3.s("5V"), c7.pads[1]),
+        (c8.pads[1], c9.pads[1], u1.s("VREG_VOUT")),
+        (u2.s("CS"), u1.s("QSPI_SS_N")),
+        (u2.s("IO1"), u1.s("QSPI_SD1")),
+        (u2.s("IO2"), u1.s("QSPI_SD2")),
+        (u2.s("IO0"), u1.s("QSPI_SD0")),
+        (u2.s("CLK"), u1.s("QSPI_SCLK")),
+        (u2.s("IO3"), u1.s("QSPI_SD3")),
+        (j1.s("A7"), r2.pads[0]),
+        (j1.s("B6"), r3.pads[0]),
+        (u1.s("USB_DM"), r2.pads[1]),
+        (u1.s("USB_DP"), r3.pads[1]),
+        (u1.s("GPIO14"), u4.s("SCL")),
+        (u1.s("GPIO15"), u4.s("SDA")),
+        (u1.s("GPIO10"), u4.s("D/C")),
+        (u1.s("GPIO11"), u4.s("RESET")),
+        (r1.pads[0], u4.s("LEDA")),
+        (u1.s("GPIO8"), j3.s("TX")),
+        (u1.s("GPIO9"), j3.s("RX")),
+        (u1.s("GPIO13"), j3.s("RTS")),
+        (u1.s("GPIO12"), j3.s("DTR")),
+        (u1.s("XIN"), y1.s("CLK")),
+        (u1.s("SWDIO"), j2.s("SWD")),
+        (u1.s("SWCLK"), j2.s("SWCLK")),
+    )
+
+    lcd_routes = (
+        (u1.s("GPIO14"), u4.s("SCL")),
+        (u1.s("GPIO15"), u4.s("SDA")),
+        (u1.s("GPIO10"), u4.s("D/C")),
+        (u1.s("GPIO11"), u4.s("RESET")),
+    )
+
+    serial_routes = (
+        (u1.s("GPIO8"), j3.s("TX")),
+        (u1.s("GPIO9"), j3.s("RX")),
+        (u1.s("GPIO13"), j3.s("RTS")),
+        (u1.s("GPIO12"), j3.s("DTR")),
+    )
+
+    if (LCD_ROUTING or SERIAL_ROUTING) and not ROUTING:
+        brd.hex_setup()
+        if LCD_ROUTING:
+            print("Starting LCD route")
+            for source, target in lcd_routes:
+                assert source.layer == target.layer == "GBL"
+                brd.hex_route(source, target)
+        if SERIAL_ROUTING:
+            print("Starting serial route")
+            selected_serial_routes = (
+                (source, target)
+                for source, target in serial_routes
+                if source.name in SERIAL_ROUTING
+            )
+            for source, target in selected_serial_routes:
+                assert source.layer == target.layer == "GTL"
+
+            serial_by_gpio = {
+                source.name: (source, target)
+                for source, target in serial_routes
+            }
+            if "GPIO12" in SERIAL_ROUTING:
+                dtr_source, dtr_target = serial_by_gpio["GPIO12"]
+                brd.hex_route(dtr_target, dtr_source)
+
+            for name in ("GPIO9", "GPIO8", "GPIO13"):
+                if name in SERIAL_ROUTING:
+                    source, target = serial_by_gpio[name]
+                    brd.hex_route(source, target)
+        brd.hex_render()
+        brd.wire_routes()
 
     if ROUTING:
         # Move these for VCC fill clearance
@@ -553,6 +647,9 @@ def td2f():
 
         brd.hex_render()
         brd.wire_routes()
+
+    airwire_records = brd.add_airwires(airwire_nets)
+    brd.print_airwire_report(airwire_records)
 
     if 1:
         brd.fill()
