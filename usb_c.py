@@ -108,7 +108,6 @@ class USBC(cu.Part):
                 resistor.pads[1].w("o -")
             else:
                 wire_ongrid(self.s(pin).w("i"))
-                wire_ongrid(resistor.pads[0].w("o"))
                 resistor.pads[1].w("o -")
             return resistor
 

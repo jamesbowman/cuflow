@@ -282,7 +282,8 @@ class HexBoard(cu.Board):
                 neighbor_cell = tuple(neighbor)
                 if (neighbor_cell not in self.valid_cells or
                         neighbor_cell in previous or
-                        blocked[neighbor.q, neighbor.r]):
+                        (neighbor_cell not in target_cells and
+                         blocked[neighbor.q, neighbor.r])):
                     continue
                 previous[neighbor_cell] = cell
                 pending.append(neighbor_cell)

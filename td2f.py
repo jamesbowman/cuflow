@@ -576,8 +576,6 @@ def td2f():
         r3 = cu.R0402(
             brd.DC(r3_cell.to_plane()), "270",
             source={"LCSC": "C25099"})
-        for p in r2.pads + r3.pads:
-            wire_ongrid(p.w("o f 0"))
 
         r4, r5 = j1.hex_escape(
             cc_positions=(r4_cell.to_plane(), r5_cell.to_plane()),
@@ -654,6 +652,8 @@ def td2f():
     )
 
     usb_dplus_net = (r3.pads[0], j1.s("A6"), j1.s("B6"))
+    usb_dplus_route_net = (
+        brd.pad_endpoint(r3.pads[0]), j1.s("A6"), j1.s("B6"))
     usb_dminus_route = (r2.pads[0], j1.s("B7"))
     usb_cc_routes = (
         (j1.s("A5"), r4.pads[0]),
@@ -679,7 +679,7 @@ def td2f():
             print("Starting USB CC route")
             for source, target in usb_cc_routes:
                 assert source.layer == target.layer == "GTL"
-                brd.hex_route(source, target)
+                brd.hex_route(source, brd.pad_endpoint(target))
         if VREG_ROUTING:
             print("Starting VREG route")
             assert all(terminal.layer == "GTL" for terminal in vreg_net)
@@ -734,14 +734,14 @@ def td2f():
             print("Starting USB MCU route")
             for source, target in usb_mcu_routes:
                 assert source.layer == target.layer
-                brd.hex_route(source, target)
+                brd.hex_route(source, brd.pad_endpoint(target))
         if USB_CONNECTOR_ROUTING:
             print("Starting USB connector route")
             assert all(terminal.layer == "GTL" for terminal in usb_dplus_net)
-            brd.hex_route_net(usb_dplus_net)
+            brd.hex_route_net(usb_dplus_route_net)
             source, target = usb_dminus_route
             assert source.layer == target.layer == "GTL"
-            brd.hex_route(source, target)
+            brd.hex_route(brd.pad_endpoint(source), target)
         brd.hex_render()
         brd.wire_routes()
 
@@ -793,10 +793,10 @@ def td2f():
         if 0:
             brd.hex_route(j2.pads[1], u2.s("CS"))
 
-        brd.hex_route(j1.s("A7"), r2.pads[0])
-        brd.hex_route(j1.s("B6"), r3.pads[0])
-        brd.hex_route(u1.s("USB_DM"), r2.pads[1])
-        brd.hex_route(u1.s("USB_DP"), r3.pads[1])
+        brd.hex_route(j1.s("A7"), brd.pad_endpoint(r2.pads[0]))
+        brd.hex_route(j1.s("B6"), brd.pad_endpoint(r3.pads[0]))
+        brd.hex_route(u1.s("USB_DM"), brd.pad_endpoint(r2.pads[1]))
+        brd.hex_route(u1.s("USB_DP"), brd.pad_endpoint(r3.pads[1]))
 
         for nm in "SCL SDA RESET D/C".split():
             note(u4.s(nm), nm)

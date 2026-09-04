@@ -255,6 +255,40 @@ class HexRouteNetWidthTests(unittest.TestCase):
              (("C1", "1"), ("C2", "1"))],
         )
 
+    def test_pad_source_can_reach_plain_destination_on_copper(self):
+        board = HexBoard(
+            (12, 12),
+            trace=0.1,
+            space=0.2,
+            via_hole=0.3,
+            via=0.6,
+            via_space=0.1,
+            silk=0.1,
+        )
+        pad_cell = Hex.from_xy_fine(2, 2)
+        pad_center = pad_cell.to_plane()
+        pad = board.DC(pad_center).setlayer("GTL")
+        pad.part = "R1"
+        pad.setname("1")
+        pad.boundary = sg.box(
+            pad_center[0] - 0.65, pad_center[1] - 0.6,
+            pad_center[0] + 0.65, pad_center[1] + 0.6,
+        )
+        board.layers["GTL"].add(pad.boundary, pad.name)
+
+        target_cell = Hex.from_xy_fine(10, 2)
+        target = board.DC(target_cell.to_plane()).setlayer("GTL")
+        target.part = "J1"
+        target.setname("A7")
+        board.layers["GTL"].add(
+            sg.Point(target.xy).buffer(board.trace / 2), target.name)
+        board.hex_setup()
+
+        route = board.hex_route(board.pad_endpoint(pad), target)
+
+        self.assertEqual(tuple(route[0]), tuple(target_cell))
+        self.assertIn(tuple(route[-1]), board.pad_hex_cells(pad))
+
 
 if __name__ == "__main__":
     unittest.main()
