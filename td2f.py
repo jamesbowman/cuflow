@@ -191,11 +191,6 @@ class HexW25Q128(cu.SOIC8b):
                 p.w("i -")
             elif p.name == "VCC":
                 p.w("i +")
-            else:
-                # p.copy().w("o f 0.5").ctext(p.name, scale = 0.4)
-                p.w("o f .1")
-                wire_ongrid(p)
-                p.wire()
 
 
 class SOT23_LDO(sot.SOT23):
@@ -316,10 +311,6 @@ class SMT6(cu.Part):
                 p.copy().w("o -")
             elif nm == "VCC":
                 p.w("o +")
-            elif nm == "TX":
-                wire_ongrid(p.w("i"))
-            else:
-                wire_ongrid(p.w("o"))
 
 class SMD_3225_4P(cu.Part):
     family = "Y"
@@ -712,14 +703,14 @@ def td2f():
                 if name in SERIAL_ROUTING:
                     source, target = serial_by_gpio[name]
                     if name == "GPIO12":
-                        brd.hex_route(target, source)
+                        brd.hex_route(brd.pad_endpoint(target), source)
                     else:
-                        brd.hex_route(source, target)
+                        brd.hex_route(source, brd.pad_endpoint(target))
         if FLASH_ROUTING:
             print("Starting flash route")
             for source, target in flash_routes:
                 assert source.layer == target.layer
-                brd.hex_route(source, target)
+                brd.hex_route(target, brd.pad_endpoint(source))
         if CLOCK_ROUTING:
             print("Starting clock route")
             source, target = clock_route
@@ -769,7 +760,6 @@ def td2f():
         note(DC, "DC")
 
         u1.s("GPIO8").hex("3f / f").wire()
-        j3.s("TX").hex("3f r f l 4f / f").wire()
 
         t0 = time.monotonic()
         brd.hex_setup()
@@ -784,14 +774,14 @@ def td2f():
         brd.hex_route(brd.pad_endpoint(c9.pads[1]), u1.s("VREG_VOUT"))
 
         if 1:
-            brd.hex_route(u2.s("CS"), u1.s("QSPI_SS_N"))
-            brd.hex_route(u2.s("IO1"), u1.s("QSPI_SD1"))
-            brd.hex_route(u2.s("IO2"), u1.s("QSPI_SD2"))
-            brd.hex_route(u2.s("IO0"), u1.s("QSPI_SD0"))
-            brd.hex_route(u2.s("CLK"), u1.s("QSPI_SCLK"))
-            brd.hex_route(u2.s("IO3"), u1.s("QSPI_SD3"))
+            brd.hex_route(u1.s("QSPI_SS_N"), brd.pad_endpoint(u2.s("CS")))
+            brd.hex_route(u1.s("QSPI_SD1"), brd.pad_endpoint(u2.s("IO1")))
+            brd.hex_route(u1.s("QSPI_SD2"), brd.pad_endpoint(u2.s("IO2")))
+            brd.hex_route(u1.s("QSPI_SD0"), brd.pad_endpoint(u2.s("IO0")))
+            brd.hex_route(u1.s("QSPI_SCLK"), brd.pad_endpoint(u2.s("CLK")))
+            brd.hex_route(u1.s("QSPI_SD3"), brd.pad_endpoint(u2.s("IO3")))
         if 0:
-            brd.hex_route(j2.pads[1], u2.s("CS"))
+            brd.hex_route(j2.pads[1], brd.pad_endpoint(u2.s("CS")))
 
         brd.hex_route(j1.s("A7"), brd.pad_endpoint(r2.pads[0]))
         brd.hex_route(j1.s("B6"), brd.pad_endpoint(r3.pads[0]))
@@ -812,10 +802,10 @@ def td2f():
         note(u1.s("GPIO8"), "TX")
 
         if 1:
-            brd.hex_route(u1.s("GPIO8"), j3.s("TX"))
-            brd.hex_route(u1.s("GPIO9"), j3.s("RX"))
-            brd.hex_route(u1.s("GPIO13"), j3.s("RTS"))
-            brd.hex_route(u1.s("GPIO12"), j3.s("DTR"))
+            brd.hex_route(u1.s("GPIO8"), brd.pad_endpoint(j3.s("TX")))
+            brd.hex_route(u1.s("GPIO9"), brd.pad_endpoint(j3.s("RX")))
+            brd.hex_route(u1.s("GPIO13"), brd.pad_endpoint(j3.s("RTS")))
+            brd.hex_route(brd.pad_endpoint(j3.s("DTR")), u1.s("GPIO12"))
 
         brd.hex_route(u1.s("XIN"), brd.pad_endpoint(y1.s("CLK")))
 
