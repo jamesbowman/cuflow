@@ -102,10 +102,10 @@ class HexBoard(cu.Board):
         self.valid_cells = frozenset(
             (h.q, h.r) for h in self.route_hexes)
         coordinates = np.asarray([h.to_plane() for h in self.route_hexes])
-        self.route_radius = (
-            self.hr
-            if not hasattr(self, "hex_clearance")
-            else self.trace / 2 + self.hex_clearance
+        self.route_radius = max(
+            self.hr,
+            self.trace / 2 + getattr(
+                self, "hex_clearance", self.hr - self.trace / 2),
         )
         route_disks = shapely.buffer(
             shapely.points(coordinates), self.route_radius, quad_segs=16)

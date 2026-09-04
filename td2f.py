@@ -38,17 +38,17 @@ PREFLIGHT_NAME_ATLAS = {
 }
 
 ROUTING = 0
-LCD_ROUTING = 0
-SERIAL_ROUTING = ()
-FLASH_ROUTING = 0
-CLOCK_ROUTING = 0
-DEBUG_ROUTING = 0
-USB_MCU_ROUTING = 0
-USB_CONNECTOR_ROUTING = 0
-USB_CC_ROUTING = 0
-VREG_ROUTING = 0
-BACKLIGHT_ROUTING = 0
-POWER_ROUTING = 0
+LCD_ROUTING = 1
+SERIAL_ROUTING = ("GPIO12", "GPIO9", "GPIO8", "GPIO13")
+FLASH_ROUTING = 1
+CLOCK_ROUTING = 1
+DEBUG_ROUTING = 1
+USB_MCU_ROUTING = 1
+USB_CONNECTOR_ROUTING = 1
+USB_CC_ROUTING = 1
+VREG_ROUTING = 1
+BACKLIGHT_ROUTING = 1
+POWER_ROUTING = 1
 CAPS = 1
 
 used_pins = [
@@ -127,10 +127,15 @@ def fanout_ongrid(river):
     return river
 
 class HexRP2040(RP2040):
+    def hookup_usb_vdd(self, pad):
+        wire_ongrid(pad.w("o")).via("GL3")
+
     def hex_escape(self):
         brd = self.board
 
-        banks = self.escape(used_pins, four_layer=True)
+        banks = self.escape(
+            used_pins, four_layer=True,
+            usb_vdd_via_on_iovdd=True)
 
         # fanout_ongrid(cu.River(brd, banks[0][0:2]).w("f .5"))
         # fanout_ongrid(cu.River(brd, banks[0][-4:-2]).w("f 0.8 r 60"))
@@ -149,13 +154,13 @@ class HexRP2040(RP2040):
         wire_ongrid(self.s("SWCLK")).wire()
 
         # USB
-        wire_ongrid(self.s("USB_DM").w("o")).hex("f").wire()
-        wire_ongrid(self.s("USB_DP")).hex("f").wire()
+        wire_ongrid(self.s("USB_DM").w("o")).hex("").wire()
+        wire_ongrid(self.s("USB_DP")).hex("").wire()
 
         # Serial
         wire_ongrid(self.s("GPIO8")).hex("f").wire()
         wire_ongrid(self.s("GPIO9")).hex("3f").wire()
-        wire_ongrid(self.s("GPIO12")).hex("f r 3f / 3f / 11f").wire()
+        wire_ongrid(self.s("GPIO12")).hex("r l r 3f / 3f / 5f").wire()
         wire_ongrid(self.s("GPIO13")).hex("l r").wire()
 
         # LCD
@@ -164,7 +169,7 @@ class HexRP2040(RP2040):
         wire_ongrid(self.s("GPIO14")).hex("l r / f").wire()
         wire_ongrid(self.s("GPIO15")).hex("l /")
 
-class HexW25Q128(cu.SOIC8):
+class HexW25Q128(cu.SOIC8b):
     source = {'LCSC': 'C131025'}
     mfr = 'W25Q16JVSSIQ'
     footprint = "SOIC-8-208mil"
@@ -320,7 +325,7 @@ class SMD_3225_4P(cu.Part):
         for _ in range(2):
             dc.push()
             dc.goxy(-1.75 / 2, 2.20 / 2).right(180)
-            self.train(dc, 2, lambda: self.rpad(dc, 1.2, 0.95), 2.20)
+            self.train(dc, 2, lambda: self.rpad(dc, 1.3, 1.2), 2.20)
             dc.pop()
             dc.right(180)
         [p.setname(nm) for p,nm in zip(self.pads, ["", "GND", "CLK", "VDD"])]
@@ -334,10 +339,10 @@ class Osc_12MHz(SMD_3225_4P):
         return self.center.copy().right(90)
 
     def escape(self):
-        self.s("GND").w("o -")
+        self.s("GND").w("r 90 f 0.6 -")
         self.s("VDD").setname("VCC")
-        self.s("VCC").w("o +")
-        wire_ongrid(self.s("CLK").w("i"))
+        self.s("VCC").w("r 90 f 0.6 +")
+        wire_ongrid(self.s("CLK").w("r 90 f 0.6"))
 
 class pogo_pads(dip.PTH):
     family  = "J"
@@ -425,7 +430,9 @@ def td2f():
 
     if 1:
         u2 = HexW25Q128(
-            brd.DC(Hex.from_xy(10, 17.5).to_plane()).right(180 + 0))
+            brd.DC(
+                (Hex.from_xy(10, 17.5) + Hex(0, -1)).to_plane()
+            ).right(180 + 0))
         u2.hex_escape()
 
     j1 = USBC(brd.DC((15, 30)).right(180))
@@ -539,7 +546,7 @@ def td2f():
         c10.pads[0].setname("GND").w("o -")
         c10.pads[1].setname("VCC").w("o +")
 
-        y1_cap_cell = Hex.from_xy_fine(27.5, 9.6)
+        y1_cap_cell = Hex.from_xy_fine(27.5, 9.6) + Hex(2, -4)
         c11 = cap(brd.DC(y1_cap_cell.to_plane()).right(180))
 
         # Local decoupling for the RP2040's internal regulator input.
@@ -547,7 +554,8 @@ def td2f():
             brd.DC(vreg_vin_cap_cell.to_plane()).right(30), '1uF')
 
     if 1:
-        y1 = Osc_12MHz(brd.DC((27.5, 12)).right(180))
+        y1_cell = Hex.from_xy_fine(27.5, 12) + Hex(1, -2)
+        y1 = Osc_12MHz(brd.DC(y1_cell.to_plane()).right(180))
         y1.escape()
 
     if 1:
@@ -694,14 +702,13 @@ def td2f():
                 source.name: (source, target)
                 for source, target in serial_routes
             }
-            if "GPIO12" in SERIAL_ROUTING:
-                dtr_source, dtr_target = serial_by_gpio["GPIO12"]
-                brd.hex_route(dtr_target, dtr_source)
-
-            for name in ("GPIO9", "GPIO8", "GPIO13"):
+            for name in ("GPIO13", "GPIO9", "GPIO8", "GPIO12", ):
                 if name in SERIAL_ROUTING:
                     source, target = serial_by_gpio[name]
-                    brd.hex_route(source, target)
+                    if name == "GPIO12":
+                        brd.hex_route(target, source)
+                    else:
+                        brd.hex_route(source, target)
         if FLASH_ROUTING:
             print("Starting flash route")
             for source, target in flash_routes:

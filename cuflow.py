@@ -1953,6 +1953,9 @@ class BT815(QFN64):
 class SOIC(Part):
     family = "U"
     footprint = "SOIC-8"
+    pad_width = 0.60
+    pad_length = 2.20
+
     def place(self, dc):
 
         self.chamfered(dc, self.A, self.B)
@@ -1962,7 +1965,10 @@ class SOIC(Part):
             dc.left(90)
             dc.forward(self.C / 2)
             dc.left(90)
-            self.train(dc, self.N // 2, lambda: self.rpad(dc, 0.60, 2.20), 1.27)
+            self.train(
+                dc, self.N // 2,
+                lambda: self.rpad(dc, self.pad_width, self.pad_length),
+                1.27)
             dc.pop()
             dc.right(180)
 
@@ -1975,6 +1981,14 @@ class SOIC8(SOIC):
     D = 3.81
     G = 3.0
     Z = 7.4
+
+class SOIC8b(SOIC8):
+    """SOIC-8-208mil land pattern used by JLCPCB part C131025."""
+
+    footprint = "SOIC-8-208mil"
+    C = 7.060
+    pad_width = 0.63
+    pad_length = 2.25
 
 class SOIC28(SOIC):
     N = 28

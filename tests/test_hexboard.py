@@ -106,6 +106,22 @@ class HexRouteNetWidthTests(unittest.TestCase):
             int(board.blocked["GTL"].sum()),
         )
 
+    def test_hex_clearance_does_not_shrink_cell_occupancy_radius(self):
+        board = HexBoard(
+            (12, 12),
+            trace=0.1,
+            space=0.2,
+            via_hole=0.3,
+            via=0.4,
+            via_space=0.1,
+            silk=0.1,
+        )
+        board.hex_clearance = 0.01
+
+        board.hex_setup()
+
+        self.assertEqual(board.route_radius, board.hr)
+
     def test_routes_four_terminal_net(self):
         board = HexBoard(
             (12, 12),

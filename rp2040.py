@@ -111,7 +111,12 @@ class RP2040(QFN56):
         for i,nm in RP2040pins:
             self.pads[i].setname(nm)
 
-    def escape(self, used_pins, four_layer=False):
+    def hookup_usb_vdd(self, pad):
+        pad.w("o +")
+
+    def escape(
+            self, used_pins, four_layer=False,
+            usb_vdd_via_on_iovdd=False):
         brd = self.board
         for p in self.pads:
             nm = p.name
@@ -141,8 +146,12 @@ class RP2040(QFN56):
         vccs[6].goto(vccs[5], twist = True).wire()
         vccs[5].w("o +")
         vccs[7].goto(vccs[6]).wire()
-        vccs[9].goto(vccs[8]).wire()
-        vccs[8].w("o +")
+        if usb_vdd_via_on_iovdd:
+            vccs[9].copy().goto(vccs[8]).wire()
+            self.hookup_usb_vdd(vccs[9])
+        else:
+            vccs[9].goto(vccs[8]).wire()
+            self.hookup_usb_vdd(vccs[8])
 
         banks = ([], [], [], [])
         for i,p in enumerate(self.pads[1:]):
