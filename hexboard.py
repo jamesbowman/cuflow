@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import shapely
 import shapely.geometry as sg
@@ -404,5 +406,21 @@ def wire_ongrid(p):
         p.wire()
     else:
         p.goyx(dx, dy).wire()
+    p.dir = 30 + 60 * round((p.dir - 30) / 60)
+    return p
+
+def wire_ongrid2(p):
+    """Join the selected forward hex center with one straight segment."""
+    (dx, dy) = best_forward(p)
+    (x, y) = p.xy
+    a = math.radians(p.dir)
+    s = math.sin(a)
+    c = math.cos(a)
+    p.xy = (
+        x + dx * c + dy * s,
+        y + dy * c - dx * s,
+    )
+    p.path.append(p.xy)
+    p.wire()
     p.dir = 30 + 60 * round((p.dir - 30) / 60)
     return p

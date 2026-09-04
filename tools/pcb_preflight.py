@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import csv
+import hashlib
 import html
 import json
 import math
@@ -39,6 +41,7 @@ class Audit:
         self.pad_rows: list[dict[str, str]] = []
         self.net_rows: list[dict[str, str]] = []
         self.device_rows: list[dict[str, Any]] = []
+        self.netlist_hash: str | None = None
 
     def add(
             self, name: str, passed: bool, detail: str,
@@ -60,6 +63,74 @@ def load_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"Expected a JSON object in {path}")
     return value
+
+
+def canonicalize_json_sequences(value: Any) -> Any:
+    """Return JSON data with mappings and every sequence stably ordered."""
+    if isinstance(value, dict):
+        return {
+            key: canonicalize_json_sequences(value[key])
+            for key in sorted(value)
+        }
+    if isinstance(value, list):
+        items = [canonicalize_json_sequences(item) for item in value]
+        return sorted(
+            items,
+            key=lambda item: json.dumps(
+                item, sort_keys=True, separators=(",", ":"),
+                ensure_ascii=False),
+        )
+    return value
+
+
+def stable_json_hash(document: dict[str, Any]) -> str:
+    """Hash JSON after recursively sorting mappings and every sequence."""
+    canonical = canonicalize_json_sequences(document)
+    payload = json.dumps(
+        canonical, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def discovered_netlist_document(
+        board: str, parsed_nets: list[dict[str, Any]]) -> dict[str, Any]:
+    """Describe physical connectivity without geometry or generated net IDs."""
+    terminals_by_physical_net: dict[str, list[dict[str, Any]]] = {}
+    unattached: list[dict[str, Any]] = []
+    for net in parsed_nets:
+        for terminal in net["terminals"]:
+            identity = terminal["identity"]
+            physical_net = terminal.get("physical_net")
+            if physical_net is None:
+                unattached.append(identity)
+            else:
+                terminals_by_physical_net.setdefault(
+                    physical_net, []).append(identity)
+    return {
+        "format": "cuflow-discovered-netlist-1",
+        "board": board,
+        "nets": [
+            {"terminals": terminals}
+            for terminals in terminals_by_physical_net.values()
+        ],
+        "unattached": unattached,
+    }
+
+
+def optional_source_literal(path: Path, variable: str) -> Any | None:
+    """Read an optional literal module-level assignment without importing."""
+    module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for statement in module.body:
+        if not isinstance(statement, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = (
+            statement.targets if isinstance(statement, ast.Assign)
+            else (statement.target,))
+        if any(
+                isinstance(target, ast.Name) and target.id == variable
+                for target in targets):
+            return ast.literal_eval(statement.value)
+    return None
 
 
 def read_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
@@ -453,8 +524,19 @@ def audit_copper_topology(
 
     netlist_file = profile.get("netlist_file")
     if netlist_file is not None:
+        expected_hash = None
+        expected_hash_error = None
+        hash_variable = profile.get(
+            "netlist_hash_variable", "PREFLIGHT_NETLIST_HASH")
+        try:
+            expected_hash = optional_source_literal(
+                relative_path(profile["source"]), hash_variable)
+        except (KeyError, OSError, SyntaxError, TypeError, ValueError) as error:
+            expected_hash_error = str(error)
         audit_intended_netlist(
-            audit, relative_path(netlist_file), board, topology)
+            audit, relative_path(netlist_file), board, topology,
+            expected_hash=expected_hash,
+            expected_hash_error=expected_hash_error)
 
     clearance = float(config.get("net_clearance_mm", 0.1))
     clearance_violations = net_clearance_violations(topology, clearance)
@@ -571,7 +653,9 @@ def audit_copper_topology(
 
 
 def audit_intended_netlist(
-        audit: Audit, path: Path, board: str, topology: Any) -> None:
+        audit: Audit, path: Path, board: str, topology: Any,
+        expected_hash: Any = None,
+        expected_hash_error: str | None = None) -> None:
     """Compare independently declared logical nets with manufactured copper."""
     try:
         document = load_json(path)
@@ -661,6 +745,11 @@ def audit_intended_netlist(
                 continue
             terminal_owners[key] = net_id
             parsed_terminals.append({
+                "identity": {
+                    "designator": designator,
+                    "pad_index": pad_index,
+                    "pad": pad,
+                },
                 "label": f"{designator}.{pad or pad_index}",
                 "layer": layer,
                 "xy": (float(x), float(y)),
@@ -705,6 +794,34 @@ def audit_intended_netlist(
         "exactly one physical net: " + "; ".join(attachment_errors[:20]) +
         (" ..." if len(attachment_errors) > 20 else ""),
     )
+
+    discovered_document = discovered_netlist_document(board, parsed_nets)
+    actual_hash = stable_json_hash(discovered_document)
+    audit.netlist_hash = actual_hash
+    if expected_hash_error is not None:
+        audit.add(
+            "Discovered netlist connectivity hash", False,
+            f"SHA-256 {actual_hash}; cannot read expected hash: "
+            f"{expected_hash_error}")
+    elif expected_hash is None:
+        audit.add(
+            "Discovered netlist connectivity hash", True,
+            f"SHA-256 {actual_hash}; no expected hash configured")
+    elif (not isinstance(expected_hash, str) or
+          re.fullmatch(r"[0-9a-fA-F]{64}", expected_hash) is None):
+        audit.add(
+            "Discovered netlist connectivity hash", False,
+            f"SHA-256 {actual_hash}; expected hash is not 64 hexadecimal "
+            "characters")
+    else:
+        expected_hash = expected_hash.lower()
+        matches = actual_hash == expected_hash
+        audit.add(
+            "Discovered netlist connectivity hash", matches,
+            f"SHA-256 {actual_hash}; " +
+            ("matches configured hash" if matches else
+             f"expected {expected_hash}"),
+        )
 
     def logical_label(net: dict[str, Any]) -> str:
         return (
@@ -1129,6 +1246,7 @@ def write_report(
     result = "PASS" if audit.passed else "FAIL"
     generated = datetime.now(timezone.utc).isoformat(timespec="seconds")
     result_class = "pass" if audit.passed else "fail"
+    netlist_hash = audit.netlist_hash or "unavailable"
     toc_items = [
         ("automated-checks", "Automated Checks"),
         ("nets-by-device", "Nets By Device"),
@@ -1225,14 +1343,12 @@ def write_report(
     ul.checklist {{ margin: 0; padding: 0; list-style: none; }}
     ul.checklist li {{ margin: 7px 0; line-height: 1.45; }}
     ul.checklist input {{ margin: 0 8px 0 0; vertical-align: middle; }}
-    .mobile-break {{ display: none; }}
     @media (min-width: 1512px) {{
       .container {{ margin-left: auto; margin-right: auto; }}
     }}
     @media (max-width: 700px) {{
       .container {{ margin-left: 10px; margin-right: 10px; }}
       .muted {{ width: calc(100vw - 20px); }}
-      .mobile-break {{ display: block; }}
       header .container {{ padding: 18px 0 16px; }}
       h1 {{ font-size: 20px; }}
       th, td {{ padding: 6px 7px; }}
@@ -1247,8 +1363,8 @@ def write_report(
       <span class="status {result_class}">{result}</span>
       <span>Generated {html_cell(generated)}</span>
     </div>
-    <p class="muted">A passing automated result does not complete<span
-      class="mobile-break"></span> the manual CAM gate.</p>
+    <p class="muted">Discovered netlist SHA-256:
+      <code>{html_cell(netlist_hash)}</code></p>
   </div>
 </header>
 <main class="container">

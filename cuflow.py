@@ -263,6 +263,8 @@ class Draw(Turtle):
         r.name = self.name
         r.part = self.part
         r.width = self.width
+        if hasattr(self, "boundary"):
+            r.boundary = self.boundary
         return r
 
     def forward(self, d):

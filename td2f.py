@@ -19,7 +19,7 @@ from usb_c import USBC
 
 import hex
 from hex import Hex, axial_direction_vectors
-from hexboard import HexBoard, wire_ongrid
+from hexboard import HexBoard, wire_ongrid, wire_ongrid2
 
 hex.set_grid_size(0.41)
 
@@ -36,6 +36,10 @@ PREFLIGHT_NAME_ATLAS = {
         },
     },
 }
+
+# Update only after intentionally reviewing a connectivity change.
+PREFLIGHT_NETLIST_HASH = (
+    "0db235d53418143e560c255d922c524166c6bb4a10b2db7f5ac05983325f144c")
 
 ROUTING = 0
 LCD_ROUTING = 1
@@ -342,7 +346,7 @@ class Osc_12MHz(SMD_3225_4P):
         self.s("GND").w("r 90 f 0.6 -")
         self.s("VDD").setname("VCC")
         self.s("VCC").w("r 90 f 0.6 +")
-        wire_ongrid(self.s("CLK").w("r 90 f 0.6"))
+        wire_ongrid2(self.s("CLK").w("r 90 f 0.6"))
 
 class pogo_pads(dip.PTH):
     family  = "J"

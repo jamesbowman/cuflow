@@ -1,6 +1,8 @@
+import copy
+import json
+import re
 import tempfile
 import unittest
-import json
 from pathlib import Path
 
 import shapely.geometry as sg
@@ -9,6 +11,7 @@ from tools.pcb_preflight import (
     Audit,
     audit_intended_netlist,
     natural_pad_number_key,
+    stable_json_hash,
     write_report,
 )
 from tools.pcb_topology import build_topology
@@ -30,13 +33,134 @@ def check(audit, name):
 
 
 class IntendedNetTests(unittest.TestCase):
-    def audit_document(self, document, topology):
+    def audit_document(self, document, topology, expected_hash=None):
         audit = Audit()
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "board.net.json"
             path.write_text(json.dumps(document), encoding="utf-8")
-            audit_intended_netlist(audit, path, "board", topology)
+            audit_intended_netlist(
+                audit, path, "board", topology,
+                expected_hash=expected_hash)
         return audit
+
+    def connectivity_document(self):
+        return {
+            "format": "cuflow-netlist-1",
+            "board": "board",
+            "nets": [
+                {"id": "L001", "name": None, "terminals": [
+                    terminal("J1", 1, "A", 0.5, 0.5),
+                    terminal("U1", 1, "B", 0.5, 2.5),
+                ]},
+                {"id": "L002", "name": None, "terminals": [
+                    terminal("J2", 1, "C", 2.5, 0.5),
+                    terminal("U2", 1, "D", 2.5, 2.5),
+                ]},
+            ],
+        }
+
+    def discovered_hash(self, document, topology):
+        result = check(
+            self.audit_document(document, topology),
+            "Discovered netlist connectivity hash",
+        )
+        match = re.search(r"SHA-256 ([0-9a-f]{64})", result.detail)
+        self.assertIsNotNone(match)
+        return match.group(1)
+
+    def test_connectivity_hash_is_sequence_order_independent(self):
+        document = {
+            "format": "cuflow-discovered-netlist-1",
+            "board": "board",
+            "nets": [
+                {"terminals": [
+                    {"designator": "J1", "pad_index": 1, "pad": "A"},
+                    {"designator": "U1", "pad_index": 1, "pad": "B"},
+                ]},
+                {"terminals": [
+                    {"designator": "J2", "pad_index": 1, "pad": "C"},
+                    {"designator": "U2", "pad_index": 1, "pad": "D"},
+                ]},
+            ],
+            "unattached": [],
+        }
+        reordered = copy.deepcopy(document)
+        reordered["nets"].reverse()
+        for net in reordered["nets"]:
+            net["terminals"].reverse()
+
+        self.assertEqual(
+            stable_json_hash(document),
+            stable_json_hash(reordered),
+        )
+
+    def test_connectivity_hash_ignores_geometry_and_generated_net_ids(self):
+        document = self.connectivity_document()
+        topology = build_topology({
+            "GTL": sg.MultiPolygon((
+                sg.box(0, 0, 1, 3),
+                sg.box(2, 0, 3, 3),
+            )),
+        }, ())
+        moved = copy.deepcopy(document)
+        for index, net in enumerate(moved["nets"], 20):
+            net["id"] = f"L{index:03d}"
+            for item in net["terminals"]:
+                item["layer"] = "GBL"
+                item["x_mm"] += 10
+                item["y_mm"] += 10
+        moved_topology = build_topology({
+            "GBL": sg.MultiPolygon((
+                sg.box(10, 10, 11, 13),
+                sg.box(12, 10, 13, 13),
+            )),
+        }, ())
+
+        self.assertEqual(
+            self.discovered_hash(document, topology),
+            self.discovered_hash(moved, moved_topology),
+        )
+
+    def test_connectivity_hash_changes_when_terminal_groups_change(self):
+        document = self.connectivity_document()
+        vertical = build_topology({
+            "GTL": sg.MultiPolygon((
+                sg.box(0, 0, 1, 3),
+                sg.box(2, 0, 3, 3),
+            )),
+        }, ())
+        horizontal = build_topology({
+            "GTL": sg.MultiPolygon((
+                sg.box(0, 0, 3, 1),
+                sg.box(0, 2, 3, 3),
+            )),
+        }, ())
+
+        self.assertNotEqual(
+            self.discovered_hash(document, vertical),
+            self.discovered_hash(document, horizontal),
+        )
+
+    def test_configured_connectivity_hash_is_a_gate(self):
+        document = self.connectivity_document()
+        topology = build_topology({
+            "GTL": sg.MultiPolygon((
+                sg.box(0, 0, 1, 3),
+                sg.box(2, 0, 3, 3),
+            )),
+        }, ())
+        actual_hash = self.discovered_hash(document, topology)
+
+        matching = self.audit_document(
+            document, topology, actual_hash)
+        mismatch = self.audit_document(document, topology, "0" * 64)
+
+        self.assertTrue(check(
+            matching, "Discovered netlist connectivity hash").passed)
+        mismatch_check = check(
+            mismatch, "Discovered netlist connectivity hash")
+        self.assertFalse(mismatch_check.passed)
+        self.assertIn("expected " + "0" * 64, mismatch_check.detail)
 
     def test_distinct_logical_nets_on_one_physical_net_are_a_short(self):
         topology = build_topology({"GTL": sg.box(0, 0, 4, 1)}, ())
@@ -144,6 +268,7 @@ class HtmlReportTests(unittest.TestCase):
 
     def test_report_is_html_and_escapes_external_values(self):
         audit = Audit()
+        audit.netlist_hash = "a" * 64
         audit.add("Example <check>", True, "safe & complete")
         audit.add(
             "Clearance", False, "N001 intersects N002",
@@ -198,6 +323,11 @@ class HtmlReportTests(unittest.TestCase):
             output = report.read_text(encoding="utf-8")
 
         self.assertTrue(output.startswith("<!doctype html>"))
+        self.assertIn(
+            "Discovered netlist SHA-256:\n      <code>" + "a" * 64,
+            output,
+        )
+        self.assertNotIn("manual CAM gate", output)
         self.assertIn("Example &lt;check&gt;", output)
         self.assertIn("safe &amp; complete", output)
         self.assertIn('id="net-n001"', output)

@@ -24,6 +24,10 @@ jobs:
         run: python -m pip install -r requirements.txt
         working-directory: cuflow
 
+      - name: Run regression tests
+        run: python -m unittest discover -s tests -v
+        working-directory: cuflow
+
       - name: Build td2e2
         run: python td2e2.py
         working-directory: cuflow
