@@ -147,7 +147,14 @@ class HexRP2040(RP2040):
         # fanout_ongrid(cu.River(brd, banks[1][:4 ]).right(30))
         # fanout_ongrid(cu.River(brd, banks[3][:1]).w("f 0.5 r 30"))
         # fanout_ongrid(cu.River(brd, banks[3][1:3]).w("f 0.4 l 30"))
-        fanout_ongrid(cu.River(brd, banks[3][-6:]).left(30))
+
+        # Otherwise picks same cell as SD1
+        self.s("QSPI_SS_N").w("l 30")
+
+        for nm in (
+                "QSPI_SD3", "QSPI_SCLK", "QSPI_SD0",
+                "QSPI_SD2", "QSPI_SD1", "QSPI_SS_N"):
+            wire_ongrid2(self.s(nm))
         for nm in ("XIN", ):
             wire_ongrid2(self.s(nm))
         self.pads[0].w("-").wire()
