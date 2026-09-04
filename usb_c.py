@@ -61,7 +61,8 @@ class USBC(cu.Part):
 
     def hex_escape(
             self, cc_positions=None, bridge_dplus=True,
-            hardwire_cc=True, escape_left_vbus=False):
+            hardwire_cc=True, escape_left_vbus=False,
+            cc_rotation=0):
         power_width = 2 * self.board.trace
         for name in ("A1/B12", "B1/A12"):
             self.s(name).setwidth(power_width).w("o -")
@@ -98,7 +99,7 @@ class USBC(cu.Part):
                 center = self.board.DC(
                     (center.xy[0], center.xy[1] + north), center.dir)
             else:
-                center = self.board.DC(position)
+                center = self.board.DC(position).right(cc_rotation)
             resistor = cu.R0402(
                 center, "5K1", source={"LCSC": "C25905"})
             if hardwire_cc:

@@ -21,7 +21,7 @@ import hex
 from hex import Hex, axial_direction_vectors
 from hexboard import HexBoard, wire_ongrid
 
-hex.set_grid_size(0.3)
+hex.set_grid_size(0.41)
 
 PREFLIGHT_NAME_ATLAS = {
     "ic_roots_by_lcsc": {
@@ -38,17 +38,17 @@ PREFLIGHT_NAME_ATLAS = {
 }
 
 ROUTING = 0
-LCD_ROUTING = 1
-SERIAL_ROUTING = ("GPIO8", "GPIO9", "GPIO12", "GPIO13")
-FLASH_ROUTING = 1
-CLOCK_ROUTING = 1
-DEBUG_ROUTING = 1
-USB_MCU_ROUTING = 1
-USB_CONNECTOR_ROUTING = 1
-USB_CC_ROUTING = 1
-VREG_ROUTING = 1
-BACKLIGHT_ROUTING = 1
-POWER_ROUTING = 1
+LCD_ROUTING = 0
+SERIAL_ROUTING = ()
+FLASH_ROUTING = 0
+CLOCK_ROUTING = 0
+DEBUG_ROUTING = 0
+USB_MCU_ROUTING = 0
+USB_CONNECTOR_ROUTING = 0
+USB_CC_ROUTING = 0
+VREG_ROUTING = 0
+BACKLIGHT_ROUTING = 0
+POWER_ROUTING = 0
 CAPS = 1
 
 used_pins = [
@@ -136,7 +136,6 @@ class HexRP2040(RP2040):
         # fanout_ongrid(cu.River(brd, banks[0][-4:-2]).w("f 0.8 r 60"))
         # fanout_ongrid(cu.River(brd, banks[0][-2:]).w(""))
         # fanout_ongrid(cu.River(brd, banks[1][:4 ]).right(30))
-        fanout_ongrid(cu.River(brd, banks[1][5:7]).w("f 0.52 l 30")).hex("").wire()
         # fanout_ongrid(cu.River(brd, banks[3][:1]).w("f 0.5 r 30"))
         # fanout_ongrid(cu.River(brd, banks[3][1:3]).w("f 0.4 l 30"))
         fanout_ongrid(cu.River(brd, banks[3][-6:]).left(30))
@@ -146,6 +145,9 @@ class HexRP2040(RP2040):
 
         wire_ongrid(self.s("VREG_VOUT")).wire()
 
+        wire_ongrid(self.s("SWDIO")).hex("l").wire()
+        wire_ongrid(self.s("SWCLK")).wire()
+
         # USB
         wire_ongrid(self.s("USB_DM").w("o")).hex("f").wire()
         wire_ongrid(self.s("USB_DP")).hex("f").wire()
@@ -154,12 +156,12 @@ class HexRP2040(RP2040):
         wire_ongrid(self.s("GPIO8")).hex("f").wire()
         wire_ongrid(self.s("GPIO9")).hex("3f").wire()
         wire_ongrid(self.s("GPIO12")).hex("f r 3f / 3f / 11f").wire()
-        wire_ongrid(self.s("GPIO13")).hex("3f r").wire()
+        wire_ongrid(self.s("GPIO13")).hex("l r").wire()
 
         # LCD
         wire_ongrid(self.s("GPIO10")).hex("f /")
         wire_ongrid(self.s("GPIO11")).hex("l f /")
-        wire_ongrid(self.s("GPIO14")).hex("l / f").wire()
+        wire_ongrid(self.s("GPIO14")).hex("l r / f").wire()
         wire_ongrid(self.s("GPIO15")).hex("l /")
 
 class HexW25Q128(cu.SOIC8):
@@ -493,11 +495,11 @@ def td2f():
     if CAPS:
         hx = Hex.from_xy_fine(25, 22.2)
         c1 = cap(brd.DC(hx.to_plane()).right(30))
-        hx += Hex(0, 4)
+        hx += Hex(0, 3)
         c2 = cap(brd.DC(hx.to_plane()).right(30))
-        hx += Hex(0, 4)
+        hx += Hex(0, 3)
         c3 = cap(brd.DC(hx.to_plane()).right(30))
-        vreg_vin_cap_cell = hx + Hex(0, 4)
+        vreg_vin_cap_cell = hx + Hex(0, 3)
 
         hx = Hex.from_xy_fine(17.9, 15.0)
         # brd.DC(hx.to_plane()).mark()
@@ -508,20 +510,20 @@ def td2f():
         c6 = cap(brd.DC(c6_cell.to_plane()), '1uF')
         brd.DC((5.4, c6.center.xy[1])).ctext("C6", scale=0.5)
 
-    c7_cell = c6_cell + Hex(2, -4)
+    c7_cell = c6_cell + Hex(2, -3)
     c7 = hcap(
         brd.DC(c7_cell.to_plane()), '1uF', width=2 * brd.trace)
     if CAPS:
         brd.DC((5.4, c7.center.xy[1])).ctext("C7", scale=0.5)
 
-    r5_cell = Hex.from_xy_fine(22, 27.5)
-    block_step = Hex(2, -4)
-    r4_cell = r5_cell + block_step
-    c8_cell = r4_cell + block_step
-    c9_cell = c8_cell + block_step
+    c9_cell = Hex.from_xy_fine(22.7, 23.8) + Hex(0, 2) + Hex(-2, 0)
+    block_step = Hex(0, 3)
+    c8_cell = c9_cell + block_step
+    r4_cell = c8_cell + block_step
+    r5_cell = r4_cell + block_step
 
-    c8 = hcap(brd.DC(c8_cell.to_plane()).left(180), '1uF')
-    c9 = hcap(brd.DC(c9_cell.to_plane()).left(180), '1uF')
+    c8 = hcap(brd.DC(c8_cell.to_plane()).right(210), '1uF')
+    c9 = hcap(brd.DC(c9_cell.to_plane()).right(210), '1uF')
     brd.DC((23.3, c8.center.xy[1])).ctext("C8", scale=0.5)
     brd.DC((23.3, c9.center.xy[1])).ctext("C9", scale=0.5)
     if not CAPS:
@@ -558,8 +560,8 @@ def td2f():
         wire_ongrid(r1.pads[0].w("o / f .4"))
 
     if 1:
-        r3_cell = Hex.from_xy_fine(16.6, 19.8)
-        r2_cell = r3_cell + Hex(0, 4)
+        r3_cell = Hex.from_xy_fine(16.6, 19.8) + Hex(0, 1)
+        r2_cell = r3_cell + Hex(0, 2)
         r2 = cu.R0402(
             brd.DC(r2_cell.to_plane()), "270",
             source={"LCSC": "C25099"})
@@ -573,7 +575,8 @@ def td2f():
             cc_positions=(r4_cell.to_plane(), r5_cell.to_plane()),
             bridge_dplus=False,
             hardwire_cc=False,
-            escape_left_vbus=True)
+            escape_left_vbus=True,
+            cc_rotation=30)
 
     power_net = (j1.s("A4/B9"), u3.s("5V"), u3.s("CE"), c7.pads[1])
 
