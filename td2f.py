@@ -248,10 +248,6 @@ class LDO_23_5(SOT23_5):
             elif nm == "VCC":
                 p.w("i +")
             p.wire()
-        power_width = 2 * self.board.trace
-        for name in ("5V", "CE"):
-            wire_ongrid(
-                self.s(name).setwidth(power_width).w("o"))
 
     def hex_escape(self):
         self.hex_hookup(('5V', 'GND', 'CE', '', 'VCC'))
@@ -577,7 +573,12 @@ def td2f():
             ongrid=wire_ongrid2)
 
     power_net = (j1.s("A4/B9"), u3.s("5V"), u3.s("CE"), c7.pads[1])
-    power_route_net = power_net[:-1] + (brd.pad_endpoint(c7.pads[1]),)
+    power_route_net = (
+        j1.s("A4/B9"),
+        brd.pad_endpoint(u3.s("5V")),
+        brd.pad_endpoint(u3.s("CE")),
+        brd.pad_endpoint(c7.pads[1]),
+    )
 
     airwire_nets = (
         power_net,
@@ -767,8 +768,10 @@ def td2f():
         t1 = time.monotonic()
         print("Starting route")
 
-        brd.hex_route(j1.s("A4/B9"), u3.s("5V"))
-        brd.hex_route(brd.pad_endpoint(c7.pads[1]), u3.s("5V"))
+        brd.hex_route(j1.s("A4/B9"), brd.pad_endpoint(u3.s("5V")))
+        brd.hex_route(
+            brd.pad_endpoint(c7.pads[1]),
+            brd.pad_endpoint(u3.s("5V")))
         brd.hex_route(
             brd.pad_endpoint(c8.pads[1]),
             brd.pad_endpoint(c9.pads[1]))
