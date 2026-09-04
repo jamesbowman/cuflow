@@ -19,7 +19,7 @@ from usb_c import USBC
 
 import hex
 from hex import Hex, axial_direction_vectors
-from hexboard import HexBoard, wire_ongrid
+from hexboard import HexBoard, wire_ongrid, wire_ongrid2
 
 hex.set_grid_size(0.41)
 
@@ -127,12 +127,12 @@ used_pins = [
 
 def fanout_ongrid(river):
     for trace in river.tt:
-        wire_ongrid(trace)
+        wire_ongrid2(trace)
     return river
 
 class HexRP2040(RP2040):
     def hookup_usb_vdd(self, pad):
-        wire_ongrid(pad.w("o")).via("GL3")
+        wire_ongrid2(pad.w("o")).via("GL3")
 
     def hex_escape(self):
         brd = self.board
@@ -149,29 +149,29 @@ class HexRP2040(RP2040):
         # fanout_ongrid(cu.River(brd, banks[3][1:3]).w("f 0.4 l 30"))
         fanout_ongrid(cu.River(brd, banks[3][-6:]).left(30))
         for nm in ("XIN", ):
-            wire_ongrid(self.s(nm))
+            wire_ongrid2(self.s(nm))
         self.pads[0].w("-").wire()
 
-        wire_ongrid(self.s("VREG_VOUT")).wire()
+        wire_ongrid2(self.s("VREG_VOUT")).wire()
 
-        wire_ongrid(self.s("SWDIO")).hex("l").wire()
-        wire_ongrid(self.s("SWCLK")).wire()
+        wire_ongrid2(self.s("SWDIO")).hex("l").wire()
+        wire_ongrid2(self.s("SWCLK")).wire()
 
         # USB
-        wire_ongrid(self.s("USB_DM").w("o")).hex("").wire()
-        wire_ongrid(self.s("USB_DP")).hex("").wire()
+        wire_ongrid2(self.s("USB_DM").w("o")).hex("").wire()
+        wire_ongrid2(self.s("USB_DP")).hex("").wire()
 
         # Serial
-        wire_ongrid(self.s("GPIO8")).hex("f").wire()
-        wire_ongrid(self.s("GPIO9")).hex("3f").wire()
-        wire_ongrid(self.s("GPIO12")).hex("r l r 3f / 3f / 5f").wire()
-        wire_ongrid(self.s("GPIO13")).hex("l r").wire()
+        wire_ongrid2(self.s("GPIO8")).hex("f").wire()
+        wire_ongrid2(self.s("GPIO9")).hex("3f").wire()
+        wire_ongrid2(self.s("GPIO12")).hex("r l r 3f / 3f / 5f").wire()
+        wire_ongrid2(self.s("GPIO13")).hex("l r").wire()
 
         # LCD
-        wire_ongrid(self.s("GPIO10")).hex("f /")
-        wire_ongrid(self.s("GPIO11")).hex("l f /")
-        wire_ongrid(self.s("GPIO14")).hex("l r / f").wire()
-        wire_ongrid(self.s("GPIO15")).hex("l /")
+        wire_ongrid2(self.s("GPIO10")).hex("f /")
+        wire_ongrid2(self.s("GPIO11")).hex("l f /")
+        wire_ongrid2(self.s("GPIO14")).hex("l r / f").wire()
+        wire_ongrid2(self.s("GPIO15")).hex("l /")
 
 class HexW25Q128(cu.SOIC8b):
     source = {'LCSC': 'C131025'}
