@@ -158,8 +158,8 @@ class HexRP2040(RP2040):
         wire_ongrid2(self.s("SWCLK")).wire()
 
         # USB
-        wire_ongrid2(self.s("USB_DM").w("o")).hex("").wire()
-        wire_ongrid2(self.s("USB_DP")).hex("").wire()
+        wire_ongrid2(self.s("USB_DM")).wire()
+        wire_ongrid2(self.s("USB_DP")).wire()
 
         # Serial
         wire_ongrid2(self.s("GPIO8")).hex("f").wire()
@@ -288,9 +288,9 @@ class ST7789_12(cu.Part):
             elif nm == "VCC":
                 p.w("o f 3.5 +")
             elif nm == "RESET":
-                wire_ongrid(p.w("o f 0.2"))
+                wire_ongrid2(p.w("o"))
             else:
-                wire_ongrid(p.w("i f 0.2"))
+                wire_ongrid2(p.w("i"))
 
 class SMT6(cu.Part):
     family = "J"
@@ -556,7 +556,7 @@ def td2f():
             source={"LCSC": "C47764"})
 
         r1.pads[1].setname("VCC").w("o +")
-        wire_ongrid(r1.pads[0].w("o / f .4"))
+        wire_ongrid2(r1.pads[0].w("o / f .4"))
 
     if 1:
         r3_cell = Hex.from_xy_fine(16.6, 19.8) + Hex(0, 1)
@@ -573,7 +573,8 @@ def td2f():
             bridge_dplus=False,
             hardwire_cc=False,
             escape_left_vbus=True,
-            cc_rotation=30)
+            cc_rotation=30,
+            ongrid=wire_ongrid2)
 
     power_net = (j1.s("A4/B9"), u3.s("5V"), u3.s("CE"), c7.pads[1])
     power_route_net = power_net[:-1] + (brd.pad_endpoint(c7.pads[1]),)

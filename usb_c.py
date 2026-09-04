@@ -62,7 +62,7 @@ class USBC(cu.Part):
     def hex_escape(
             self, cc_positions=None, bridge_dplus=True,
             hardwire_cc=True, escape_left_vbus=False,
-            cc_rotation=0):
+            cc_rotation=0, ongrid=wire_ongrid):
         power_width = 2 * self.board.trace
         for name in ("A1/B12", "B1/A12"):
             self.s(name).setwidth(power_width).w("o -")
@@ -78,7 +78,7 @@ class USBC(cu.Part):
                 (self.s("A4/B9"), self.s("B4/A9")),
                 key=lambda pad: pad.xy[0],
             )
-            wire_ongrid(left_vbus.setwidth(power_width).w("o"))
+            ongrid(left_vbus.setwidth(power_width).w("o"))
 
         a7 = self.s("A7").copy()
         b7 = self.s("B7").copy()
@@ -89,8 +89,8 @@ class USBC(cu.Part):
                 self.s("A6"), twist=True).wire()
         else:
             for name in ("A6", "B6"):
-                wire_ongrid(self.s(name).w("o"))
-            wire_ongrid(self.s("B7").w("o"))
+                ongrid(self.s(name).w("o"))
+            ongrid(self.s("B7").w("o"))
 
         def cc_pulldown(pin, north=0, position=None):
             if position is None:
@@ -107,7 +107,7 @@ class USBC(cu.Part):
                     resistor.pads[0], twist=True).wire()
                 resistor.pads[1].w("o -")
             else:
-                wire_ongrid(self.s(pin).w("i"))
+                ongrid(self.s(pin).w("i"))
                 resistor.pads[1].w("o -")
             return resistor
 
