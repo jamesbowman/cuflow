@@ -20,6 +20,7 @@
   },
   "drill_file": "spiq_a.TXT",
   "airwire_file": "spiq_a.AIR",
+  "netlist_file": "spiq_a.net.json",
   "external_footprints": {
     "cache_dir": "preflight/easyeda-footprints",
     "name_atlas_source": "spiq_a.py",

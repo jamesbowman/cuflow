@@ -40,8 +40,6 @@ class USBC(cu.Part):
         for pad, name in zip(self.pads, pad_names):
             pad.setname(name)
 
-        self.s("A6").mark()
-
         baseline = dc.copy().goxy(0, 2.6)
 
         def plated_slot(slot, land_length):

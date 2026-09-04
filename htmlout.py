@@ -200,6 +200,14 @@ def _bezel_model(board):
     )
 
 
+def _solder_paste_geometry(board):
+    """Return the manufacturing paste layers without board-body clipping."""
+    return (
+        board.layers["GTP"].preview(),
+        board.layers["GBP"].preview(),
+    )
+
+
 def write(board, filename, generated_records, thickness=1.6):
     """Write ``filename`` without changing any manufacturing layers."""
     part_name = Path(filename).stem
@@ -225,8 +233,7 @@ def write(board, filename, generated_records, thickness=1.6):
         .intersection(body)
         .difference(bottom_solder_mask_openings)
     )
-    top_solder_paste = board.layers["GTP"].preview().intersection(body)
-    bottom_solder_paste = board.layers["GBP"].preview().intersection(body)
+    top_solder_paste, bottom_solder_paste = _solder_paste_geometry(board)
     top_copper = board.layers["GTL"].preview().intersection(body)
     bottom_copper = board.layers["GBL"].preview().intersection(body)
     exposed_top_copper = top_copper.intersection(top_solder_mask_openings)

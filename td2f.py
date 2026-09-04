@@ -23,6 +23,20 @@ from hexboard import HexBoard, wire_ongrid
 
 hex.set_grid_size(0.3)
 
+PREFLIGHT_NAME_ATLAS = {
+    "ic_roots_by_lcsc": {
+        "C2040": "RP2040",
+        "C131025": "W25Q16",
+        "C81233": "ME6212",
+    },
+    "header_pins": {
+        "J3": {
+            "names": ("DTR", "RX", "TX", "VCC", "RTS", "GND"),
+            "external_pad_numbers": (1, 2, 3, 4, 5, 6),
+        },
+    },
+}
+
 ROUTING = 0
 LCD_ROUTING = 1
 SERIAL_ROUTING = ("GPIO8", "GPIO9", "GPIO12", "GPIO13")
@@ -140,13 +154,13 @@ class HexRP2040(RP2040):
         wire_ongrid(self.s("GPIO8")).hex("f").wire()
         wire_ongrid(self.s("GPIO9")).hex("3f").wire()
         wire_ongrid(self.s("GPIO12")).hex("f r 3f / 3f / 11f").wire()
-        wire_ongrid(self.s("GPIO13")).hex("3f").wire()
+        wire_ongrid(self.s("GPIO13")).hex("3f r").wire()
 
         # LCD
         wire_ongrid(self.s("GPIO10")).hex("f /")
-        wire_ongrid(self.s("GPIO11")).hex("l /")
-        wire_ongrid(self.s("GPIO14")).hex("f /")
-        wire_ongrid(self.s("GPIO15")).hex("f /")
+        wire_ongrid(self.s("GPIO11")).hex("l f /")
+        wire_ongrid(self.s("GPIO14")).hex("l / f").wire()
+        wire_ongrid(self.s("GPIO15")).hex("l /")
 
 class HexW25Q128(cu.SOIC8):
     source = {'LCSC': 'C131025'}
@@ -218,7 +232,7 @@ class SOT23_5(cu.Part):
 
 class LDO_23_5(SOT23_5):
     source = {'LCSC': 'C81233'}
-    mfr = "AP2127N-3.3TRG1"
+    mfr = "ME6212C33M5G"
 
     def hex_hookup(self, names):
         for (p,nm) in zip(self.pads, names):
@@ -335,7 +349,7 @@ class pogo_pads(dip.PTH):
 
     def gh(self, dc, plate = 1.0):
         p = dc.copy()
-        self.roundpad(p, 2 * plate * self.r)
+        self.roundpad(p, 2 * plate * self.r, paste = False)
         return
 
         p.n_agon(plate * self.r, 30)
@@ -351,17 +365,18 @@ def td2f():
         (30, 30),
         trace = w,
         space = hex.size - w,
-        via_hole = 0.15,
-        via = 0.25,
+        via_hole = 0.3,
+        via = 0.4,
         via_space = cu.mil(5),
         silk = cu.mil(5))
+    brd.hex_clearance = 0.095
 
     brd.outline()
 
     o = 2
     for x in (o, 30 - o):
         for y in (o, 30 - o):
-            brd.hole((x, y), 2, 2.5, stencil_alignment = True)
+            brd.hole((x, y), 2, 2.5)
 
     if 0:
         for xy in ((2, 9), (30 - 2, 9)):
@@ -426,7 +441,7 @@ def td2f():
         p.copy().w("l 90 f 0.7").rtext(nm)
     wire_ongrid(j2.pads[0].w("l 90 f .7"))
     j2.pads[1].setname("GND").w("o -")
-    wire_ongrid(j2.pads[2].w("l 90 f .7"))
+    wire_ongrid(j2.pads[2].w("l 90 f 1.0"))
 
     # u3 = SOT23_LDO(brd.DC((7, 27.5)).right(180).left(90))
     u3 = LDO_23_5(brd.DC((6.5, 27.5)).right(180))
@@ -454,8 +469,13 @@ def td2f():
         j3.hex_escape()
         j3.inBOM = True
 
+    capacitor_lcsc = {
+        "100nF": "C1525",
+        "1uF": "C52923",
+    }
     def ucap(p, val = '100nF'):
-        cn = cu.C0402_nolabel(p, val)
+        cn = cu.C0402_nolabel(
+            p, val, source={"LCSC": capacitor_lcsc[val]})
         cn.pads[0].setname("GND").w("o -")
         return cn
     def cap(p, val = '100nF'):
@@ -477,6 +497,7 @@ def td2f():
         c2 = cap(brd.DC(hx.to_plane()).right(30))
         hx += Hex(0, 4)
         c3 = cap(brd.DC(hx.to_plane()).right(30))
+        vreg_vin_cap_cell = hx + Hex(0, 4)
 
         hx = Hex.from_xy_fine(17.9, 15.0)
         # brd.DC(hx.to_plane()).mark()
@@ -485,10 +506,13 @@ def td2f():
         c5 = cap(brd.DC((9.9, 14)))
 
         c6 = cap(brd.DC(c6_cell.to_plane()), '1uF')
+        brd.DC((5.4, c6.center.xy[1])).ctext("C6", scale=0.5)
 
     c7_cell = c6_cell + Hex(2, -4)
     c7 = hcap(
         brd.DC(c7_cell.to_plane()), '1uF', width=2 * brd.trace)
+    if CAPS:
+        brd.DC((5.4, c7.center.xy[1])).ctext("C7", scale=0.5)
 
     r5_cell = Hex.from_xy_fine(22, 27.5)
     block_step = Hex(2, -4)
@@ -498,6 +522,8 @@ def td2f():
 
     c8 = hcap(brd.DC(c8_cell.to_plane()).left(180), '1uF')
     c9 = hcap(brd.DC(c9_cell.to_plane()).left(180), '1uF')
+    brd.DC((23.3, c8.center.xy[1])).ctext("C8", scale=0.5)
+    brd.DC((23.3, c9.center.xy[1])).ctext("C9", scale=0.5)
     if not CAPS:
         for capacitor, designator in ((c7, "C7"), (c8, "C8"), (c9, "C9")):
             capacitor.id = designator
@@ -505,12 +531,18 @@ def td2f():
                 pad.part = designator
 
     if CAPS:
-        c10 = cu.C0603(brd.DC((6, 5)).left(90), '10 uF, 16V')
+        c10 = cu.C0603(
+            brd.DC((6, 5)).left(90), '10 uF, 16V',
+            source={"LCSC": "C70225"})
         c10.pads[0].setname("GND").w("o -")
         c10.pads[1].setname("VCC").w("o +")
 
         y1_cap_cell = Hex.from_xy_fine(27.5, 9.6)
         c11 = cap(brd.DC(y1_cap_cell.to_plane()).right(180))
+
+        # Local decoupling for the RP2040's internal regulator input.
+        c12 = cap(
+            brd.DC(vreg_vin_cap_cell.to_plane()).right(30), '1uF')
 
     if 1:
         y1 = Osc_12MHz(brd.DC((27.5, 12)).right(180))
@@ -518,7 +550,9 @@ def td2f():
 
     if 1:
         # ST7789_12 backlight power
-        r1 = cu.R0402(brd.DC((6, 11)).right(90), "7.5")
+        r1 = cu.R0402(
+            brd.DC((6, 11)).right(90), "7.5",
+            source={"LCSC": "C47764"})
 
         r1.pads[1].setname("VCC").w("o +")
         wire_ongrid(r1.pads[0].w("o / f .4"))
@@ -526,8 +560,12 @@ def td2f():
     if 1:
         r3_cell = Hex.from_xy_fine(16.6, 19.8)
         r2_cell = r3_cell + Hex(0, 4)
-        r2 = cu.R0402(brd.DC(r2_cell.to_plane()), "270")
-        r3 = cu.R0402(brd.DC(r3_cell.to_plane()), "270")
+        r2 = cu.R0402(
+            brd.DC(r2_cell.to_plane()), "270",
+            source={"LCSC": "C25099"})
+        r3 = cu.R0402(
+            brd.DC(r3_cell.to_plane()), "270",
+            source={"LCSC": "C25099"})
         for p in r2.pads + r3.pads:
             wire_ongrid(p.w("o f 0"))
 
@@ -795,6 +833,8 @@ def td2f():
     brd.add_hex_grid()
 
     generated_records = brd.save("td2f")
+    generated_records["netlist"] = brd.save_netlist(
+        "td2f", airwire_nets)
     htmlout.write(brd, "td2f.html", generated_records)
     print("Saved")
 

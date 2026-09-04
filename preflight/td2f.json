@@ -1,0 +1,53 @@
+{
+  "board": "td2f",
+  "source": "td2f.py",
+  "bom": "td2f-jlcpcb-bom.csv",
+  "pnp": "td2f-jlcpcb-pnp.csv",
+  "part_catalog": "preflight/td2f-jlcpcb-parts.csv",
+  "gerber_layers": {
+    "GTL": true,
+    "G2L": true,
+    "G3L": true,
+    "GBL": true,
+    "GTO": true,
+    "GBO": true,
+    "GTS": true,
+    "GBS": true,
+    "GTP": true,
+    "GBP": false,
+    "GML": true
+  },
+  "drill_file": "td2f.TXT",
+  "airwire_file": "td2f.AIR",
+  "netlist_file": "td2f.net.json",
+  "external_footprints": {
+    "cache_dir": "preflight/easyeda-footprints",
+    "name_atlas_source": "td2f.py",
+    "name_atlas_variable": "PREFLIGHT_NAME_ATLAS"
+  },
+  "excluded_designators": ["J2", "U4"],
+  "expected_gml_contours": 5,
+  "expected_gml_contours_reason": "one square board perimeter plus J1's four plated USB-C mounting slots",
+  "topology": {
+    "copper_layers": ["GTL", "G2L", "G3L", "GBL"],
+    "net_clearance_mm": 0.09,
+    "plated_internal_gml_contours": 4,
+    "net_seeds": {
+      "GND": [
+        {"layer": "G2L", "selector": "largest"}
+      ],
+      "VCC": [
+        {"layer": "G3L", "selector": "largest"}
+      ]
+    },
+    "forbidden_connections": [["GND", "VCC"]]
+  },
+  "manual_checks": [
+    "In a CAM viewer, identify the five GML contours as one square board perimeter and J1's four closed mounting slots.",
+    "Confirm each J1 routed slot is surrounded by its intended copper and solder-mask land on both board sides.",
+    "Compare J1, J3, U3, Y1, and the RP2040 package geometry and orientation with the exact selected manufacturer packages.",
+    "Confirm the four 2 mm mounting holes and the J2 debug pogo pads have no solder-paste apertures.",
+    "Confirm C12 is the local 1 uF VREG_VIN capacitor and C8/C9 remain on VREG_VOUT.",
+    "Inspect the bottom LCD-module outline, pads, and mechanical clearances against the intended hand-installed module."
+  ]
+}

@@ -7,6 +7,7 @@ import argparse
 import csv
 import html
 import json
+import math
 import os
 import re
 import subprocess
@@ -450,6 +451,11 @@ def audit_copper_topology(
         f"{len(topology.nets)} physical nets",
     )
 
+    netlist_file = profile.get("netlist_file")
+    if netlist_file is not None:
+        audit_intended_netlist(
+            audit, relative_path(netlist_file), board, topology)
+
     clearance = float(config.get("net_clearance_mm", 0.1))
     clearance_violations = net_clearance_violations(topology, clearance)
     clearance_detail = (
@@ -562,6 +568,211 @@ def audit_copper_topology(
 
     audit_external_footprints(
         audit, profile, topology, labels_by_net)
+
+
+def audit_intended_netlist(
+        audit: Audit, path: Path, board: str, topology: Any) -> None:
+    """Compare independently declared logical nets with manufactured copper."""
+    try:
+        document = load_json(path)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        audit.add("Intended net manifest", False, str(error))
+        return
+
+    errors: list[str] = []
+    if document.get("format") != "cuflow-netlist-1":
+        errors.append(f"unsupported format {document.get('format')!r}")
+    if document.get("board") != board:
+        errors.append(
+            f"board {document.get('board')!r} does not match {board!r}")
+    nets = document.get("nets")
+    if not isinstance(nets, list):
+        errors.append("nets must be a list")
+        nets = []
+
+    parsed_nets: list[dict[str, Any]] = []
+    net_ids: set[str] = set()
+    terminal_owners: dict[tuple[str, int], str] = {}
+    for net_index, net in enumerate(nets, 1):
+        location = f"net {net_index}"
+        if not isinstance(net, dict):
+            errors.append(f"{location} must be an object")
+            continue
+        net_id = net.get("id")
+        if not isinstance(net_id, str) or not net_id:
+            errors.append(f"{location} has invalid id {net_id!r}")
+            continue
+        if net_id in net_ids:
+            errors.append(f"duplicate net id {net_id}")
+            continue
+        net_ids.add(net_id)
+        name = net.get("name")
+        if name is not None and not isinstance(name, str):
+            errors.append(f"{net_id} has invalid name {name!r}")
+        terminals = net.get("terminals")
+        if not isinstance(terminals, list) or len(terminals) < 2:
+            errors.append(f"{net_id} must have at least two terminals")
+            continue
+
+        parsed_terminals: list[dict[str, Any]] = []
+        for terminal_index, terminal in enumerate(terminals, 1):
+            terminal_location = f"{net_id} terminal {terminal_index}"
+            if not isinstance(terminal, dict):
+                errors.append(f"{terminal_location} must be an object")
+                continue
+            designator = terminal.get("designator")
+            pad_index = terminal.get("pad_index")
+            pad = terminal.get("pad")
+            layer = terminal.get("layer")
+            x = terminal.get("x_mm")
+            y = terminal.get("y_mm")
+            valid = True
+            if not isinstance(designator, str) or not designator:
+                errors.append(
+                    f"{terminal_location} has invalid designator")
+                valid = False
+            if (not isinstance(pad_index, int) or
+                    isinstance(pad_index, bool) or pad_index < 1):
+                errors.append(
+                    f"{terminal_location} has invalid pad_index")
+                valid = False
+            if pad is not None and not isinstance(pad, str):
+                errors.append(f"{terminal_location} has invalid pad name")
+                valid = False
+            if not isinstance(layer, str) or layer not in topology.layer_order:
+                errors.append(
+                    f"{terminal_location} has invalid copper layer {layer!r}")
+                valid = False
+            if (isinstance(x, bool) or isinstance(y, bool) or
+                    not isinstance(x, (int, float)) or
+                    not isinstance(y, (int, float)) or
+                    not math.isfinite(float(x)) or
+                    not math.isfinite(float(y))):
+                errors.append(
+                    f"{terminal_location} has invalid coordinates")
+                valid = False
+            if not valid:
+                continue
+            key = (designator, pad_index)
+            if key in terminal_owners:
+                errors.append(
+                    f"{designator} pad {pad_index} belongs to both "
+                    f"{terminal_owners[key]} and {net_id}")
+                continue
+            terminal_owners[key] = net_id
+            parsed_terminals.append({
+                "label": f"{designator}.{pad or pad_index}",
+                "layer": layer,
+                "xy": (float(x), float(y)),
+            })
+        parsed_nets.append({
+            "id": net_id,
+            "name": name if isinstance(name, str) else None,
+            "terminals": parsed_terminals,
+        })
+
+    if errors:
+        audit.add(
+            "Intended net manifest", False,
+            f"{len(errors)} format error(s): " + "; ".join(errors[:20]) +
+            (" ..." if len(errors) > 20 else ""))
+        return
+    terminal_count = sum(len(net["terminals"]) for net in parsed_nets)
+    audit.add(
+        "Intended net manifest", True,
+        f"{len(parsed_nets)} logical nets and {terminal_count} unique "
+        f"terminals in {path.name}")
+
+    attachment_errors: list[str] = []
+    for net in parsed_nets:
+        for terminal in net["terminals"]:
+            try:
+                component = topology.component_at(
+                    terminal["layer"], terminal["xy"])
+                terminal["physical_net"] = topology.net_for_component(
+                    component)
+            except LookupError as error:
+                attachment_errors.append(
+                    f"{terminal['label']} at {terminal['layer']} "
+                    f"({terminal['xy'][0]:.6f}, "
+                    f"{terminal['xy'][1]:.6f}): {error}")
+    audit.add(
+        "Intended net terminal attachment",
+        not attachment_errors,
+        f"all {terminal_count} terminals touch exactly one physical net"
+        if not attachment_errors else
+        f"{len(attachment_errors)}/{terminal_count} terminals do not touch "
+        "exactly one physical net: " + "; ".join(attachment_errors[:20]) +
+        (" ..." if len(attachment_errors) > 20 else ""),
+    )
+
+    def logical_label(net: dict[str, Any]) -> str:
+        return (
+            f"{net['id']} ({net['name']})"
+            if net["name"] is not None else net["id"])
+
+    continuity_errors: list[str] = []
+    for net in parsed_nets:
+        physical_nets = sorted({
+            terminal["physical_net"]
+            for terminal in net["terminals"]
+            if "physical_net" in terminal
+        })
+        missing = [
+            terminal["label"] for terminal in net["terminals"]
+            if "physical_net" not in terminal
+        ]
+        if missing:
+            continuity_errors.append(
+                f"{logical_label(net)} has unattached " + ", ".join(missing))
+        elif len(physical_nets) != 1:
+            assignments = ", ".join(
+                f"{terminal['label']}={terminal['physical_net']}"
+                for terminal in net["terminals"])
+            continuity_errors.append(
+                f"{logical_label(net)} spans " + "/".join(physical_nets) +
+                f": {assignments}")
+    audit.add(
+        "Intended net continuity",
+        not continuity_errors,
+        "every intended net occupies exactly one physical net"
+        if not continuity_errors else
+        f"{len(continuity_errors)} open net(s): " +
+        "; ".join(continuity_errors[:20]) +
+        (" ..." if len(continuity_errors) > 20 else ""),
+    )
+
+    logical_by_physical: dict[str, list[dict[str, Any]]] = {}
+    for net in parsed_nets:
+        for physical_net in {
+                terminal["physical_net"]
+                for terminal in net["terminals"]
+                if "physical_net" in terminal}:
+            logical_by_physical.setdefault(physical_net, []).append(net)
+    shorts = {
+        physical_net: nets
+        for physical_net, nets in logical_by_physical.items()
+        if len(nets) > 1
+    }
+    short_details = []
+    for physical_net, joined_nets in sorted(shorts.items()):
+        descriptions = []
+        for net in joined_nets:
+            terminals = ", ".join(
+                terminal["label"] for terminal in net["terminals"]
+                if terminal.get("physical_net") == physical_net)
+            descriptions.append(f"{logical_label(net)} [{terminals}]")
+        short_details.append(
+            f"{physical_net} joins " + " and ".join(descriptions))
+    audit.add(
+        "Intended net isolation",
+        not short_details,
+        "no physical net contains terminals from different intended nets"
+        if not short_details else
+        f"{len(short_details)} shorted physical net(s): " +
+        "; ".join(short_details[:20]) +
+        (" ..." if len(short_details) > 20 else ""),
+    )
 
 
 def audit_external_footprints(

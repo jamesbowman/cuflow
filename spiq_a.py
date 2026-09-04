@@ -933,6 +933,8 @@ def spiq_a():
             part.id for part in constructed_parts - covered_parts)))
 
     generated_records = brd.save("spiq_a")
+    generated_records["netlist"] = brd.save_netlist(
+        "spiq_a", airwires, global_names=("GND",))
     htmlout.write(brd, "spiq_a.html", generated_records)
     print("Saved")
 

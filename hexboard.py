@@ -102,8 +102,13 @@ class HexBoard(cu.Board):
         self.valid_cells = frozenset(
             (h.q, h.r) for h in self.route_hexes)
         coordinates = np.asarray([h.to_plane() for h in self.route_hexes])
+        self.route_radius = (
+            self.hr
+            if not hasattr(self, "hex_clearance")
+            else self.trace / 2 + self.hex_clearance
+        )
         route_disks = shapely.buffer(
-            shapely.points(coordinates), self.hr, quad_segs=16)
+            shapely.points(coordinates), self.route_radius, quad_segs=16)
         self.route_tree = STRtree(route_disks)
         self.route_point_tree = STRtree(shapely.points(coordinates))
         self.blocked = {layer: self.layer_blocks(layer) for layer in ('GTL', 'GBL')}
@@ -119,8 +124,9 @@ class HexBoard(cu.Board):
             for _, polygon in self.layers[nm].polys
             if not any(polygon.intersects(point) for point in endpoint_points)
         ]
-        route_clearance = width / 2 + self.space
-        drill_expansion = max(0, route_clearance - self.hr)
+        route_clearance = width / 2 + getattr(
+            self, "hex_clearance", self.space)
+        drill_expansion = max(0, route_clearance - self.route_radius)
         drill_keepouts = [
             sg.Point(xy).buffer(diameter / 2 + drill_expansion)
             for diameter, locations in self.holes.items()
@@ -142,7 +148,7 @@ class HexBoard(cu.Board):
                 blocked[h.q, h.r] = 1
             return blocked
 
-        geometry_expansion = max(0, route_clearance - self.hr)
+        geometry_expansion = max(0, route_clearance - self.route_radius)
         fixed_geometry = so.unary_union(
             copper + self.keepouts + self.route_keepouts[nm])
         if geometry_expansion:
@@ -174,7 +180,8 @@ class HexBoard(cu.Board):
                 self.routes, self.route_widths):
             if route_layer != layer:
                 continue
-            clearance = (width + route_width) / 2 + self.space
+            clearance = (width + route_width) / 2 + getattr(
+                self, "hex_clearance", self.space)
             corridor = self._route_geometry(route).buffer(clearance)
             self._mark_blocked_geometry(blocked, corridor)
         return blocked
@@ -309,7 +316,8 @@ class HexBoard(cu.Board):
             for q, r in occupied:
                 self.blocked[layer][q, r] = 1
         else:
-            clearance = (route_width + self.trace) / 2 + self.space
+            clearance = (route_width + self.trace) / 2 + getattr(
+                self, "hex_clearance", self.space)
             corridor = so.unary_union([
                 self._route_geometry(route)
                 for route in routes

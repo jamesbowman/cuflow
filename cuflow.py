@@ -1033,6 +1033,119 @@ class Board:
             value.ljust(widths[column])
             for column, value in enumerate(total_row)))
 
+    def save_netlist(
+            self, basename, nets,
+            global_names=("GND", "VCC", "5V")):
+        """Write an intended-connectivity manifest independent of copper.
+
+        ``nets`` contains groups of pad cursors that are intended to be
+        electrically connected.  Common power-net names are additionally
+        joined so plane connections appear in the manifest even when they do
+        not require an airwire.
+        """
+        pads = []
+        for parts in self.parts.values():
+            for part in parts:
+                for pad_index, pad in enumerate(part.pads, 1):
+                    pads.append((part, pad_index, pad))
+
+        pad_by_identity = {
+            id(pad): (part.id, pad_index)
+            for part, pad_index, pad in pads
+        }
+        pads_by_label = defaultdict(list)
+        for part, pad_index, pad in pads:
+            pads_by_label[(part.id, pad.name)].append(
+                (part.id, pad_index))
+
+        def terminal_key(terminal):
+            key = pad_by_identity.get(id(terminal))
+            if key is not None:
+                return key
+            candidates = pads_by_label.get(
+                (terminal.part, terminal.name), ())
+            assert len(candidates) == 1, (
+                "Netlist terminal does not identify exactly one pad: "
+                f"{terminal.part}.{terminal.name}")
+            return candidates[0]
+
+        declared_nets = [tuple(net) for net in nets]
+        assert all(len(net) >= 2 for net in declared_nets), (
+            "Every intended net must contain at least two terminals")
+
+        parent = {}
+
+        def find(key):
+            parent.setdefault(key, key)
+            while parent[key] != key:
+                parent[key] = parent[parent[key]]
+                key = parent[key]
+            return key
+
+        def union(a, b):
+            a = find(a)
+            b = find(b)
+            if a != b:
+                parent[b] = a
+
+        for net in declared_nets:
+            keys = [terminal_key(terminal) for terminal in net]
+            for key in keys[1:]:
+                union(keys[0], key)
+
+        for name in global_names:
+            keys = [
+                (part.id, pad_index)
+                for part, pad_index, pad in pads
+                if pad.name == name
+            ]
+            for key in keys[1:]:
+                union(keys[0], key)
+
+        pad_records = {
+            (part.id, pad_index): {
+                "designator": part.id,
+                "pad_index": pad_index,
+                "pad": pad.name,
+                "layer": pad.layer,
+                "x_mm": round(float(pad.xy[0]), 6),
+                "y_mm": round(float(pad.xy[1]), 6),
+            }
+            for part, pad_index, pad in pads
+        }
+        groups = defaultdict(list)
+        for key in parent:
+            groups[find(key)].append(key)
+
+        logical_nets = []
+        ordered_groups = sorted(
+            (sorted(group) for group in groups.values()),
+            key=lambda group: group[0])
+        for index, group in enumerate(ordered_groups, 1):
+            records = [pad_records[key] for key in group]
+            power_names = [
+                name for name in global_names
+                if any(record["pad"] == name for record in records)
+            ]
+            assert len(power_names) <= 1, (
+                "Intended net joins global power names: " +
+                ", ".join(power_names))
+            logical_nets.append({
+                "id": f"L{index:03d}",
+                "name": power_names[0] if power_names else None,
+                "terminals": records,
+            })
+
+        document = {
+            "format": "cuflow-netlist-1",
+            "board": basename,
+            "nets": logical_nets,
+        }
+        with open(basename + ".net.json", "wt") as output:
+            json.dump(document, output, indent=2)
+            output.write("\n")
+        return document
+
     def body(self):
         # Return the board outline with holes and slots removed.
         # This is the shape of the resin subtrate.
@@ -1495,10 +1608,11 @@ class Part:
         self.pad(dc)
         dc.left(90)
 
-    def roundpad(self, dc, d):
+    def roundpad(self, dc, d, paste = True):
         (dc.w, dc.h) = (d, d)
         g = sg.Point(dc.xy).buffer(d / 2)
-        for n in ('GTL', 'GTS', 'GTP'):
+        layers = ('GTL', 'GTS', 'GTP') if paste else ('GTL', 'GTS')
+        for n in layers:
             dc.board.layers[n].add(g)
         p = dc.copy()
         p.part = self.id

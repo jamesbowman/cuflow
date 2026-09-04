@@ -1,8 +1,136 @@
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
-from tools.pcb_preflight import Audit, natural_pad_number_key, write_report
+import shapely.geometry as sg
+
+from tools.pcb_preflight import (
+    Audit,
+    audit_intended_netlist,
+    natural_pad_number_key,
+    write_report,
+)
+from tools.pcb_topology import build_topology
+
+
+def terminal(designator, pad_index, pad, x, y):
+    return {
+        "designator": designator,
+        "pad_index": pad_index,
+        "pad": pad,
+        "layer": "GTL",
+        "x_mm": x,
+        "y_mm": y,
+    }
+
+
+def check(audit, name):
+    return next(item for item in audit.checks if item.name == name)
+
+
+class IntendedNetTests(unittest.TestCase):
+    def audit_document(self, document, topology):
+        audit = Audit()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "board.net.json"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            audit_intended_netlist(audit, path, "board", topology)
+        return audit
+
+    def test_distinct_logical_nets_on_one_physical_net_are_a_short(self):
+        topology = build_topology({"GTL": sg.box(0, 0, 4, 1)}, ())
+        audit = self.audit_document({
+            "format": "cuflow-netlist-1",
+            "board": "board",
+            "nets": [
+                {"id": "L001", "name": None, "terminals": [
+                    terminal("J1", 1, "DTR", 0.5, 0.5),
+                    terminal("U1", 1, "GPIO12", 1.5, 0.5),
+                ]},
+                {"id": "L002", "name": None, "terminals": [
+                    terminal("J1", 2, "RTS", 2.5, 0.5),
+                    terminal("U1", 2, "GPIO13", 3.5, 0.5),
+                ]},
+            ],
+        }, topology)
+
+        self.assertTrue(check(audit, "Intended net manifest").passed)
+        self.assertTrue(
+            check(audit, "Intended net terminal attachment").passed)
+        self.assertTrue(check(audit, "Intended net continuity").passed)
+        isolation = check(audit, "Intended net isolation")
+        self.assertFalse(isolation.passed)
+        self.assertIn("N001 joins L001", isolation.detail)
+        self.assertIn("and L002", isolation.detail)
+        self.assertIn("U1.GPIO12", isolation.detail)
+        self.assertIn("U1.GPIO13", isolation.detail)
+
+    def test_one_logical_net_on_two_physical_nets_is_an_open(self):
+        topology = build_topology({
+            "GTL": sg.MultiPolygon((
+                sg.box(0, 0, 1, 1),
+                sg.box(2, 0, 3, 1),
+            )),
+        }, ())
+        audit = self.audit_document({
+            "format": "cuflow-netlist-1",
+            "board": "board",
+            "nets": [{
+                "id": "L001",
+                "name": None,
+                "terminals": [
+                    terminal("U1", 1, "A", 0.5, 0.5),
+                    terminal("U2", 1, "B", 2.5, 0.5),
+                ],
+            }],
+        }, topology)
+
+        continuity = check(audit, "Intended net continuity")
+        self.assertFalse(continuity.passed)
+        self.assertIn("L001 spans N001/N002", continuity.detail)
+        self.assertTrue(check(audit, "Intended net isolation").passed)
+
+    def test_unattached_terminal_fails_attachment_and_continuity(self):
+        topology = build_topology({"GTL": sg.box(0, 0, 1, 1)}, ())
+        audit = self.audit_document({
+            "format": "cuflow-netlist-1",
+            "board": "board",
+            "nets": [{
+                "id": "L001",
+                "name": None,
+                "terminals": [
+                    terminal("U1", 1, "A", 0.5, 0.5),
+                    terminal("U2", 1, "B", 2.5, 0.5),
+                ],
+            }],
+        }, topology)
+
+        attachment = check(audit, "Intended net terminal attachment")
+        self.assertFalse(attachment.passed)
+        self.assertIn("U2.B", attachment.detail)
+        continuity = check(audit, "Intended net continuity")
+        self.assertFalse(continuity.passed)
+        self.assertIn("L001 has unattached U2.B", continuity.detail)
+
+    def test_terminal_cannot_belong_to_two_logical_nets(self):
+        topology = build_topology({"GTL": sg.box(0, 0, 1, 1)}, ())
+        shared = terminal("U1", 1, "A", 0.5, 0.5)
+        audit = self.audit_document({
+            "format": "cuflow-netlist-1",
+            "board": "board",
+            "nets": [
+                {"id": "L001", "name": None,
+                 "terminals": [shared, terminal("U2", 1, "B", .5, .5)]},
+                {"id": "L002", "name": None,
+                 "terminals": [shared, terminal("U3", 1, "C", .5, .5)]},
+            ],
+        }, topology)
+
+        manifest = check(audit, "Intended net manifest")
+        self.assertFalse(manifest.passed)
+        self.assertIn(
+            "U1 pad 1 belongs to both L001 and L002", manifest.detail)
 
 
 class HtmlReportTests(unittest.TestCase):
