@@ -287,7 +287,9 @@ class HexBoard(cu.Board):
                     continue
                 previous[neighbor_cell] = cell
                 pending.append(neighbor_cell)
-        assert destination is not None, "Signal failed to route"
+        assert destination is not None, (
+            f"Signal failed to route: {source.part}.{source.name} to "
+            f"{target.part}.{target.name}")
 
         route = [Hex(*destination)]
         cell = destination
