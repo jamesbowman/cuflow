@@ -143,8 +143,8 @@ class RP2040(QFN56):
             vccs[4].w("o +")
         else:
             vccs[4].w("o f .2 l 45 f .3 +")
-        vccs[6].goto(vccs[5], twist = True).wire()
         vccs[5].w("o +")
+        vccs[6].copy().goto(vccs[5], twist = True).wire()
         vccs[7].goto(vccs[6]).wire()
         if usb_vdd_via_on_iovdd:
             vccs[9].copy().goto(vccs[8]).wire()

@@ -69,8 +69,8 @@ used_pins = [
 "GPIO8",    # Module_Serial.TX
 "GPIO13",   # Module_Serial.RTS
 
-"GPIO0",
-"GPIO1",
+# "GPIO0",
+# "GPIO1",
 # "GPIO2",
 # "GPIO3",
 # "GPIO4",
@@ -125,11 +125,6 @@ used_pins = [
 "QSPI_SS_N",
 ]
 
-def fanout_ongrid(river):
-    for trace in river.tt:
-        wire_ongrid2(trace)
-    return river
-
 class HexRP2040(RP2040):
     def hookup_usb_vdd(self, pad):
         wire_ongrid2(pad.w("o")).via("GL3")
@@ -140,13 +135,6 @@ class HexRP2040(RP2040):
         banks = self.escape(
             used_pins, four_layer=True,
             usb_vdd_via_on_iovdd=True)
-
-        # fanout_ongrid(cu.River(brd, banks[0][0:2]).w("f .5"))
-        # fanout_ongrid(cu.River(brd, banks[0][-4:-2]).w("f 0.8 r 60"))
-        # fanout_ongrid(cu.River(brd, banks[0][-2:]).w(""))
-        # fanout_ongrid(cu.River(brd, banks[1][:4 ]).right(30))
-        # fanout_ongrid(cu.River(brd, banks[3][:1]).w("f 0.5 r 30"))
-        # fanout_ongrid(cu.River(brd, banks[3][1:3]).w("f 0.4 l 30"))
 
         # Otherwise picks same cell as SD1
         self.s("QSPI_SS_N").w("l 30")
