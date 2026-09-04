@@ -15,7 +15,7 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -1244,7 +1244,7 @@ def write_report(
         path: Path, profile: dict[str, Any], audit: Audit,
         generation_output: str) -> None:
     result = "PASS" if audit.passed else "FAIL"
-    generated = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    generated = datetime.now().astimezone().isoformat(timespec="seconds")
     result_class = "pass" if audit.passed else "fail"
     netlist_hash = audit.netlist_hash or "unavailable"
     toc_items = [
