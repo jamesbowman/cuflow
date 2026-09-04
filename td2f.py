@@ -133,7 +133,7 @@ class HexRP2040(RP2040):
         brd = self.board
 
         banks = self.escape(
-            used_pins, four_layer=True,
+            set(used_pins) - {"GPIO10"}, four_layer=True,
             usb_vdd_via_on_iovdd=True)
 
         # Otherwise picks same cell as SD1
@@ -163,9 +163,9 @@ class HexRP2040(RP2040):
         wire_ongrid2(self.s("GPIO13")).hex("l r").wire()
 
         # LCD
-        wire_ongrid2(self.s("GPIO10")).hex("f /")
+        wire_ongrid2(self.s("GPIO10").w("i")).hex("f 2 /")
         wire_ongrid2(self.s("GPIO11")).hex("l f /")
-        wire_ongrid2(self.s("GPIO14")).hex("l r / f").wire()
+        wire_ongrid2(self.s("GPIO14")).hex("l r /").wire()
         wire_ongrid2(self.s("GPIO15")).hex("l /")
 
 class HexW25Q128(cu.SOIC8b):
