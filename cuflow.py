@@ -1618,6 +1618,7 @@ class Part:
             dc.board.layers[n].add(g)
         p = dc.copy()
         p.part = self.id
+        p.boundary = g
         self.pads.append(p)
 
     def train(self, dc, n, op, step):

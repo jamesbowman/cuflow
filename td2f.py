@@ -19,7 +19,7 @@ from usb_c import USBC
 
 import hex
 from hex import Hex, axial_direction_vectors
-from hexboard import HexBoard, wire_ongrid, wire_ongrid2
+from hexboard import HexBoard, wire_ongrid
 
 hex.set_grid_size(0.41)
 
@@ -346,7 +346,6 @@ class Osc_12MHz(SMD_3225_4P):
         self.s("GND").w("r 90 f 0.6 -")
         self.s("VDD").setname("VCC")
         self.s("VCC").w("r 90 f 0.6 +")
-        wire_ongrid2(self.s("CLK").w("r 90 f 0.6"))
 
 class pogo_pads(dip.PTH):
     family  = "J"
@@ -452,9 +451,7 @@ def td2f():
     for (p, nm) in zip(j2.pads, names):
         p.setname(nm)
         p.copy().w("l 90 f 0.7").rtext(nm)
-    wire_ongrid(j2.pads[0].w("l 90 f .7"))
     j2.pads[1].setname("GND").w("o -")
-    wire_ongrid(j2.pads[2].w("l 90 f 1.0"))
 
     # u3 = SOT23_LDO(brd.DC((7, 27.5)).right(180).left(90))
     u3 = LDO_23_5(brd.DC((6.5, 27.5)).right(180))
@@ -500,7 +497,6 @@ def td2f():
         signal = cn.pads[1]
         if width is not None:
             signal.setwidth(width)
-        wire_ongrid(signal.w("o f .2"))
         return cn
     c6_cell = Hex.from_xy_fine(6.6, 25.2)
     if CAPS:
@@ -591,6 +587,7 @@ def td2f():
             cc_rotation=30)
 
     power_net = (j1.s("A4/B9"), u3.s("5V"), u3.s("CE"), c7.pads[1])
+    power_route_net = power_net[:-1] + (brd.pad_endpoint(c7.pads[1]),)
 
     airwire_nets = (
         power_net,
@@ -663,6 +660,11 @@ def td2f():
         (j1.s("B5"), r5.pads[0]),
     )
     vreg_net = (u1.s("VREG_VOUT"), c8.pads[1], c9.pads[1])
+    vreg_route_net = (
+        u1.s("VREG_VOUT"),
+        brd.pad_endpoint(c8.pads[1]),
+        brd.pad_endpoint(c9.pads[1]),
+    )
     backlight_route = (r1.pads[0], u4.s("LEDA"))
     if (LCD_ROUTING or SERIAL_ROUTING or FLASH_ROUTING or
             CLOCK_ROUTING or DEBUG_ROUTING or USB_MCU_ROUTING or
@@ -672,7 +674,7 @@ def td2f():
         if POWER_ROUTING:
             print("Starting 5V route")
             assert all(terminal.layer == "GTL" for terminal in power_net)
-            brd.hex_route_net(power_net, width=2 * brd.trace)
+            brd.hex_route_net(power_route_net, width=2 * brd.trace)
         if USB_CC_ROUTING:
             print("Starting USB CC route")
             for source, target in usb_cc_routes:
@@ -681,7 +683,7 @@ def td2f():
         if VREG_ROUTING:
             print("Starting VREG route")
             assert all(terminal.layer == "GTL" for terminal in vreg_net)
-            brd.hex_route_net(vreg_net)
+            brd.hex_route_net(vreg_route_net)
         if LCD_ROUTING:
             print("Starting LCD route")
             for source, target in lcd_routes:
@@ -722,12 +724,12 @@ def td2f():
             print("Starting clock route")
             source, target = clock_route
             assert source.layer == target.layer
-            brd.hex_route(source, target)
+            brd.hex_route(source, brd.pad_endpoint(target))
         if DEBUG_ROUTING:
             print("Starting debug route")
             for source, target in debug_routes:
                 assert source.layer == target.layer
-                brd.hex_route(source, target)
+                brd.hex_route(source, brd.pad_endpoint(target))
         if USB_MCU_ROUTING:
             print("Starting USB MCU route")
             for source, target in usb_mcu_routes:
@@ -775,9 +777,11 @@ def td2f():
         print("Starting route")
 
         brd.hex_route(j1.s("A4/B9"), u3.s("5V"))
-        brd.hex_route(c7.pads[1], u3.s("5V"))
-        brd.hex_route(c8.pads[1], c9.pads[1])
-        brd.hex_route(c9.pads[1], u1.s("VREG_VOUT"))
+        brd.hex_route(brd.pad_endpoint(c7.pads[1]), u3.s("5V"))
+        brd.hex_route(
+            brd.pad_endpoint(c8.pads[1]),
+            brd.pad_endpoint(c9.pads[1]))
+        brd.hex_route(brd.pad_endpoint(c9.pads[1]), u1.s("VREG_VOUT"))
 
         if 1:
             brd.hex_route(u2.s("CS"), u1.s("QSPI_SS_N"))
@@ -813,10 +817,10 @@ def td2f():
             brd.hex_route(u1.s("GPIO13"), j3.s("RTS"))
             brd.hex_route(u1.s("GPIO12"), j3.s("DTR"))
 
-        brd.hex_route(u1.s("XIN"), y1.s("CLK"))
+        brd.hex_route(u1.s("XIN"), brd.pad_endpoint(y1.s("CLK")))
 
-        brd.hex_route(u1.s("SWDIO"), j2.s("SWD"))
-        brd.hex_route(u1.s("SWCLK"), j2.s("SWCLK"))
+        brd.hex_route(u1.s("SWDIO"), brd.pad_endpoint(j2.s("SWD")))
+        brd.hex_route(u1.s("SWCLK"), brd.pad_endpoint(j2.s("SWCLK")))
 
         # Hack, rescue a ground island
         j3.s("GND").w("o -")

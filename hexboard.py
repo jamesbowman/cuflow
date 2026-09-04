@@ -5,6 +5,7 @@ import shapely
 import shapely.geometry as sg
 import shapely.ops as so
 from collections import deque
+from dataclasses import dataclass
 from shapely.strtree import STRtree
 from PIL import Image, ImageDraw, ImageFont
 
@@ -15,6 +16,12 @@ from hex import Hex, axial_direction_vectors
 twenty_rgb = [
 (230, 25, 75), (60, 180, 75), (255, 225, 25), (0, 130, 200), (245, 130, 48), (145, 30, 180), (70, 240, 240), (240, 50, 230), (210, 245, 60), (250, 190, 212), (0, 128, 128), (220, 190, 255), (170, 110, 40), (255, 250, 200), (128, 0, 0), (170, 255, 195), (128, 128, 0), (255, 215, 180), (0, 0, 128), (128, 128, 128), (255, 255, 255), (0, 0, 0)
 ]
+
+
+@dataclass(frozen=True)
+class PadEndpoint:
+    draw: cu.Draw
+
 
 class ByteGrid:
     def __init__(self, w, h):
@@ -117,15 +124,20 @@ class HexBoard(cu.Board):
         self.routes = []
         self.route_widths = []
 
-    def layer_blocks(self, nm, width=None, exempt_points=()):
+    def layer_blocks(
+            self, nm, width=None, exempt_points=(),
+            exempt_geometries=()):
         explicit_width = width is not None
         width = self.trace if width is None else width
         endpoint_points = tuple(sg.Point(xy) for xy in exempt_points)
+        exempt_geometry = so.unary_union(tuple(exempt_geometries))
         copper = [
             polygon
             for _, polygon in self.layers[nm].polys
             if not any(polygon.intersects(point) for point in endpoint_points)
         ]
+        if not exempt_geometry.is_empty:
+            copper = [polygon.difference(exempt_geometry) for polygon in copper]
         route_clearance = width / 2 + getattr(
             self, "hex_clearance", self.space)
         drill_expansion = max(0, route_clearance - self.route_radius)
@@ -176,8 +188,10 @@ class HexBoard(cu.Board):
             h = self.route_hexes[i]
             blocked[h.q, h.r] = 1
 
-    def _blocked_for_width(self, layer, width, exempt_points=()):
-        blocked = self.layer_blocks(layer, width, exempt_points)
+    def _blocked_for_width(
+            self, layer, width, exempt_points=(), exempt_geometries=()):
+        blocked = self.layer_blocks(
+            layer, width, exempt_points, exempt_geometries)
         for ((route_layer, route), route_width) in zip(
                 self.routes, self.route_widths):
             if route_layer != layer:
@@ -188,7 +202,108 @@ class HexBoard(cu.Board):
             self._mark_blocked_geometry(blocked, corridor)
         return blocked
 
+    def pad_endpoint(self, draw):
+        """Wrap a pad Draw for boundary-aware hex routing."""
+        boundary = getattr(draw, "boundary", None)
+        assert boundary is not None and not boundary.is_empty, (
+            "pad_endpoint() needs a Draw with a non-empty boundary")
+        return PadEndpoint(draw)
+
+    def pad_hex_cells(self, endpoint, width=None):
+        """Return cells whose wire-width center disk is >=50% in a pad."""
+        draw = endpoint.draw if isinstance(endpoint, PadEndpoint) else endpoint
+        boundary = getattr(draw, "boundary", None)
+        assert boundary is not None and not boundary.is_empty, (
+            "pad_hex_cells() needs a Draw with a non-empty boundary")
+        route_width = self.trace if width is None else float(width)
+        assert route_width > 0, "Route width must be positive"
+
+        radius = route_width / 2
+        search_area = boundary.buffer(radius)
+        result = set()
+        for index in self.route_point_tree.query(
+                search_area, predicate="intersects"):
+            cell = self.route_hexes[index]
+            disk = sg.Point(cell.to_plane()).buffer(radius)
+            coverage = disk.intersection(boundary).area / disk.area
+            if coverage + 1e-12 >= 0.5:
+                result.add(tuple(cell))
+        assert result, (
+            "No hex cell center disk is at least 50% covered by the pad")
+        return frozenset(result)
+
+    def _hex_route_pad_endpoints(self, a, b):
+        """Lee-route between endpoints when at least one is a PadEndpoint."""
+        source = a.draw if isinstance(a, PadEndpoint) else a
+        target = b.draw if isinstance(b, PadEndpoint) else b
+        layer = source.layer
+        assert target.layer == layer
+
+        source_cells = (
+            self.pad_hex_cells(a)
+            if isinstance(a, PadEndpoint)
+            else frozenset((tuple(Hex.from_xy(*source.xy)),)))
+        target_cells = (
+            self.pad_hex_cells(b)
+            if isinstance(b, PadEndpoint)
+            else frozenset((tuple(Hex.from_xy(*target.xy)),)))
+        exempt_geometries = tuple(
+            endpoint.draw.boundary
+            for endpoint in (a, b)
+            if isinstance(endpoint, PadEndpoint)
+        )
+        blocked = self._blocked_for_width(
+            layer, self.trace, exempt_geometries=exempt_geometries)
+
+        def available(cells, endpoint):
+            if not isinstance(endpoint, PadEndpoint):
+                return cells
+            return frozenset(
+                cell for cell in cells
+                if not blocked[cell[0], cell[1]])
+
+        source_cells = available(source_cells, a)
+        target_cells = available(target_cells, b)
+        assert source_cells, "All source pad terminal cells are blocked"
+        assert target_cells, "All target pad terminal cells are blocked"
+
+        directions = [Hex(dq, dr) for dq, dr in axial_direction_vectors]
+        previous = {cell: None for cell in source_cells}
+        pending = deque(sorted(source_cells, key=lambda cell: (cell[1], cell[0])))
+        destination = None
+        while pending:
+            cell = pending.popleft()
+            if cell in target_cells:
+                destination = cell
+                break
+            h = Hex(*cell)
+            for direction in directions:
+                neighbor = h + direction
+                neighbor_cell = tuple(neighbor)
+                if (neighbor_cell not in self.valid_cells or
+                        neighbor_cell in previous or
+                        blocked[neighbor.q, neighbor.r]):
+                    continue
+                previous[neighbor_cell] = cell
+                pending.append(neighbor_cell)
+        assert destination is not None, "Signal failed to route"
+
+        route = [Hex(*destination)]
+        cell = destination
+        while previous[cell] is not None:
+            cell = previous[cell]
+            route.append(Hex(*cell))
+        for cell in route:
+            self.blocked[layer][cell.q, cell.r] = 1
+        self.routes.append((layer, route))
+        self.route_widths.append(self.trace)
+        self.addnet(source, target)
+        return route
+
     def hex_route(self, a, b):
+        if isinstance(a, PadEndpoint) or isinstance(b, PadEndpoint):
+            return self._hex_route_pad_endpoints(a, b)
+
         layer = a.layer
         assert b.layer == a.layer
         source = a
@@ -251,27 +366,48 @@ class HexBoard(cu.Board):
         route_width = self.trace if width is None else float(width)
         assert route_width > 0, "Route width must be positive"
 
-        layer = terminals[0].layer
-        assert all(terminal.layer == layer for terminal in terminals)
+        draws = tuple(
+            terminal.draw if isinstance(terminal, PadEndpoint) else terminal
+            for terminal in terminals)
+        layer = draws[0].layer
+        assert all(draw.layer == layer for draw in draws)
 
-        terminal_hexes = [Hex.from_xy(*terminal.xy) for terminal in terminals]
-        terminal_cells = {tuple(h) for h in terminal_hexes}
-        valid = self.valid_cells
-        blocked = (
-            self.blocked[layer]
-            if width is None
-            else self._blocked_for_width(
-                layer, route_width,
-                exempt_points=(terminal.xy for terminal in terminals),
-            )
+        endpoint_cells = [
+            (self.pad_hex_cells(terminal, route_width)
+             if isinstance(terminal, PadEndpoint)
+             else frozenset((tuple(Hex.from_xy(*draw.xy)),)))
+            for terminal, draw in zip(terminals, draws)
+        ]
+        exempt_geometries = tuple(
+            terminal.draw.boundary
+            for terminal in terminals
+            if isinstance(terminal, PadEndpoint)
         )
+        valid = self.valid_cells
+        if width is None and not exempt_geometries:
+            blocked = self.blocked[layer]
+        else:
+            blocked = self._blocked_for_width(
+                layer, route_width,
+                exempt_points=(draw.xy for draw in draws),
+                exempt_geometries=exempt_geometries,
+            )
+        endpoint_cells = [
+            (frozenset(
+                cell for cell in cells
+                if not blocked[cell[0], cell[1]])
+             if isinstance(terminal, PadEndpoint) else cells)
+            for terminal, cells in zip(terminals, endpoint_cells)
+        ]
+        assert all(endpoint_cells), "All pad terminal cells are blocked"
+        terminal_cells = set().union(*endpoint_cells)
         directions = [Hex(dq, dr) for dq, dr in axial_direction_vectors]
 
-        def wavefront(start):
-            start = tuple(start)
-            distance = {start: 0}
-            previous = {}
-            pending = deque([start])
+        def wavefront(starts):
+            ordered_starts = sorted(starts, key=lambda cell: (cell[1], cell[0]))
+            distance = {cell: 0 for cell in ordered_starts}
+            previous = {cell: None for cell in ordered_starts}
+            pending = deque(ordered_starts)
             while pending:
                 cell = pending.popleft()
                 h = Hex(*cell)
@@ -288,7 +424,7 @@ class HexBoard(cu.Board):
                     pending.append(neighbor_cell)
             return distance, previous
 
-        searches = [wavefront(h) for h in terminal_hexes]
+        searches = [wavefront(cells) for cells in endpoint_cells]
         common = set(searches[0][0])
         for distance, _ in searches[1:]:
             common.intersection_update(distance)
@@ -303,12 +439,12 @@ class HexBoard(cu.Board):
 
         routes = []
         occupied = set()
-        for terminal, (_, previous) in zip(terminal_hexes, searches):
-            terminal_cell = tuple(terminal)
+        for terminal_cells_for_endpoint, (_, previous) in zip(
+                endpoint_cells, searches):
             cell = junction
             route = [Hex(*cell)]
             occupied.add(cell)
-            while cell != terminal_cell:
+            while cell not in terminal_cells_for_endpoint:
                 cell = previous[cell]
                 route.append(Hex(*cell))
                 occupied.add(cell)
@@ -327,8 +463,8 @@ class HexBoard(cu.Board):
             self._mark_blocked_geometry(self.blocked[layer], corridor)
         self.routes.extend((layer, route) for route in routes)
         self.route_widths.extend(route_width for route in routes)
-        for terminal in terminals[1:]:
-            self.addnet(terminals[0], terminal)
+        for draw in draws[1:]:
+            self.addnet(draws[0], draw)
 
         return routes
 
