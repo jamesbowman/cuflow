@@ -328,6 +328,10 @@ class HtmlReportTests(unittest.TestCase):
             output,
         )
         self.assertNotIn("manual CAM gate", output)
+        self.assertIn('<time id="generated-time"', output)
+        self.assertIn('<span id="generated-age">0 seconds ago</span>', output)
+        self.assertIn("function updateGeneratedAge()", output)
+        self.assertIn("window.setInterval(updateGeneratedAge, 1000)", output)
         self.assertIn("Example &lt;check&gt;", output)
         self.assertIn("safe &amp; complete", output)
         self.assertIn('id="net-n001"', output)

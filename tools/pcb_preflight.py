@@ -1361,7 +1361,9 @@ def write_report(
     <h1>{html_cell(profile['board'])} manufacturing preflight</h1>
     <div class="summary">
       <span class="status {result_class}">{result}</span>
-      <span>Generated {html_cell(generated)}</span>
+      <span>Generated <time id="generated-time"
+        datetime="{html_cell(generated)}">{html_cell(generated)}</time>
+        (<span id="generated-age">0 seconds ago</span>)</span>
     </div>
     <p class="muted">Discovered netlist SHA-256:
       <code>{html_cell(netlist_hash)}</code></p>
@@ -1546,6 +1548,32 @@ def write_report(
     lines.extend(["""
 </main>
 <script>
+  function updateGeneratedAge() {
+    const timestamp = document.getElementById('generated-time');
+    const label = document.getElementById('generated-age');
+    if (!timestamp || !label) return;
+    const seconds = Math.max(
+      0, Math.floor((Date.now() - Date.parse(timestamp.dateTime)) / 1000));
+    let value;
+    let unit;
+    if (seconds < 60) {
+      value = seconds;
+      unit = 'second';
+    } else if (seconds < 60 * 60) {
+      value = Math.floor(seconds / 60);
+      unit = 'minute';
+    } else if (seconds < 24 * 60 * 60) {
+      value = Math.floor(seconds / (60 * 60));
+      unit = 'hour';
+    } else {
+      value = Math.floor(seconds / (24 * 60 * 60));
+      unit = 'day';
+    }
+    label.textContent = `${value} ${unit}${value === 1 ? '' : 's'} ago`;
+  }
+  updateGeneratedAge();
+  window.setInterval(updateGeneratedAge, 1000);
+
   function highlightPad(anchor) {
     const target = document.getElementById(anchor);
     if (!target || !target.closest('.device-pads')) return;
