@@ -5,6 +5,13 @@ Always use this Python on Mac:
 and this Python on Linux:
 /home/jamesb/py313/bin/python
 
+## Gerber viewer reload
+
+Run `./gerbv-reload` at the end of every board-changing operation so the
+user's Gerber view updates. On macOS it must be run with elevated execution
+outside the workspace sandbox: sandboxed `osascript` cannot access System
+Events and fails with error `-10827`, even while Gerbv is running.
+
 ## PCB manufacturing preflight
 
 When the user asks to preflight a PCB, check it before manufacture, or decide
