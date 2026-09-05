@@ -12,8 +12,13 @@ from tools.pcb_assembly import (
     FootprintPad,
     Placement,
     format_device_pad,
+    jlcpcb_body_spacing_violations,
+    jlcpcb_smd_category,
+    jlcpcb_smd_spacing_mm,
     load_name_atlas,
     map_pads_to_topology,
+    package_body_size_mm,
+    place_component_body,
     place_footprint,
     read_jlc_bom,
     read_jlc_pnp,
@@ -81,6 +86,63 @@ class PlacementTests(unittest.TestCase):
         )
         self.assertEqual(
             placed[0].layers, ("GTL", "G2L", "G3L", "GBL"))
+
+
+class ComponentSpacingTests(unittest.TestCase):
+    def placed_body(
+            self, designator, package, xy, side="Top", rotation=0):
+        source = replace(footprint(pad()), package=package)
+        return place_component_body(
+            source, Placement(designator, "C1", xy, side, rotation))
+
+    def test_package_categories_cover_jlcpcb_matrix_names(self):
+        self.assertEqual(jlcpcb_smd_category("R0402"), "0402")
+        self.assertEqual(jlcpcb_smd_category("C0603"), "0603")
+        self.assertEqual(
+            jlcpcb_smd_category("LQFN-56_L7.0-W7.0-P0.4-EP"), "QFN")
+        self.assertEqual(
+            jlcpcb_smd_category("MSOP-10_L3.0-W3.0-P0.5"), "SOP/SOIC")
+        self.assertEqual(
+            jlcpcb_smd_category("SOT-23-5_L3.0-W1.7-P0.95"), "SOT")
+        self.assertIsNone(jlcpcb_smd_category("OSC-SMD_4P-L3.2-W2.5"))
+
+    def test_body_sizes_use_chip_standard_or_package_dimensions(self):
+        self.assertEqual(package_body_size_mm("C0402"), (1.0, 0.5))
+        self.assertEqual(
+            package_body_size_mm("SOT-23-5_L3.0-W1.7-P0.95"),
+            (3.0, 1.7),
+        )
+
+    def test_published_spacing_matrix_is_symmetric(self):
+        self.assertEqual(jlcpcb_smd_spacing_mm("0402", "QFN"), 1.0)
+        self.assertEqual(jlcpcb_smd_spacing_mm("QFN", "0402"), 1.0)
+        self.assertEqual(jlcpcb_smd_spacing_mm("1206", "1206"), 0.35)
+        self.assertEqual(jlcpcb_smd_spacing_mm("BGA", "BGA"), 2.0)
+
+    def test_body_rotation_follows_pnp_rotation(self):
+        body = self.placed_body(
+            "U1", "SOT-23-5_L3.0-W1.7-P0.95", (5, 10), rotation=90)
+        minimum_x, minimum_y, maximum_x, maximum_y = body.geometry.bounds
+        self.assertAlmostEqual(maximum_x - minimum_x, 1.7)
+        self.assertAlmostEqual(maximum_y - minimum_y, 3.0)
+
+    def test_same_side_gap_below_recommendation_is_a_violation(self):
+        first = self.placed_body("R1", "R0402", (0, 0))
+        second = self.placed_body("R2", "R0402", (1.149, 0))
+        violations, pair_count = jlcpcb_body_spacing_violations(
+            (first, second))
+        self.assertEqual(pair_count, 1)
+        self.assertEqual(len(violations), 1)
+        self.assertAlmostEqual(violations[0].clearance, 0.149)
+        self.assertEqual(violations[0].required, 0.15)
+
+    def test_opposite_side_parts_are_not_compared(self):
+        first = self.placed_body("R1", "R0402", (0, 0), side="Top")
+        second = self.placed_body("R2", "R0402", (0, 0), side="Bottom")
+        violations, pair_count = jlcpcb_body_spacing_violations(
+            (first, second))
+        self.assertEqual(violations, ())
+        self.assertEqual(pair_count, 0)
 
 
 class AttachmentTests(unittest.TestCase):

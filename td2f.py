@@ -490,11 +490,11 @@ def td2f():
         c3 = cap(brd.DC(hx.to_plane()).right(30))
         vreg_vin_cap_cell = hx + Hex(0, 3)
 
-        hx = Hex.from_xy_fine(17.9, 15.0)
+        hx = Hex.from_xy_fine(17.9, 15.0) + Hex(-2, 0)
         # brd.DC(hx.to_plane()).mark()
         c4 = cap(brd.DC(hx.to_plane()).right(30))
 
-        c5 = cap(brd.DC((9.9, 14)))
+        c5 = cap(brd.DC((9.9, 13.9)))
 
         c6 = cap(brd.DC(c6_cell.to_plane()), '1uF')
         brd.DC((5.4, c6.center.xy[1])).ctext("C6", scale=0.5)

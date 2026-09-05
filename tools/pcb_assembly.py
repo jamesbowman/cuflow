@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import ast
 import csv
+import itertools
 import json
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping
@@ -24,6 +26,38 @@ else:
 
 FOOTPRINT_FORMAT = "cuflow-easyeda-part-2"
 PREFLIGHT_PLACEMENT_FORMAT = "cuflow-preflight-placements-1"
+JLCPCB_SMD_SPACING_URL = (
+    "https://jlcpcb.com/help/article/minimum-spacing-for-smd-components")
+
+# JLCPCB's package-pair recommendations, in millimetres.  The table is
+# symmetric; keeping the published category order makes lookup and reporting
+# deterministic.
+JLCPCB_SMD_CATEGORIES = (
+    "0201", "0402", "0603", "0805", "1206",
+    "QFN", "QFP", "SOP/SOIC", "SOT", "BGA",
+)
+_JLCPCB_SMD_SPACING_ROWS = (
+    (0.15, 0.15, 0.18, 0.18, 0.25, 1.0, 0.5, 0.4, 0.2, 1.0),
+    (0.15, 0.15, 0.18, 0.18, 0.25, 1.0, 0.5, 0.4, 0.2, 1.0),
+    (0.18, 0.18, 0.18, 0.18, 0.25, 1.0, 0.5, 0.4, 0.2, 1.0),
+    (0.18, 0.18, 0.18, 0.18, 0.25, 1.0, 0.5, 0.4, 0.2, 1.0),
+    (0.25, 0.25, 0.25, 0.25, 0.35, 1.0, 0.5, 0.4, 0.2, 1.0),
+    (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.5),
+    (0.5, 0.5, 0.5, 0.5, 0.5, 1.0, 1.25, 1.25, 1.0, 1.5),
+    (0.4, 0.4, 0.4, 0.4, 0.4, 1.0, 1.25, 0.5, 0.4, 1.0),
+    (0.2, 0.2, 0.2, 0.2, 0.2, 1.0, 1.0, 0.4, 0.4, 1.0),
+    (1.0, 1.0, 1.0, 1.0, 1.0, 1.5, 1.5, 1.0, 1.0, 2.0),
+)
+_STANDARD_CHIP_BODY_MM = {
+    "0201": (0.6, 0.3),
+    "0402": (1.0, 0.5),
+    "0603": (1.6, 0.8),
+    "0805": (2.0, 1.25),
+    "1206": (3.2, 1.6),
+}
+_PACKAGE_BODY_DIMENSIONS = re.compile(
+    r"(?:^|_)L(?P<length>[0-9]+(?:\.[0-9]+)?)-"
+    r"W(?P<width>[0-9]+(?:\.[0-9]+)?)(?:-|_|$)")
 
 
 @dataclass(frozen=True)
@@ -58,6 +92,24 @@ class Placement:
     xy: tuple[float, float]
     side: str
     rotation: float
+
+
+@dataclass(frozen=True)
+class PlacedBody:
+    designator: str
+    lcsc: str
+    package: str
+    category: str
+    side: str
+    geometry: BaseGeometry
+
+
+@dataclass(frozen=True)
+class BodySpacingViolation:
+    first: PlacedBody
+    second: PlacedBody
+    clearance: float
+    required: float
 
 
 @dataclass(frozen=True)
@@ -96,6 +148,98 @@ class PadAttachment:
     pad: PlacedPad
     net_ids: tuple[str, ...]
     overlap_area: float
+
+
+def jlcpcb_smd_category(package: str) -> str | None:
+    """Map an EasyEDA package name to a category in JLCPCB's SMD table."""
+    normalized = package.upper()
+    chip = re.search(
+        r"(?:^|[-_])(?:R|C)?(0201|0402|0603|0805|1206)(?:$|[-_])",
+        normalized,
+    )
+    if chip:
+        return chip.group(1)
+    if "QFN" in normalized:
+        return "QFN"
+    if "QFP" in normalized:
+        return "QFP"
+    if any(name in normalized for name in (
+            "SOIC", "SOP", "MSOP", "SSOP", "TSSOP")):
+        return "SOP/SOIC"
+    if "SOT" in normalized:
+        return "SOT"
+    if "BGA" in normalized:
+        return "BGA"
+    return None
+
+
+def package_body_size_mm(
+        package: str, category: str | None = None
+        ) -> tuple[float, float] | None:
+    """Return nominal body length/width derivable from a package name."""
+    category = category or jlcpcb_smd_category(package)
+    if category in _STANDARD_CHIP_BODY_MM:
+        return _STANDARD_CHIP_BODY_MM[category]
+    match = _PACKAGE_BODY_DIMENSIONS.search(package.upper())
+    if match:
+        return (float(match.group("length")), float(match.group("width")))
+    return None
+
+
+def jlcpcb_smd_spacing_mm(first_category: str, second_category: str) -> float:
+    """Return JLCPCB's recommended minimum for a package-category pair."""
+    first = JLCPCB_SMD_CATEGORIES.index(first_category)
+    second = JLCPCB_SMD_CATEGORIES.index(second_category)
+    return _JLCPCB_SMD_SPACING_ROWS[first][second]
+
+
+def place_component_body(
+        footprint: ExternalFootprint, placement: Placement) -> PlacedBody:
+    """Place a nominal package body at its JLCPCB PNP location."""
+    category = jlcpcb_smd_category(footprint.package)
+    if category is None:
+        raise ValueError(
+            f"package {footprint.package!r} is outside JLCPCB's spacing table")
+    size = package_body_size_mm(footprint.package, category)
+    if size is None:
+        raise ValueError(
+            f"cannot derive body dimensions from package {footprint.package!r}")
+    length, width = size
+    geometry = sg.box(-length / 2, -width / 2, length / 2, width / 2)
+    geometry = sa.rotate(geometry, placement.rotation, origin=(0, 0))
+    geometry = sa.translate(geometry, *placement.xy)
+    return PlacedBody(
+        placement.designator,
+        placement.lcsc,
+        footprint.package,
+        category,
+        placement.side,
+        geometry,
+    )
+
+
+def jlcpcb_body_spacing_violations(
+        bodies: Iterable[PlacedBody], tolerance: float = 1e-9
+        ) -> tuple[tuple[BodySpacingViolation, ...], int]:
+    """Check same-side body gaps against JLCPCB's package-pair table."""
+    ordered = sorted(bodies, key=lambda body: body.designator)
+    violations: list[BodySpacingViolation] = []
+    pair_count = 0
+    for first, second in itertools.combinations(ordered, 2):
+        if first.side != second.side:
+            continue
+        pair_count += 1
+        required = jlcpcb_smd_spacing_mm(first.category, second.category)
+        clearance = first.geometry.distance(second.geometry)
+        if clearance + tolerance < required:
+            violations.append(BodySpacingViolation(
+                first, second, clearance, required))
+    violations.sort(key=lambda item: (
+        item.clearance - item.required,
+        item.first.designator,
+        item.second.designator,
+    ))
+    return tuple(violations), pair_count
 
 
 def load_name_atlas(path: Path, variable: str) -> DeviceNameAtlas:

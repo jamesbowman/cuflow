@@ -900,10 +900,14 @@ def audit_external_footprints(
         return
     if __package__:
         from .pcb_assembly import (
+            JLCPCB_SMD_SPACING_URL,
             format_device_pad,
+            jlcpcb_body_spacing_violations,
+            jlcpcb_smd_category,
             load_footprints,
             load_name_atlas,
             map_pads_to_topology,
+            place_component_body,
             place_footprint,
             read_jlc_bom,
             read_jlc_pnp,
@@ -911,10 +915,14 @@ def audit_external_footprints(
         )
     else:
         from pcb_assembly import (
+            JLCPCB_SMD_SPACING_URL,
             format_device_pad,
+            jlcpcb_body_spacing_violations,
+            jlcpcb_smd_category,
             load_footprints,
             load_name_atlas,
             map_pads_to_topology,
+            place_component_body,
             place_footprint,
             read_jlc_bom,
             read_jlc_pnp,
@@ -928,6 +936,8 @@ def audit_external_footprints(
     except (OSError, ValueError, csv.Error) as error:
         audit.add("External footprint placements", False, str(error))
         return
+
+    assembly_placements = placements
 
     supplemental_designators = set(config.get("supplemental_designators", ()))
     if supplemental_designators:
@@ -979,6 +989,74 @@ def audit_external_footprints(
     )
     if cache_errors:
         return
+
+    placed_bodies = []
+    spacing_geometry_errors: list[str] = []
+    outside_spacing_table: list[str] = []
+    for placement in assembly_placements:
+        footprint = footprints[placement.lcsc]
+        if jlcpcb_smd_category(footprint.package) is None:
+            outside_spacing_table.append(
+                f"{placement.designator} ({footprint.package})")
+            continue
+        try:
+            placed_bodies.append(place_component_body(footprint, placement))
+        except ValueError as error:
+            spacing_geometry_errors.append(
+                f"{placement.designator}: {error}")
+    spacing_coverage_detail = (
+        f"{len(placed_bodies)}/{len(assembly_placements)} populated "
+        "placements match JLCPCB's published package matrix"
+    )
+    if outside_spacing_table:
+        spacing_coverage_detail += (
+            "; outside the matrix: " +
+            ", ".join(sorted(outside_spacing_table)))
+    if spacing_geometry_errors:
+        spacing_coverage_detail += (
+            "; missing body geometry: " +
+            "; ".join(spacing_geometry_errors))
+    audit.add(
+        "JLCPCB SMD spacing geometry",
+        not spacing_geometry_errors,
+        spacing_coverage_detail,
+    )
+
+    if spacing_geometry_errors:
+        audit.add(
+            "JLCPCB SMD body spacing", False,
+            "not evaluated because applicable package body geometry is missing",
+        )
+    else:
+        spacing_violations, spacing_pair_count = (
+            jlcpcb_body_spacing_violations(placed_bodies))
+        if spacing_violations:
+            spacing_detail = (
+                f"{len(spacing_violations)}/{spacing_pair_count} applicable "
+                "same-side body pair(s) are below JLCPCB's recommended "
+                "minimum: " + "; ".join(
+                    f"{item.first.designator} ({item.first.category}) to "
+                    f"{item.second.designator} ({item.second.category}) "
+                    f"is {item.clearance:.3f} mm; needs "
+                    f"{item.required:.3f} mm"
+                    for item in spacing_violations[:20]
+                ) + (" ..." if len(spacing_violations) > 20 else "")
+            )
+        else:
+            spacing_detail = (
+                f"all {spacing_pair_count} applicable same-side body pairs "
+                "meet JLCPCB's recommended package-pair minimums")
+        spacing_detail_html = (
+            html_cell(spacing_detail) +
+            f' (<a href="{html_cell(JLCPCB_SMD_SPACING_URL)}" '
+            'target="_blank" rel="noopener noreferrer">JLCPCB source</a>)'
+        )
+        audit.add(
+            "JLCPCB SMD body spacing",
+            not spacing_violations,
+            spacing_detail,
+            spacing_detail_html,
+        )
 
     try:
         name_atlas = load_name_atlas(
