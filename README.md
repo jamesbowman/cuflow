@@ -49,10 +49,10 @@ For the SPIQ LCD bezel:
 
 Some notes on the theory and the practice:
 
- * [Motivation](http://tinyletter.com/jamesbowman/letters/How-would-Bob-Ross-lay-out-a-PCB)
- * [The geometry of river routing](http://tinyletter.com/jamesbowman/letters/the-geometry-of-river-routing)
- * [The Dazzler PCB](http://tinyletter.com/jamesbowman/letters/gameduino-dazzler-pcb-first-pictures)
- * [laser cut mockups](http://tinyletter.com/jamesbowman/letters/the-map-is-not-the-territory)
+ * [Motivation](https://excamera.substack.com/p/how-would-bob-ross-lay-out-a-pcbhtml)
+ * [The geometry of river routing](https://excamera.substack.com/p/the-geometry-of-river-routinghtml)
+ * [The Dazzler PCB](https://excamera.substack.com/p/gameduino-dazzler-pcb-first-pictureshtml)
+ * [laser cut mockups](https://excamera.substack.com/p/the-map-is-not-the-territoryhtml)
 
 ![POVRay rendering of Dazzler PCB](images/dazzler-spin000.png)
 ![Actual Dazzler PCB](images/dazzler-proto.jpg)
