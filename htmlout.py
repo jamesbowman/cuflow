@@ -1,9 +1,12 @@
 """Write a self-contained, interactive 3D board preview."""
 
+import base64
 import hashlib
+from io import BytesIO
 import json
 from pathlib import Path
 
+from PIL import Image, ImageDraw
 import shapely.geometry as sg
 
 
@@ -12,6 +15,11 @@ _MODEL_MESH_DIRECTORY = Path("webviewer/generated")
 _LCD_DESIGNATOR = "U3"
 _LCD_STEP_MODEL = Path("assets/misc-step/LH133T-IG01.stp")
 _LCD_MESH_MODEL = Path("webviewer/generated/LH133T-IG01.mesh.json")
+_LCD_SCREEN_IMAGE = Path("assets/spiq/demoscreen.png")
+_LCD_SCREEN_SIZE = (27.92, 32.63)
+_LCD_SCREEN_CENTER = (0.0, 1.36)
+_LCD_SCREEN_Z = 0.80
+_LCD_SCREEN_PIXEL_SCALE = 10
 _BEZEL_STL_MODEL = Path("assets/misc-stl/bezel.stl")
 _BEZEL_MESH_MODEL = Path("webviewer/generated/bezel.mesh.json")
 _BEZEL_CONTACT_Z = 2.1
@@ -177,14 +185,55 @@ def _anchored_model(
     }
 
 
+def _pixel_grid_image(image_bytes, scale):
+    """Upscale pixels into cells separated by one-pixel black lines."""
+    with Image.open(BytesIO(image_bytes)) as source:
+        source = source.convert("RGB")
+    width, height = source.size
+    enlarged = source.resize(
+        (width * scale, height * scale),
+        Image.Resampling.NEAREST,
+    )
+    draw = ImageDraw.Draw(enlarged)
+    for x in range(scale - 1, enlarged.width, scale):
+        draw.line((x, 0, x, enlarged.height - 1), fill="black")
+    for y in range(scale - 1, enlarged.height, scale):
+        draw.line((0, y, enlarged.width - 1, y), fill="black")
+    encoded = BytesIO()
+    enlarged.save(encoded, format="PNG", optimize=True)
+    return encoded.getvalue(), enlarged.size
+
+
 def _lcd_model(board):
-    return _anchored_model(
+    model = _anchored_model(
         board,
         _LCD_DESIGNATOR,
         _LCD_STEP_MODEL,
         _LCD_MESH_MODEL,
         f"node webviewer/convert-step.js {_LCD_STEP_MODEL} {_LCD_MESH_MODEL}",
     )
+    image_path = Path(__file__).parent / _LCD_SCREEN_IMAGE
+    if not image_path.exists():
+        raise FileNotFoundError(f"Missing LCD screen image {image_path}")
+    image_bytes = image_path.read_bytes()
+    display_bytes, display_pixels = _pixel_grid_image(
+        image_bytes,
+        _LCD_SCREEN_PIXEL_SCALE,
+    )
+    model["screen"] = {
+        "image": (
+            "data:image/png;base64,"
+            + base64.b64encode(display_bytes).decode("ascii")
+        ),
+        "sourceSha256": hashlib.sha256(image_bytes).hexdigest(),
+        "imageSha256": hashlib.sha256(display_bytes).hexdigest(),
+        "imageSize": list(display_pixels),
+        "pixelScale": _LCD_SCREEN_PIXEL_SCALE,
+        "size": list(_LCD_SCREEN_SIZE),
+        "center": list(_LCD_SCREEN_CENTER),
+        "z": _LCD_SCREEN_Z,
+    }
+    return model
 
 
 def _bezel_model(board):
@@ -624,8 +673,61 @@ def _document(runtime, model_json):
     visibilityLayers.components.add(component);
   }}
 
+  function addAccessoryScreen(accessoryData, model) {{
+    const screen = accessoryData.screen;
+    if (!screen) return;
+
+    const texture = new THREE.TextureLoader().load(
+      screen.image,
+      (loadedTexture) => {{
+        const imageAspect = (
+          loadedTexture.image.width / loadedTexture.image.height
+        );
+        const panelAspect = screen.size[0] / screen.size[1];
+        if (imageAspect < panelAspect) {{
+          const visibleHeight = imageAspect / panelAspect;
+          loadedTexture.repeat.set(1, visibleHeight);
+          loadedTexture.offset.set(0, (1 - visibleHeight) / 2);
+        }} else {{
+          const visibleWidth = panelAspect / imageAspect;
+          loadedTexture.repeat.set(visibleWidth, 1);
+          loadedTexture.offset.set((1 - visibleWidth) / 2, 0);
+        }}
+        loadedTexture.needsUpdate = true;
+      }}
+    );
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    const geometry = new THREE.PlaneGeometry(screen.size[0], screen.size[1]);
+    geometry.rotateX(-Math.PI / 2);
+    geometry.translate(
+      screen.center[0],
+      screen.z - accessoryData.mesh.bounds.min[2],
+      -screen.center[1]
+    );
+    const display = new THREE.Mesh(
+      geometry,
+      new THREE.MeshBasicMaterial({{
+        map: texture,
+        side: THREE.DoubleSide,
+        toneMapped: false,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      }})
+    );
+    display.name = `${{accessoryData.designator}} screen`;
+    display.renderOrder = 50;
+    model.add(display);
+  }}
+
   function placeAccessory(accessoryData, parent) {{
     const model = buildStepTemplate(accessoryData);
+    addAccessoryScreen(accessoryData, model);
     if (accessoryData.flip) {{
       model.rotation.x = Math.PI;
       model.position.y = accessoryData.flipOffset ?? (
