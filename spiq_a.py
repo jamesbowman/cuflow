@@ -17,6 +17,9 @@ def mean(L):
 
 ROUTE2 = 1
 USE_EDITED_HEADER_ART = True
+PREFLIGHT_NETLIST_HASH = (
+    "255edc2d9fefb2ebc1520529dfb45bb434502cc2b0a0780224fbb07fa05cf030"
+)
 
 PREFLIGHT_NAME_ATLAS = {
     "ic_roots_by_lcsc": {
@@ -107,7 +110,8 @@ class HexRP2040(RP2040):
     def hex_escape(self):
         brd = self.board
 
-        banks = self.escape(used_pins, four_layer=True)
+        banks = self.escape(
+            used_pins, four_layer=True, usb_vdd_via_on_iovdd=True)
 
         by_name = {pad.name: pad for bank in banks for pad in bank}
 
@@ -413,7 +417,7 @@ def spiq_a():
         trace = w,
         space = .4 - w,
         via_hole = 0.3,
-        via = 0.6,
+        via = 0.45,
         via_space = cu.mil(5),
         silk = cu.mil(5))
 
