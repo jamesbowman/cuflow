@@ -133,7 +133,7 @@ class HexRP2040(RP2040):
 
         return
 
-class HexW25Q128(cu.SOIC8):
+class HexW25Q128(cu.SOIC8b):
     source = {'LCSC': 'C131025'}
     mfr = 'W25Q16JVSSIQ'
     footprint = "SOIC-8-208mil"
@@ -149,10 +149,6 @@ class HexW25Q128(cu.SOIC8):
                 p.w("i -")
             elif p.name == "VCC":
                 p.w("i +")
-            else:
-                p.w("o f .1")
-                wire_ongrid(p)
-                p.wire()
 
 
 class PZ254RS(cu.Part):
@@ -198,8 +194,8 @@ class PZ254RS(cu.Part):
 
 class Module_SPI_Header(PZ254RS):
     def hex_escape(self):
-        for pad in self.pads:
-            wire_ongrid(pad.w("o"))
+        # Signal routes terminate directly in the pad areas.
+        pass
 
 
 class Module_Serial_Debug(PZ254RS):
@@ -213,15 +209,10 @@ class Module_Serial_Debug(PZ254RS):
 
     def hex_escape(self):
         for pad in self.pads:
-            route = pad.right(180)
             if pad.name == "GND":
-                route.w("o -")
+                pad.right(180).w("o -")
             elif pad.name == "VCC":
-                route.w("o +")
-            elif pad.name in ("TX", ):
-                wire_ongrid(route.w("o"))
-            else:
-                wire_ongrid(route.w("i"))
+                pad.right(180).w("o +")
 
 
 class Module_LCD240x240(cu.Part):
@@ -420,6 +411,7 @@ def spiq_a():
         via = 0.45,
         via_space = cu.mil(5),
         silk = cu.mil(5))
+    brd.hex_clearance = 0.100
 
     def spiq_logo():
         x0, y0 = (0.9, 0.9)
@@ -793,24 +785,25 @@ def spiq_a():
 
     if ROUTE2:
 
-        brd.hex_route(u2.s("CS"), u1.s("QSPI_SS_N"))
-        brd.hex_route(u2.s("IO1"), u1.s("QSPI_SD1"))
-        brd.hex_route(u2.s("IO2"), u1.s("QSPI_SD2"))
-        brd.hex_route(u2.s("IO0"), u1.s("QSPI_SD0"))
-        brd.hex_route(u2.s("CLK"), u1.s("QSPI_SCLK"))
-        brd.hex_route(u2.s("IO3"), u1.s("QSPI_SD3"))
+        # Let the router choose an entry cell across each large U2 pad.
+        brd.hex_route(u1.s("QSPI_SS_N"), brd.pad_endpoint(u2.s("CS")))
+        brd.hex_route(u1.s("QSPI_SD1"), brd.pad_endpoint(u2.s("IO1")))
+        brd.hex_route(u1.s("QSPI_SD2"), brd.pad_endpoint(u2.s("IO2")))
+        brd.hex_route(u1.s("QSPI_SD0"), brd.pad_endpoint(u2.s("IO0")))
+        brd.hex_route(u1.s("QSPI_SCLK"), brd.pad_endpoint(u2.s("CLK")))
+        brd.hex_route(u1.s("QSPI_SD3"), brd.pad_endpoint(u2.s("IO3")))
 
         brd.hex_route(u1.s("USB_DM"), r7.pads[1])
         brd.hex_route(u1.s("USB_DP"), r8.pads[1])
         brd.hex_route(u1.s("XIN"), y1.s("CLK"))
 
-        brd.hex_route(j4.s("SWCLK"), u1.s("SWCLK"))
-        brd.hex_route(u1.s("GPIO0"), j4.s("TX"))
-        brd.hex_route(u1.s("GPIO1"), j4.s("RX"))
-        brd.hex_route(j4.s("SWDIO"), u1.s("SWDIO"))
+        brd.hex_route(u1.s("SWCLK"), brd.pad_endpoint(j4.s("SWCLK")))
+        brd.hex_route(u1.s("GPIO0"), brd.pad_endpoint(j4.s("TX")))
+        brd.hex_route(u1.s("GPIO1"), brd.pad_endpoint(j4.s("RX")))
+        brd.hex_route(u1.s("SWDIO"), brd.pad_endpoint(j4.s("SWDIO")))
 
         for (a, b) in zip(bus, j3.pads):
-            brd.hex_route(a, b)
+            brd.hex_route(a, brd.pad_endpoint(b))
 
         brd.hex_route(u3.s("D/C"), u1.s("GPIO10"))
         brd.hex_route(u3.s("RESET"), u1.s("GPIO11"))
