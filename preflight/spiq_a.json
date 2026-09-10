@@ -1,7 +1,6 @@
 {
   "board": "spiq_a",
   "source": "spiq_a.py",
-  "python": "/home/jamesb/py313/bin/python",
   "bom": "spiq_a-jlcpcb-bom.csv",
   "pnp": "spiq_a-jlcpcb-pnp.csv",
   "part_catalog": "preflight/spiq_a-jlcpcb-parts.csv",

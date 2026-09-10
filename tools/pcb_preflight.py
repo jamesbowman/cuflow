@@ -538,40 +538,6 @@ def audit_copper_topology(
             expected_hash=expected_hash,
             expected_hash_error=expected_hash_error)
 
-    clearance = float(config.get("net_clearance_mm", 0.1))
-    clearance_violations = net_clearance_violations(topology, clearance)
-    clearance_detail = (
-        f"all physical nets are separated by at least {clearance:.3f} mm"
-        if not clearance_violations else
-        f"{len(clearance_violations)} violation(s) at {clearance:.3f} mm: " +
-        "; ".join(
-            f"{violation.layer} {violation.net_id} intersects buffered "
-            f"{'/'.join(violation.conflicting_net_ids)} at "
-            f"({violation.centroid[0]:.3f}, {violation.centroid[1]:.3f}) mm"
-            for violation in clearance_violations[:20]
-        ) + (" ..." if len(clearance_violations) > 20 else "")
-    )
-    clearance_detail_html = None
-    if clearance_violations:
-        clearance_detail_html = (
-            f"{len(clearance_violations)} violation(s) at "
-            f"{clearance:.3f} mm: " +
-            "; ".join(
-                f"{html_cell(violation.layer)} "
-                f"{net_report_link(violation.net_id)} intersects buffered "
-                f"{'/'.join(net_report_link(net_id) for net_id in violation.conflicting_net_ids)} "
-                f"at ({violation.centroid[0]:.3f}, "
-                f"{violation.centroid[1]:.3f}) mm"
-                for violation in clearance_violations[:20]
-            ) + (" ..." if len(clearance_violations) > 20 else "")
-        )
-    audit.add(
-        "Net-to-net clearance",
-        not clearance_violations,
-        clearance_detail,
-        clearance_detail_html,
-    )
-
     named_nets: dict[str, set[str]] = {}
     seed_errors: list[str] = []
     for name, seeds in config.get("net_seeds", {}).items():
@@ -630,7 +596,61 @@ def audit_copper_topology(
             ", ".join(shared),
         )
 
+    connected_net_ids = audit_external_footprints(
+        audit, profile, topology, labels_by_net)
+    if connected_net_ids is None:
+        connected_net_ids = {net.net_id for net in topology.nets}
+    else:
+        omitted_nets = [
+            net for net in topology.nets
+            if net.net_id not in connected_net_ids
+        ]
+        audit.add(
+            "Unconnected copper classification", True,
+            f"excluded {len(omitted_nets)} copper island"
+            f"{'s' if len(omitted_nets) != 1 else ''} without component "
+            "pads or interlayer connections from the electrical netlist "
+            "and clearance check; copper remains in the Gerbers",
+        )
+
+    clearance = float(config.get("net_clearance_mm", 0.1))
+    clearance_violations = net_clearance_violations(
+        topology, clearance, connected_net_ids)
+    clearance_detail = (
+        f"all electrical nets are separated by at least {clearance:.3f} mm"
+        if not clearance_violations else
+        f"{len(clearance_violations)} violation(s) at {clearance:.3f} mm: " +
+        "; ".join(
+            f"{violation.layer} {violation.net_id} intersects buffered "
+            f"{'/'.join(violation.conflicting_net_ids)} at "
+            f"({violation.centroid[0]:.3f}, {violation.centroid[1]:.3f}) mm"
+            for violation in clearance_violations[:20]
+        ) + (" ..." if len(clearance_violations) > 20 else "")
+    )
+    clearance_detail_html = None
+    if clearance_violations:
+        clearance_detail_html = (
+            f"{len(clearance_violations)} violation(s) at "
+            f"{clearance:.3f} mm: " +
+            "; ".join(
+                f"{html_cell(violation.layer)} "
+                f"{net_report_link(violation.net_id)} intersects buffered "
+                f"{'/'.join(net_report_link(net_id) for net_id in violation.conflicting_net_ids)} "
+                f"at ({violation.centroid[0]:.3f}, "
+                f"{violation.centroid[1]:.3f}) mm"
+                for violation in clearance_violations[:20]
+            ) + (" ..." if len(clearance_violations) > 20 else "")
+        )
+    audit.add(
+        "Net-to-net clearance",
+        not clearance_violations,
+        clearance_detail,
+        clearance_detail_html,
+    )
+
     for net in topology.nets:
+        if net.net_id not in connected_net_ids:
+            continue
         connector_kinds: dict[str, int] = {}
         for connector_index in net.connector_indices:
             kind = topology.connectors[connector_index].kind
@@ -647,10 +667,6 @@ def audit_copper_topology(
                 f"{layer}={area:.3f}"
                 for layer, area in net.area_by_layer.items()),
         })
-
-    audit_external_footprints(
-        audit, profile, topology, labels_by_net)
-
 
 def audit_intended_netlist(
         audit: Audit, path: Path, board: str, topology: Any,
@@ -894,7 +910,7 @@ def audit_intended_netlist(
 
 def audit_external_footprints(
         audit: Audit, profile: dict[str, Any], topology: Any,
-        labels_by_net: dict[str, list[str]]) -> None:
+        labels_by_net: dict[str, list[str]]) -> set[str] | None:
     config = profile.get("external_footprints")
     if config is None:
         return
@@ -1156,7 +1172,17 @@ def audit_external_footprints(
         if len(attachment.net_ids) == 1:
             attachments_by_net.setdefault(
                 attachment.net_ids[0], []).append(attachment)
+    connected_net_ids = {
+        net_id
+        for attachment in attachments
+        for net_id in attachment.net_ids
+    }
+    connected_net_ids.update(labels_by_net)
+    connected_net_ids.update(
+        net.net_id for net in topology.nets if net.connector_indices)
     for net in topology.nets:
+        if net.net_id not in connected_net_ids:
+            continue
         net_attachments = sorted(
             attachments_by_net.get(net.net_id, ()),
             key=lambda item: (
@@ -1187,9 +1213,11 @@ def audit_external_footprints(
             })
     audit.add(
         "Net list",
-        len({row["net"] for row in audit.net_rows}) == len(topology.nets),
-        f"all {len(topology.nets)} physical nets listed with "
-        f"{len(attachments) - len(bad_attachments)} attached named pads",
+        len({row["net"] for row in audit.net_rows}) == len(connected_net_ids),
+        f"all {len(connected_net_ids)} electrical physical nets listed with "
+        f"{len(attachments) - len(bad_attachments)} attached named pads; "
+        f"{len(topology.nets) - len(connected_net_ids)} unconnected copper "
+        "islands omitted",
     )
 
     family_order = {"J": 0, "U": 1, "Y": 2, "R": 3}
@@ -1296,6 +1324,7 @@ def audit_external_footprints(
         f"{len(audit.device_rows)} devices listed with {listed_pad_count} pads; "
         f"{omitted_power_capacitors} VCC-to-GND capacitors omitted",
     )
+    return connected_net_ids
 
 
 def html_cell(value: object) -> str:

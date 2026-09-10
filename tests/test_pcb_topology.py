@@ -110,6 +110,17 @@ class TopologyTests(unittest.TestCase):
         self.assertAlmostEqual(violations[0].centroid[0], 1.045)
         self.assertAlmostEqual(violations[0].centroid[1], 0.5)
 
+    def test_net_clearance_ignores_unselected_copper(self):
+        topology = build_topology({
+            "GTL": sg.MultiPolygon((
+                sg.box(0, 0, 1, 1),
+                sg.box(1.09, 0, 2.09, 1),
+            )),
+        }, ())
+
+        self.assertEqual(
+            net_clearance_violations(topology, 0.1, {"N001"}), ())
+
     def test_overlapping_layers_are_separate_without_a_drill(self):
         copper = sg.box(0, 0, 1, 1)
         topology = build_topology({"GTL": copper, "GBL": copper}, ())

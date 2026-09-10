@@ -440,16 +440,22 @@ def build_topology(
 
 def net_clearance_violations(
         topology: BoardTopology,
-        clearance: float) -> tuple[ClearanceViolation, ...]:
-    """Find different-net copper closer than the requested clearance."""
+        clearance: float,
+        net_ids: Iterable[str] | None = None,
+        ) -> tuple[ClearanceViolation, ...]:
+    """Find selected different-net copper closer than the clearance."""
     if clearance < 0:
         raise ValueError("clearance must not be negative")
+    selected_net_ids = None if net_ids is None else set(net_ids)
     violations: list[ClearanceViolation] = []
     radius = clearance / 2
     for layer in topology.layer_order:
         running_sum: BaseGeometry = sg.Polygon()
         accepted: list[tuple[str, BaseGeometry]] = []
         for net in topology.nets:
+            if (selected_net_ids is not None and
+                    net.net_id not in selected_net_ids):
+                continue
             geometry = topology.geometry_for_net(net.net_id, layer)
             if geometry.is_empty:
                 continue
