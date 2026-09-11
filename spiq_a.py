@@ -10,7 +10,7 @@ from rp2040 import RP2040
 from usb_c import USBC
 
 from hex import Hex
-from hexboard import HexBoard, river_ongrid, wire_ongrid
+from hexboard import HexBoard, wire_ongrid2
 
 def mean(L):
     return sum(L) / len(L)
@@ -118,6 +118,11 @@ class HexRP2040(RP2040):
         def river(names):
             return cu.River(brd, [by_name[name] for name in names])
 
+        def river_ongrid(river):
+            for pad in river.tt:
+                wire_ongrid2(pad)
+            return river
+
         river_ongrid(river(tuple(f"GPIO{i}" for i in range(0, 12)))
                      .w("f 0.8 l 60"))
         river_ongrid(river(("GPIO14", "GPIO15")).right(30))
@@ -127,8 +132,8 @@ class HexRP2040(RP2040):
             "QSPI_SD3", "QSPI_SCLK", "QSPI_SD0",
             "QSPI_SD2", "QSPI_SD1", "QSPI_SS_N")).left(30))
         for nm in ("XIN", "GPIO20"):
-            wire_ongrid(self.s(nm).w("o"))
-        wire_ongrid(self.s("GPIO21").w("o f 1"))
+            wire_ongrid2(self.s(nm).w("o"))
+        wire_ongrid2(self.s("GPIO21").w("o f 1"))
         self.pads[0].w("-").wire()
 
         return
@@ -250,7 +255,7 @@ class Module_LCD240x240(cu.Part):
             elif pad.name == "LEDA":
                 pass
             else:
-                wire_ongrid(pad.w("o f 0.2"))
+                wire_ongrid2(pad.w("o f 0.2"))
 
 
 class LDO_1117_3V3(cu.SOT223):
@@ -348,8 +353,8 @@ class INA226(VSSOP10):
         self.s("VBUS").goto(self.s("IN-")).wire()
         self.s("GND").w("i -")
         self.s("VCC").w("o r 90 f .5 +")
-        wire_ongrid(self.s("SDA").w("i f 0.2"))
-        wire_ongrid(self.s("SCL").w("o f 0.2"))
+        wire_ongrid2(self.s("SDA").w("i f 0.2"))
+        wire_ongrid2(self.s("SCL").w("o f 0.2"))
 
 class R1206(cu.Part):
     family = "R"
@@ -398,7 +403,6 @@ class Osc_12MHz(SMD_3225_4P):
     def hex_escape(self):
         self.s("GND").w("o -")
         self.s("VDD").w("o +")
-        wire_ongrid(self.s("CLK").w("o"))
 
 def spiq_a():
     w = .4/3   # .127 is JLCPCB minimum
@@ -639,7 +643,6 @@ def spiq_a():
     def setup_i2c_pullup(resistor, signal):
         resistor.pads[0].w("o +").wire()
         resistor.pads[1].setname(signal)
-        wire_ongrid(resistor.pads[1].w("o ")).wire()
 
     r3 = cu.R0402(
         hex_near(23, 43).right(0), "5K1",
@@ -710,7 +713,12 @@ def spiq_a():
     y1 = Osc_12MHz(brd.DC((12, 34)).right(60))
     y1_body = y1.center.copy().rect(2.8, 3.5).poly()
     for layer in ("GTL", "GBL"):
-        brd.route_keepouts[layer].append(y1_body)
+        keepout = y1_body
+        if layer == "GTL":
+            # Allow a trace-width approach to the clock pad itself.
+            keepout = keepout.difference(y1.s("CLK").boundary.buffer(
+                brd.trace / 2 + brd.hex_clearance))
+        brd.route_keepouts[layer].append(keepout)
 
     usb_body_south = j1.center.xy[1] - 8.94 / 2
     series_resistor_y = usb_body_south - 1.0 - 1.1
@@ -723,9 +731,6 @@ def spiq_a():
     for resistor in (r7, r8):
         for pad, name in zip(resistor.pads, ("1", "2")):
             pad.setname(name)
-    if ROUTE2:
-        for r in (r7, r8):
-            wire_ongrid(r.pads[1].w("o f 0"))
     r7.pads[0].goto(j1.s("A7"), twist = True).wire()
     brd.addnet(r7.pads[0], j1.s("B7"))
     j1.s("B6").w("i l 45 f 1 /")
@@ -750,10 +755,10 @@ def spiq_a():
     if ROUTE2:
         # Debug port signals on bottom
 
-        u1.s("SWDIO").hex("lr/!3f").wire()
-        u1.s("SWCLK").hex("ff/!3f").wire()
-        u1.s("GPIO0").hex("r/f").wire()
-        u1.s("GPIO1").hex("2frf/f").wire()
+        u1.s("SWDIO").hex("flr/").wire()
+        u1.s("SWCLK").hex("ff/").wire()
+        u1.s("GPIO0").hex("r/").wire()
+        u1.s("GPIO1").hex("2frf/").wire()
 
         bus = [u1.s(f"GPIO{i}") for i in range(2, 10)]
         aligner = [
@@ -793,9 +798,9 @@ def spiq_a():
         brd.hex_route(u1.s("QSPI_SCLK"), brd.pad_endpoint(u2.s("CLK")))
         brd.hex_route(u1.s("QSPI_SD3"), brd.pad_endpoint(u2.s("IO3")))
 
-        brd.hex_route(u1.s("USB_DM"), r7.pads[1])
-        brd.hex_route(u1.s("USB_DP"), r8.pads[1])
-        brd.hex_route(u1.s("XIN"), y1.s("CLK"))
+        brd.hex_route(u1.s("USB_DM"), brd.pad_endpoint(r7.pads[1]))
+        brd.hex_route(u1.s("USB_DP"), brd.pad_endpoint(r8.pads[1]))
+        brd.hex_route(u1.s("XIN"), brd.pad_endpoint(y1.s("CLK")))
 
         brd.hex_route(u1.s("SWCLK"), brd.pad_endpoint(j4.s("SWCLK")))
         brd.hex_route(u1.s("GPIO0"), brd.pad_endpoint(j4.s("TX")))
@@ -813,12 +818,12 @@ def spiq_a():
         brd.hex_route_net((
             u1.s("GPIO20"),
             u6.s("SDA"),
-            r3.s("SDA"),
+            brd.pad_endpoint(r3.s("SDA")),
         ))
         brd.hex_route_net((
             u1.s("GPIO21"),
             u6.s("SCL"),
-            r4.s("SCL"),
+            brd.pad_endpoint(r4.s("SCL")),
         ))
     if ROUTE2:
         brd.hex_render()
