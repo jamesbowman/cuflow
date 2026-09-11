@@ -30,6 +30,7 @@
   "excluded_designators": ["J4", "U3"],
   "expected_gml_contours": 5,
   "expected_gml_contours_reason": "one rounded board perimeter plus J1's four plated USB-C mounting slots",
+  "copper_edge_clearance_mm": {"GTL": 0.4, "GBL": 0.4},
   "topology": {
     "copper_layers": ["GTL", "G2L", "G3L", "GBL"],
     "net_clearance_mm": 0.1,

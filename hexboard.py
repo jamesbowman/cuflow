@@ -120,9 +120,41 @@ class HexBoard(cu.Board):
             shapely.points(coordinates), self.route_radius, quad_segs=16)
         self.route_tree = STRtree(route_disks)
         self.route_point_tree = STRtree(shapely.points(coordinates))
+        self.route_outline = (
+            self.outline_polygon if self.outline_polygon is not None
+            else sg.box(0, 0, *self.size))
+        outlines = self.layers['GML'].lines
+        if outlines:
+            self.route_outline = max(
+                (sg.Polygon(line) for line in outlines), key=lambda p: p.area)
+        self.edge_block_cache = {}
         self.blocked = {layer: self.layer_blocks(layer) for layer in ('GTL', 'GBL')}
         self.routes = []
         self.route_widths = []
+
+    def edge_blocks(self, width):
+        """Reserve trace radius and edge clearance against the perimeter.
+
+        Convex insets contain the segments between allowed centers. Concave
+        outlines need an extra half-step margin to protect those segments.
+        """
+        clearance = float(getattr(self, "hex_edge_clearance", 0))
+        assert math.isfinite(clearance) and clearance >= 0
+        key = (width, clearance)
+        if key not in self.edge_block_cache:
+            segment_margin = (
+                0 if self.route_outline.equals(self.route_outline.convex_hull)
+                else self.hr)
+            interior = self.route_outline.buffer(
+                -(clearance + width / 2 + segment_margin))
+            blocked = self.gr.zeros(np.uint8) | (self.gr.valid == 0)
+            points = shapely.points([h.to_plane() for h in self.route_hexes])
+            inside = shapely.covers(interior, points)
+            for h, allowed in zip(self.route_hexes, inside):
+                if not allowed:
+                    blocked[h.q, h.r] = 1
+            self.edge_block_cache[key] = blocked
+        return self.edge_block_cache[key].copy()
 
     def layer_blocks(
             self, nm, width=None, exempt_points=(),
@@ -155,7 +187,7 @@ class HexBoard(cu.Board):
             layer_poly = so.unary_union(
                 copper + drill_keepouts + self.keepouts +
                 self.route_keepouts[nm]).buffer(0)
-            blocked = self.gr.zeros(np.uint8) | (self.gr.valid == 0)
+            blocked = self.edge_blocks(width)
             for i in self.route_tree.query(
                     layer_poly, predicate="intersects"):
                 h = self.route_hexes[i]
@@ -169,7 +201,7 @@ class HexBoard(cu.Board):
             fixed_geometry = fixed_geometry.buffer(geometry_expansion)
         layer_poly = so.unary_union(
             [fixed_geometry] + drill_keepouts).buffer(0)
-        blocked = self.gr.zeros(np.uint8) | (self.gr.valid == 0)
+        blocked = self.edge_blocks(width)
         for i in self.route_tree.query(layer_poly, predicate="intersects"):
             h = self.route_hexes[i]
             blocked[h.q, h.r] = 1
@@ -247,6 +279,11 @@ class HexBoard(cu.Board):
             self.pad_hex_cells(b)
             if isinstance(b, PadEndpoint)
             else frozenset((tuple(Hex.from_xy(*target.xy)),)))
+        edge_blocked = self.edge_blocks(self.trace)
+        for endpoint, cells in ((a, source_cells), (b, target_cells)):
+            if not isinstance(endpoint, PadEndpoint):
+                assert all(not edge_blocked[q, r] for q, r in cells), (
+                    "Route endpoint violates board-edge clearance")
         exempt_geometries = tuple(
             endpoint.draw.boundary
             for endpoint in (a, b)
@@ -313,6 +350,9 @@ class HexBoard(cu.Board):
         target = b
         a = Hex.from_xy(*source.xy)
         b = Hex.from_xy(*target.xy)
+        edge_blocked = self.edge_blocks(self.trace)
+        assert not edge_blocked[a.q, a.r] and not edge_blocked[b.q, b.r], (
+            "Route endpoint violates board-edge clearance")
 
         wavefront = set([tuple(a)])
         dirs = [Hex(dq,dr) for (dq, dr) in axial_direction_vectors]
@@ -381,6 +421,11 @@ class HexBoard(cu.Board):
              else frozenset((tuple(Hex.from_xy(*draw.xy)),)))
             for terminal, draw in zip(terminals, draws)
         ]
+        edge_blocked = self.edge_blocks(route_width)
+        for terminal, cells in zip(terminals, endpoint_cells):
+            if not isinstance(terminal, PadEndpoint):
+                assert all(not edge_blocked[q, r] for q, r in cells), (
+                    "Route endpoint violates board-edge clearance")
         exempt_geometries = tuple(
             terminal.draw.boundary
             for terminal in terminals

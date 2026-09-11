@@ -442,6 +442,63 @@ def audit_manufacturing_files(
             )
 
 
+def audit_copper_edges(audit: Audit, profile: dict[str, Any]) -> None:
+    """Check all copper, including artwork, against the outer GML perimeter."""
+    limits = profile.get("copper_edge_clearance_mm")
+    if not limits:
+        return
+    import shapely.geometry as sg
+    from shapely.ops import nearest_points
+    if __package__:
+        from .pcb_topology import (
+            TopologyFormatError, parse_cuflow_gerber, parse_cuflow_paths_text)
+    else:
+        from pcb_topology import (
+            TopologyFormatError, parse_cuflow_gerber, parse_cuflow_paths_text)
+
+    board = profile["board"]
+    try:
+        paths = parse_cuflow_paths_text(
+            (ROOT / f"{board}.GML").read_text(encoding="ascii"))
+        if not paths or any(not path.is_ring for path in paths):
+            raise ValueError("GML must contain closed, simple contours")
+        # Internal slots have separate rules, particularly plated slots.
+        perimeter = max((sg.Polygon(path) for path in paths),
+                        key=lambda polygon: polygon.area)
+        if not perimeter.is_valid or perimeter.area <= 0:
+            raise ValueError("invalid outer GML perimeter")
+    except (OSError, ValueError, TopologyFormatError) as error:
+        audit.add("Copper-to-board-edge clearance", False,
+                  f"cannot read perimeter: {error}")
+        return
+
+    for layer, limit in limits.items():
+        name = f"{layer} copper-to-board-edge clearance"
+        try:
+            clearance = float(limit)
+            if not math.isfinite(clearance) or clearance < 0:
+                raise ValueError("clearance must be finite and nonnegative")
+            copper = parse_cuflow_gerber(ROOT / f"{board}.{layer}")
+            if copper.is_empty:
+                audit.add(name, True, "no copper on layer")
+                continue
+            outside = copper.difference(perimeter)
+            if not outside.is_empty:
+                point = outside.representative_point()
+                audit.add(name, False,
+                          f"copper outside board at ({point.x:.3f}, "
+                          f"{point.y:.3f}) mm; needs {clearance:.3f} mm inset")
+                continue
+            distance = copper.distance(perimeter.boundary)
+            point, _ = nearest_points(copper, perimeter.boundary)
+            audit.add(name, distance + 1e-9 >= clearance,
+                      f"minimum {distance:.4f} mm; needs {clearance:.3f} mm; "
+                      f"nearest copper at ({point.x:.3f}, {point.y:.3f}) mm "
+                      "(includes unconnected artwork)")
+        except (OSError, ValueError, TopologyFormatError) as error:
+            audit.add(name, False, f"cannot check copper: {error}")
+
+
 def audit_copper_topology(
         audit: Audit, profile: dict[str, Any]) -> None:
     config = profile.get("topology")
@@ -1794,6 +1851,7 @@ def main() -> int:
     catalog = load_catalog(audit, relative_path(profile["part_catalog"]))
     audit_bom_and_pnp(audit, profile, catalog)
     audit_manufacturing_files(audit, profile)
+    audit_copper_edges(audit, profile)
     audit_copper_topology(audit, profile)
 
     report_path = args.report or ROOT / f"{args.board}-preflight.html"

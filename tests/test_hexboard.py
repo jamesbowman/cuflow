@@ -30,6 +30,39 @@ class HexRouteNetWidthTests(unittest.TestCase):
             result.append(terminal)
         return tuple(result)
 
+    def test_edge_blocks_follow_outline_on_both_layers(self):
+        board = self.board()
+        board.outline_polygon = sg.Polygon([
+            (0, 3), (3, 0), (12, 0), (12, 12), (0, 12)])
+        board.hex_edge_clearance = 0.4
+        board.hex_setup()
+        corner = Hex.from_xy_fine(1, 1)
+        inside = Hex.from_xy_fine(6, 6)
+        for layer in ("GTL", "GBL"):
+            self.assertTrue(board.blocked[layer][corner.q, corner.r])
+            self.assertFalse(board.blocked[layer][inside.q, inside.r])
+
+    def test_wide_routes_reserve_more_edge_space(self):
+        board = self.board()
+        board.hex_edge_clearance = 0.4
+        narrow = board.edge_blocks(0.1)
+        wide = board.edge_blocks(0.8)
+        self.assertTrue(any(
+            wide[h.q, h.r] and not narrow[h.q, h.r]
+            for h in board.route_hexes))
+
+    def test_point_and_net_endpoints_cannot_override_edge_blocks(self):
+        board = self.board()
+        board.hex_edge_clearance = 0.4
+        board.hex_setup()
+        a, b, c = self.terminals(board)
+        a.xy = Hex.from_xy_fine(0.1, 6).to_plane()
+        for source, target in ((a, b), (b, a)):
+            with self.assertRaisesRegex(AssertionError, "board-edge"):
+                board.hex_route(source, target)
+        with self.assertRaisesRegex(AssertionError, "board-edge"):
+            board.hex_route_net((a, b, c))
+
     def test_default_width_preserves_single_cell_occupancy(self):
         board = self.board()
         before = board.blocked["GTL"].copy()

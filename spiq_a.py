@@ -416,6 +416,7 @@ def spiq_a():
         via_space = cu.mil(5),
         silk = cu.mil(5))
     brd.hex_clearance = 0.100
+    brd.hex_edge_clearance = 0.400
 
     def spiq_logo():
         x0, y0 = (0.9, 0.9)
@@ -798,13 +799,13 @@ def spiq_a():
         brd.hex_route(u1.s("QSPI_SCLK"), brd.pad_endpoint(u2.s("CLK")))
         brd.hex_route(u1.s("QSPI_SD3"), brd.pad_endpoint(u2.s("IO3")))
 
-        brd.hex_route(u1.s("USB_DM"), brd.pad_endpoint(r7.pads[1]))
         brd.hex_route(u1.s("USB_DP"), brd.pad_endpoint(r8.pads[1]))
+        brd.hex_route(u1.s("USB_DM"), brd.pad_endpoint(r7.pads[1]))
         brd.hex_route(u1.s("XIN"), brd.pad_endpoint(y1.s("CLK")))
 
         brd.hex_route(u1.s("SWCLK"), brd.pad_endpoint(j4.s("SWCLK")))
-        brd.hex_route(u1.s("GPIO0"), brd.pad_endpoint(j4.s("TX")))
         brd.hex_route(u1.s("GPIO1"), brd.pad_endpoint(j4.s("RX")))
+        brd.hex_route(u1.s("GPIO0"), brd.pad_endpoint(j4.s("TX")))
         brd.hex_route(u1.s("SWDIO"), brd.pad_endpoint(j4.s("SWDIO")))
 
         for (a, b) in zip(bus, j3.pads):
