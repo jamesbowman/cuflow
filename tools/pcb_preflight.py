@@ -444,9 +444,10 @@ def audit_manufacturing_files(
 
 def audit_copper_edges(audit: Audit, profile: dict[str, Any]) -> None:
     """Check all copper, including artwork, against the outer GML perimeter."""
-    limits = profile.get("copper_edge_clearance_mm")
-    if not limits:
-        return
+    # Routed edges by default; profiles can specify larger V-score clearances.
+    # A partial override must not silently disable the other copper layer.
+    limits = {"GTL": 0.2, "GBL": 0.2}
+    limits.update(profile.get("copper_edge_clearance_mm") or {})
     import shapely.geometry as sg
     from shapely.ops import nearest_points
     if __package__:

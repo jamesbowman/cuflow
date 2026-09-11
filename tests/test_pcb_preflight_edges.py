@@ -21,20 +21,34 @@ def gerber(*polygons):
 
 
 class CopperEdgeTests(unittest.TestCase):
-    def check_copper(self, copper, outline=None, slots=()):
+    def check_copper(self, copper, outline=None, slots=(), overrides=None):
         if outline is None:
             outline = sg.box(0, 0, 10, 10)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "board.GML").write_text(gerber(outline, *slots))
             (root / "board.GTL").write_text(gerber(*copper))
+            (root / "board.GBL").write_text(gerber(*copper))
             audit = pcb_preflight.Audit()
             with patch.object(pcb_preflight, "ROOT", root):
                 pcb_preflight.audit_copper_edges(audit, {
                     "board": "board",
-                    "copper_edge_clearance_mm": {"GTL": 0.4},
+                    **({"copper_edge_clearance_mm": {"GTL": 0.4}}
+                       if overrides is None else overrides),
                 })
             return audit
+
+    def test_missing_setting_checks_both_layers_at_routed_default(self):
+        audit = self.check_copper([sg.box(.2, .2, 9.8, 9.8)], overrides={})
+        self.assertTrue(audit.passed)
+        self.assertEqual(len(audit.checks), 2)
+        self.assertTrue(all("needs 0.200 mm" in c.detail for c in audit.checks))
+        audit = self.check_copper([sg.box(.19, 2, 1, 3)], overrides={})
+        self.assertEqual([c.passed for c in audit.checks], [False, False])
+
+    def test_partial_override_keeps_other_layer_enabled(self):
+        audit = self.check_copper([sg.box(.3, .3, 9.7, 9.7)])
+        self.assertEqual([c.passed for c in audit.checks], [False, True])
 
     def test_exact_clearance_passes(self):
         self.assertTrue(self.check_copper([sg.box(.4, .4, 9.6, 9.6)]).passed)
