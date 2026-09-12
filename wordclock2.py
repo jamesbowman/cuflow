@@ -10,6 +10,10 @@ import svgout
 import dip
 import sot
 import eagle
+from hexboard import HexBoard
+from dualflash import (
+    TRACE_WIDTH, TRACE_SPACE, VIA_HOLE, VIA_DIAMETER, VIA_SPACE, SILK_WIDTH,
+)
 
 """
 16x8
@@ -45,14 +49,14 @@ class NeoPixel5050(cu.Part):
 def wordclock2():
     d = 68.5      # pin-to-pin
     d1 = 4.0    # pin-to-edge
-    brd = cu.Board(
+    brd = HexBoard(
         (HSIZE, VSIZE),
-        trace = 0.4,
-        space = 0.2,
-        via_hole = 0.3,
-        via = 0.6,
-        via_space = cu.mil(5),
-        silk = cu.mil(5))
+        trace = TRACE_WIDTH,
+        space = TRACE_SPACE,
+        via_hole = VIA_HOLE,
+        via = VIA_DIAMETER,
+        via_space = VIA_SPACE,
+        silk = SILK_WIDTH)
 
     o = 8
     for x in (o, HSIZE - o):
@@ -73,30 +77,8 @@ def wordclock2():
     j2.s("GND").through().thermal(1).wire()
     j2.s("+5V").setname("VCC").thermal(1).wire()
 
-    fixture_holes = []
-
-    def fixture_wire(dc, side):
-        # Keep copper 0.5 mm from the drill, plus 0.05 mm margin.
-        radius = 1.0 + 0.5 + dc.width / 2 + 0.05
-        path = [dc.path[0]]
-        for start, end in zip(dc.path, dc.path[1:]):
-            segment = sg.LineString((start, end))
-            hits = [xy for xy in fixture_holes
-                    if segment.distance(sg.Point(xy)) < radius]
-            if hits:
-                # The column turnarounds and DIN approach are horizontal.
-                assert abs(start[1] - end[1]) < 1e-6
-                direction = 1 if end[0] > start[0] else -1
-                for x, y in sorted(hits, key=lambda xy: direction * xy[0]):
-                    path.extend(((x - direction * radius, y + side * radius),
-                                 (x + direction * radius, y + side * radius)))
-            path.append(end)
-        dc.path = path
-        dc.wire()
-
     def nps(n, p):
         a = []
-        links = []
         fixture_offset = 6 / math.sqrt(2)
         for i in range(n):
             np = NeoPixel5050(p.copy().right(0 + 45))
@@ -105,30 +87,49 @@ def wordclock2():
             for dx, dy in ((-fixture_offset, fixture_offset),
                            (fixture_offset, -fixture_offset)):
                 xy = (x + dx, y + dy)
-                fixture_holes.append(xy)
                 brd.hole(xy, 2)
             np.escape()
-            if i != 0:
-                links.append((prev, np, 1 if i % 18 == 9 else -1))
             if (i % 18) == 8:
                 p.right(90).forward(HSPACE).right(90)
             elif (i % 18) == 17:
                 p.left(90).forward(HSPACE).left(90)
             else:
                 p.forward(VSPACE)
-            prev = np
             a.append(np)
-        # Route only after every fixture hole has been placed.
-        for src, dst, side in links:
-            fixture_wire(src.s("DOUT").straight(dst.s("DIN")), side)
         return a
 
     # Top left LED is at (7.11, 15.7)
     all_n = nps(16 * 9, brd.DC((7.11, VSIZE - 15.7 - 8 * VSPACE)))
 
-    fixture_wire(j2.s("DIN").goto(all_n[0].s("DIN")), -1)
-
     brd.outline()
+    brd.hex_clearance = TRACE_SPACE
+    brd.hex_edge_clearance = 0.5
+    # DIN is a plated terminal, not a mechanical routing obstacle. Exempt
+    # its own drill/keepout while planning, restoring both before export.
+    din = j2.s("DIN")
+    holes, keepouts = brd.holes, brd.keepouts
+    try:
+        brd.holes = holes.copy()
+        for diameter, locations in holes.items():
+            brd.holes[diameter] = [xy for xy in locations if xy != din.xy]
+        brd.keepouts = [g for g in keepouts
+                        if not g.covers(sg.Point(din.xy))]
+        brd.hex_setup()
+        # Route directly between the available cells inside the large pads.
+        brd.hex_route(
+            brd.pad_endpoint(din),
+            brd.pad_endpoint(all_n[0].s("DIN")),
+        )
+    finally:
+        brd.holes, brd.keepouts = holes, keepouts
+    for i, (src, dst) in enumerate(zip(all_n, all_n[1:]), 1):
+        brd.hex_route(
+            brd.pad_endpoint(src.s("DOUT")),
+            brd.pad_endpoint(dst.s("DIN")),
+        )
+        if i % 16 == 0 or i == len(all_n) - 1:
+            print(f"Routed {i}/{len(all_n) - 1} LED links", flush=True)
+    brd.wire_routes()
     if 1:
         brd.fill_any("GTL", "VCC")
         brd.fill_any("GBL", "GND")
