@@ -28,6 +28,9 @@ VSPACE = 144.9 / 5
 
 class NeoPixel5050(cu.Part):
     family = "U"
+    mfr = "WS2812B-B/W"
+    footprint = "SMD5050-4P"
+    source = {"LCSC": "C114586"}
     def place(self, dc):
         self.chamfered(dc.copy().left(90), 5.0, 5.0, idoffset = (-0.5, .2))
 
