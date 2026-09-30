@@ -1,0 +1,24 @@
+#!/bin/sh
+
+case "$(uname -s)" in
+  Darwin)
+    osascript <<'EOF'
+tell application "System Events"
+    tell process "Gerbv"
+        set frontmost to true
+        key code 96
+    end tell
+end tell
+EOF
+    ;;
+  Linux)
+    for W in $(xdotool search --onlyvisible --name Gerbv)
+    do
+      xdotool key --window "$W" F5
+    done
+    ;;
+  *)
+    echo "gerbv-reload: unsupported platform" >&2
+    exit 1
+    ;;
+esac
