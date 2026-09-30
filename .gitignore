@@ -10,10 +10,13 @@ __pycache__
 *.GTO
 *.GTP
 *.GTS
+*.HEX
 *.TXT
 *.zip
 *.ucf
 *.svg
+*.html
+*.net.json
 !assets/*.svg
 *.csv
 !preflight/*.csv
@@ -23,6 +26,7 @@ __pycache__
 *.G2L
 *.G3L
 *.gtl.pov
+*.gtl-covered.pov
 *.gto.pov
 *.sub.pov
 *.gts.pov
