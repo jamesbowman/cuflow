@@ -404,11 +404,23 @@ def audit_manufacturing_files(
         drill_hits = sum(
             DRILL_HIT.match(line.strip()) is not None
             for line in drill_text.splitlines())
-        audit.add(
-            "Drill file",
-            drill_hits > 0,
-            f"{drill_hits} drill hits in {drill_path.name}",
-        )
+        if "expected_drill_hits" in profile:
+            # An all-SMD board has no drills: the profile says so, with why.
+            expected = int(profile["expected_drill_hits"])
+            reason = profile.get(
+                "expected_drill_hits_reason", "profile requirement")
+            audit.add(
+                "Drill file",
+                drill_hits == expected,
+                f"{drill_hits} drill hits in {drill_path.name}; expected "
+                f"{expected}: {reason}",
+            )
+        else:
+            audit.add(
+                "Drill file",
+                drill_hits > 0,
+                f"{drill_hits} drill hits in {drill_path.name}",
+            )
     else:
         audit.add("Drill file", False, f"missing {drill_path.name}")
 
