@@ -368,5 +368,35 @@ class HtmlReportTests(unittest.TestCase):
         self.assertIn('id="generator-output"', output)
 
 
+class RootOptionTests(unittest.TestCase):
+    def test_root_option_resolves_profile_outside_checkout(self):
+        import contextlib
+        import io
+        from unittest.mock import patch
+
+        import tools.pcb_preflight as pcb_preflight
+
+        checkout_root = pcb_preflight.ROOT
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "preflight").mkdir()
+            (root / "preflight" / "outside.json").write_text(
+                json.dumps({"board": "elsewhere"}), encoding="utf-8")
+            stderr = io.StringIO()
+            argv = ["pcb_preflight.py", "outside", "--root", directory]
+            try:
+                with patch("sys.argv", argv), contextlib.redirect_stderr(stderr):
+                    code = pcb_preflight.main()
+                self.assertEqual(pcb_preflight.ROOT, root.resolve())
+            finally:
+                pcb_preflight.ROOT = checkout_root
+
+        # The profile under --root was found and read: its board name is
+        # checked, rather than the load failing in the CuFlow checkout.
+        self.assertEqual(code, 2)
+        self.assertIn("does not match 'outside'", stderr.getvalue())
+
+
+
 if __name__ == "__main__":
     unittest.main()

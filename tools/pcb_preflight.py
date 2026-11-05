@@ -1776,6 +1776,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--report", type=Path,
         help="report path (default: <board>-preflight.html)")
+    parser.add_argument(
+        "--root", type=Path,
+        help="directory holding the board's outputs; relative paths on the "
+             "command line and in the profile, and the board generator's "
+             "working directory, resolve against it (default: this CuFlow "
+             "checkout)")
     return parser.parse_args()
 
 
@@ -1788,7 +1794,10 @@ def configured_python(
 
 
 def main() -> int:
+    global ROOT
     args = parse_args()
+    if args.root is not None:
+        ROOT = args.root.expanduser().resolve()
     profile_path = (
         args.profile if args.profile is not None
         else ROOT / "preflight" / f"{args.board}.json")
