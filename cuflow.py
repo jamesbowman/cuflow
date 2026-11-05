@@ -23,17 +23,24 @@ def micron(x):  return x / 1000
 def DEGREES(r): return 180 * r / math.pi
 
 def pretty_parts(nms):
-    f = nms[0][0]
-    nn = [int(nm[1:]) for nm in nms]
+    # Compact designators per prefix: R1,R2,R3,R5 -> R1-3,R5. Prefixes may
+    # be any length (BT1, SW1, TP1); a range only covers consecutive numbers.
+    numbers = defaultdict(list)
+    for nm in nms:
+        prefix = nm.rstrip("0123456789")
+        numbers[prefix].append(int(nm[len(prefix):]))
     ni = []
-    while nn:
-        seq = [i for (i,j) in zip(nn, range(nn[0], 9999)) if (i == j)]
-        if len(seq) > 2:
-            ni.append("{0}{1}-{2}".format(f, nn[0], nn[len(seq) - 1]))
-            nn = nn[len(seq):]
-        else:
-            ni.append("{0}{1}".format(f, nn[0]))
-            nn = nn[1:]
+    for f, nn in numbers.items():
+        while nn:
+            run = 1
+            while run < len(nn) and nn[run] == nn[0] + run:
+                run += 1
+            if run > 2:
+                ni.append("{0}{1}-{2}".format(f, nn[0], nn[run - 1]))
+                nn = nn[run:]
+            else:
+                ni.append("{0}{1}".format(f, nn[0]))
+                nn = nn[1:]
     return ",".join(ni)
 
 class Layer:
@@ -1306,13 +1313,14 @@ class Board:
                         vendor_c = p.source[vendor]
                     else:
                         (vendor, vendor_c) = ('', '')
-                    attr = (rank.index(f), p.mfr + p.val, p.footprint, vendor, vendor_c)
+                    order = rank.index(f) if f in rank else len(rank)
+                    attr = (order, f, p.mfr + p.val, p.footprint, vendor, vendor_c)
                     parts[attr].append(p.id)
 
         records = []
         jlcpcb_records = []
         for attr in sorted(parts):
-            _, mfr, footprint, vendor, vendor_c = attr
+            _, _, mfr, footprint, vendor, vendor_c = attr
             designators = parts[attr]
             records.append({
                 "parts": pretty_parts(designators),
