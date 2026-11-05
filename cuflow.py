@@ -946,9 +946,13 @@ class Board:
         la = self.layers[layer]
 
         d = max(self.space, self.via_space)
+        # The keep-away is a 16-segment buffer whose chords lie inside the
+        # true distance, and Layer.add then simplifies the pour by up to
+        # 1 um. Grow the radius so the stored pour still clears by d.
+        r = (d + 0.001) / math.cos(math.pi / 64)
         notouch = so.unary_union([o for (nm, o) in la.polys if nm not in include])
         self.layers[layer].add(
-            g.difference(notouch.buffer(d)), include
+            g.difference(notouch.buffer(r)), include
         )
 
     def addnet(self, a, b):
