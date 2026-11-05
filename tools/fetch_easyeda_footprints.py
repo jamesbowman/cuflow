@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import tempfile
@@ -19,6 +20,7 @@ else:
 
 POLYGON_POINT = re.compile(
     r"\(xy\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\)")
+DRILL = re.compile(r"\(drill(?: oval)? (\d+(?:\.\d+)?)(?: (\d+(?:\.\d+)?))?\)")
 
 
 def atomic_json(path: Path, value: dict) -> None:
@@ -46,6 +48,58 @@ def copper_sides(layers: str) -> list[str]:
     if "B.Cu" in values:
         result.append("bottom")
     return result
+
+
+def pad_drill(text: str) -> list[float] | None:
+    """A pad's drill as [width, length] in mm (equal for round), or None."""
+    if not text or not text.strip():
+        return None
+    match = DRILL.fullmatch(text.strip())
+    if match is None:
+        raise ValueError(f"unrecognised pad drill {text!r}")
+    width = float(match.group(1))
+    length = float(match.group(2)) if match.group(2) else width
+    return [width, length]
+
+
+def silkscreen(exported) -> list[dict]:
+    """Top-silkscreen strokes: {"line": [[x, y], ...], "width": w} polylines
+    (arcs sampled every 10 degrees or finer) and {"circle": [x, y, r],
+    "width": w} circles, in the same package-local coordinates as the pads."""
+    strokes: list[dict] = []
+    for shape in (*exported.tracks, *exported.rectangles):
+        if shape.layers != "F.SilkS":
+            continue
+        for sx, sy, ex, ey in zip(
+                shape.points_start_x, shape.points_start_y,
+                shape.points_end_x, shape.points_end_y, strict=True):
+            strokes.append({
+                "line": [[sx, sy], [ex, ey]], "width": shape.stroke_width})
+    for circle in exported.circles:
+        if circle.layers == "F.SilkS":
+            radius = math.hypot(
+                circle.end_x - circle.cx, circle.end_y - circle.cy)
+            strokes.append({
+                "circle": [circle.cx, circle.cy, radius],
+                "width": circle.stroke_width})
+    for arc in exported.arcs:
+        if arc.layers != "F.SilkS":
+            continue
+        # KiCad 5 fp_arc: start is the centre, end the first point, angle
+        # the sweep in degrees.
+        radius = math.hypot(arc.end_x - arc.start_x, arc.end_y - arc.start_y)
+        first = math.atan2(arc.end_y - arc.start_y, arc.end_x - arc.start_x)
+        steps = max(4, int(abs(arc.angle) / 10))
+        sweep = math.radians(arc.angle)
+        strokes.append({
+            "line": [
+                [arc.start_x + radius * math.cos(first + sweep * i / steps),
+                 arc.start_y + radius * math.sin(first + sweep * i / steps)]
+                for i in range(steps + 1)
+            ],
+            "width": arc.stroke_width,
+        })
+    return strokes
 
 
 def normalize_footprint(lcsc: str, cad_data: dict) -> dict:
@@ -92,6 +146,7 @@ def normalize_footprint(lcsc: str, cad_data: dict) -> dict:
             "shape": pad.shape,
             "size": [pad.width, pad.height],
             "type": pad.type,
+            "drill": pad_drill(pad.drill),
         })
     canonical_source = json.dumps(
         cad_data, sort_keys=True, separators=(",", ":"),
@@ -106,6 +161,8 @@ def normalize_footprint(lcsc: str, cad_data: dict) -> dict:
         "mpn": symbol.info.mpn,
         "package": exported.info.name,
         "pads": pads,
+        "holes": [[hole.pos_x, hole.pos_y, hole.size] for hole in exported.holes],
+        "silk": silkscreen(exported),
         "pin_names": pin_names,
         "source_sha256": hashlib.sha256(canonical_source).hexdigest(),
     }
