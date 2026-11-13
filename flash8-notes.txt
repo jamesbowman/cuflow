@@ -1,4 +1,5 @@
-CURRENT STATUS: Power, local CS/LED branches and flash-column buses connected.
+CURRENT STATUS: Power, header A/B/CS controls, all eight U1-to-flash CS nets,
+local LED branches and all five shared SPI/QSPI buses connected.
 All GND and 3.3 V pins
 connect to their respective inner planes, including the pull resistors and
 shift-register clear input. Each flash CS connects to its pull-up and LED
@@ -7,8 +8,15 @@ connections use the hex grid and pad-area endpoints. Each flash column has
 two north-south GBL trunks west (IO1, IO2, nearest first) and three east
 (SCK, IO0, IO3, nearest first). Trunks pass through alternate-row hex centers;
 each flash signal pin has a top-layer hex branch and one via at its nearest
-trunk center. The column-to-column joins, header connections, U1 output-to-CS
-connections and other control signals remain unrouted.
+trunk center. The eight U1 outputs are assigned in physical fanout order and
+connect to their flash CS groups on GTL, with no crossings or added vias.
+A, B and host CS connect from J2 on GBL to three vias near U1. Short top
+hex branches join SER, both clock pins, and OE/R1 respectively. R2 and R3
+connect to their plated header pads on top. All use pad-area endpoints.
+The five shared trunks extend south on GBL to ten new hex-center vias.
+Top-layer hex routes join both columns to J2, including R4/R5 for IO2/IO3.
+Existing routes and component placements are preserved. The unused 5 V
+header pins remain isolated; all functional signal nets are connected.
 
 FLASH8 — SPIDriver Quattro / EVE flash validation fixture
 
@@ -39,16 +47,17 @@ U1: SN74LVC595APWR, TSSOP-16 (TI PW0016A).
   R1 sits adjacent to U1's OE pin, with its signal pad facing U1.
   R2-R5 sit beside the J2 pins for A, B, IO2 and IO3 respectively.
 
-SLOT / FLASH / OUTPUT / U1 PIN
-  F0 / U2 / QA / 15
-  F1 / U3 / QB / 1
-  F2 / U4 / QC / 2
-  F3 / U5 / QD / 3
-  F4 / U6 / QE / 4
-  F5 / U7 / QF / 5
-  F6 / U8 / QG / 6
-  F7 / U9 / QH / 7
-Slots F0..F3 are the left column, bottom to top. F4..F7 are the right column.
+LABEL / FLASH / OUTPUT / U1 PIN
+  0 / U2 / QA / 15
+  1 / U6 / QB / 1
+  2 / U3 / QC / 2
+  3 / U7 / QD / 3
+  4 / U8 / QE / 4
+  5 / U4 / QF / 5
+  6 / U9 / QG / 6
+  7 / U5 / QH / 7
+Labels are shift-register bit numbers, QA=0 through QH=7.
+Bottom to top: left column 0, 2, 5, 7; right column 1, 3, 4, 6.
 
 Eight soldered SOIC-8-208mil footprints, 5.3 mm wide body, 1.27 mm pitch.
 These are bare IC footprints, not ZIF socket footprints.
@@ -58,7 +67,8 @@ Confirm the selected flash is pin-compatible and 3.3 V before population.
 
 Each CS has a 470 ohm pull-up to 3.3 V. Each indicator branch is:
   3.3 V -> 1.5 kohm -> red LED anode -> LED cathode -> CSn.
-D1..D8 correspond to F0..F7. The silk bar marks each LED cathode.
+D1..D8 correspond to labels 0, 2, 5, 7, 1, 3, 4, 6 respectively.
+The silk bar marks each LED cathode.
 Each LED and its series resistor sit north of that flash's CS pull-up and
 decoupling capacitor, grouping the chip-select connections locally.
 Each pair is rotated 180 degrees: LED west with its cathode toward the CS
@@ -79,7 +89,7 @@ at the mating header.
 SELECTION PROTOCOL
 1. Drive host CS high. All QA..QH outputs are high-impedance, all flash
    chip selects rise through their 470 ohm pull-ups, and all LEDs are off.
-2. Drive B low. For slot n, form pattern 0xFF XOR (1 << n).
+2. Drive B low. For printed label n, form pattern 0xFF XOR (1 << n).
 3. Send bits 7..0 on A. For every bit, set A, then pulse B high and low.
 4. Send a ninth B pulse (A can be high). With SRCLK and RCLK tied together,
    the latch is one clock behind the shift register; this pulse is required.
@@ -93,6 +103,7 @@ multiple devices and cause contention on the shared bus.
 SOFTWARE
 flash8_control.py provides Flash8.program(slot), Flash8.transaction(slot),
 and Flash8.jedec_id(slot). It programs the nine-clock sequence with CS high,
+using printed label numbers 0..7 directly (QA..QH),
 rejects nested transactions, and deselects on transfer exceptions.
 Run with the project Python:
   /Users/jamesb/.pyenv/versions/3.13.0/envs/py13/bin/python flash8_control.py SERIAL_PORT

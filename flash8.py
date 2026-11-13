@@ -1,6 +1,6 @@
-"""Eight-device SPI/QSPI fixture with power, local CS/LED and column buses.
+"""Eight-device SPI/QSPI fixture with power, control, CS and shared buses routed.
 
-U1 is SN74LVC595APWR. QA..QH select slots 0..7 (U2..U9).
+U1 is SN74LVC595APWR. Flash labels 0..7 correspond directly to QA..QH.
 With SRCLK and RCLK tied together, send eight bits MSB first followed by
 one extra rising edge, always while the host CS/OE signal is high.
 """
@@ -12,6 +12,7 @@ import dip
 import hex
 import shapely.geometry as sg
 from hexboard import HexBoard
+from flash8_control import FLASH_OUTPUT_BITS
 
 
 BOARD_SIZE = (49, 49)
@@ -144,7 +145,7 @@ def flash_bus_trunks(brd, flashes):
     """Straight bottom trunks through alternate-row hex centers.
 
     Top branches reach the nearest center on their trunk, with a via at
-    that center. Each column remains independent of the other and J2.
+    that center. The columns and J2 are joined later at the south edge.
     """
     brd.bus_trunks = []
     brd.bus_taps = []
@@ -177,6 +178,86 @@ def flash_bus_trunks(brd, flashes):
                     brd.drill(via.xy, brd.via_hole)
                     brd.bus_taps.append((pad, via))
                 column_index += side
+
+
+def connect_host_controls(brd, shift, header):
+    """Bottom-layer host controls with short pad-area branches at U1."""
+    parts = {part.id: part for group in brd.parts.values() for part in group}
+    brd.control_vias = {}
+    # Three nonadjacent hex centers just inside U1's west pad row.
+    # These vias are outside the pads and carry no soldermask openings.
+    for name, dy in (("A", -0.875), ("OE", -0.125), ("B", 0.625)):
+        cell = hex.Hex.from_xy(shift.center.xy[0] - 1.2,
+                               shift.center.xy[1] + dy)
+        via = brd.DC(cell.to_plane()).setname(name)
+        via.boundary = sg.Point(via.xy).buffer(brd.via / 2)
+        for layer in ("GTL", "GL2", "GL3", "GBL"):
+            brd.layers[layer].add(via.boundary, name)
+        brd.drill(via.xy, brd.via_hole)
+        brd.control_vias[name] = via
+
+    def route(*pads):
+        # A plated terminal's own hole keepout must not block entry into
+        # its annulus. Other header pins retain their keepouts.
+        terminal_points = [sg.Point(pad.xy) for pad in pads
+                           if pad.part == header.id]
+        keepouts = brd.keepouts
+        try:
+            brd.keepouts = [g for g in keepouts
+                            if not any(g.covers(p) for p in terminal_points)]
+            return brd.hex_route_net(
+                [brd.pad_endpoint(pad) for pad in pads], width=TRACE_WIDTH)
+        finally:
+            brd.keepouts = keepouts
+
+    route(shift.s("SER"), brd.control_vias["A"])
+    route(shift.s("OE"), parts["R1"].pads[1], brd.control_vias["OE"])
+    route(shift.s("SRCLK"), shift.s("RCLK"), brd.control_vias["B"])
+    # The plated header pads provide the layer transition for R2 and R3.
+    route(header.s("A"), parts["R2"].pads[1])
+    route(header.s("B"), parts["R3"].pads[1])
+    for name, pin in (("A", "A"), ("OE", "CS"), ("B", "B")):
+        route(header.s(pin).copy().setlayer("GBL"),
+              brd.control_vias[name].copy().setlayer("GBL"))
+
+
+def connect_shared_buses(brd, header):
+    """Join the fixed column trunks across the clear south edge."""
+    parts = {part.id: part for group in brd.parts.values() for part in group}
+    brd.shared_bus_vias = {}
+    # Separate top-layer crosslinks by two hex rows. Extend the existing
+    # bottom trunks straight south to the new, nonadjacent tap vias.
+    for name, y in (("SCK", 3.75), ("MOSI", 3.0), ("MISO", 2.25),
+                    ("IO2", 1.5), ("IO3", 0.75)):
+        taps = []
+        for column, net, trunk in brd.bus_trunks:
+            if net != name:
+                continue
+            x = trunk.bounds[0]
+            # Lift the southeast tap clear of the rounded board corner.
+            tap_y = 1.5 if name == "IO3" and column == 1 else y
+            via = brd.DC(hex.Hex.from_xy(x, tap_y).to_plane()).setname(name)
+            via.boundary = sg.Point(via.xy).buffer(brd.via / 2)
+            for layer in ("GTL", "GL2", "GL3", "GBL"):
+                brd.layers[layer].add(via.boundary, name)
+            brd.drill(via.xy, brd.via_hole)
+            extension = sg.LineString(((x, trunk.bounds[1]), via.xy))
+            brd.layers["GBL"].add(extension.buffer(brd.trace / 2), name)
+            taps.append(via)
+        brd.shared_bus_vias[name] = taps
+
+    for name in ("SCK", "MOSI", "MISO", "IO2", "IO3"):
+        pad = header.s(name)
+        terminals = [pad, *brd.shared_bus_vias[name]]
+        if name in ("IO2", "IO3"):
+            terminals.append(parts["R4" if name == "IO2" else "R5"].pads[1])
+        keepouts = brd.keepouts
+        try:
+            brd.keepouts = [g for g in keepouts if not g.covers(sg.Point(pad.xy))]
+            brd.hex_route_net(
+                [brd.pad_endpoint(p) for p in terminals], width=TRACE_WIDTH)
+        finally:
+            brd.keepouts = keepouts
 
 
 def header_center_y(pin_count, edge):
@@ -270,8 +351,8 @@ def make_board():
                       ("OE", "OE"), ("VCC", "SRCLR"), ("VCC", "VCC"),
                       ("GND", "GND"), ("NC_QH_PRIME", "QH_PRIME")):
         bind(brd, name, shift.s(pin))
-    for i, letter in enumerate("ABCDEFGH"):
-        bind(brd, f"CS{i}", shift.s("Q" + letter))
+    for i, bit in enumerate(FLASH_OUTPUT_BITS):
+        bind(brd, f"CS{i}", shift.s("Q" + "ABCDEFGH"[bit]))
 
     def decouple(xy, value="100nF", direction=0):
         cap = Capacitor(brd.DC(xy).right(direction), value)
@@ -327,16 +408,17 @@ def make_board():
             (flash.s("CS"), pullup.pads[1], led.pads[1]),
             (led_r.pads[1], led.pads[0]),
         ))
-        brd.DC((x, y)).ctext(f"F{i}", scale=1.4)
-        brd.DC((x - 2, led_y + 1.1)).ctext(f"F{i} D{i + 1}", scale=0.6)
+        label = FLASH_OUTPUT_BITS[i]
+        brd.DC((x, y)).ctext(str(label), scale=1.4)
+        brd.DC((x - 2, led_y + 1.1)).ctext(f"{label} D{i + 1}", scale=0.6)
         brd.DC((x + 2, led_y + 1.1)).ctext(led_r.id, scale=0.6)
         brd.DC((x - 3, y + 5.3)).ctext(pullup.id, scale=0.6)
         brd.DC((x + 3, y + 5.3)).ctext(cap.id, scale=0.6)
         brd.layers["GTO"].add(sg.Point((x - 4.9, y + 2.7)).buffer(0.18))
 
     brd.DC((33, 48)).ctext("FLASH8  3.3V", scale=0.8)
-    # Route local branches and flash bus taps. U1 outputs, J2 and the
-    # column-to-column joins remain unrouted. Use pad-area endpoints.
+    # Preserve the established local, column and CS routing first; add
+    # host controls and shared-bus joins afterward using pad-area endpoints.
     tag_copper(brd)
     connect_planes(brd)
     flash_bus_trunks(brd, flashes)
@@ -349,6 +431,15 @@ def make_board():
     for pad, via in brd.bus_taps:
         brd.hex_route_net(
             [brd.pad_endpoint(pad), brd.pad_endpoint(via)], width=TRACE_WIDTH)
+    # Fan out in physical output order. The slot assignment follows the
+    # destinations around U1 so the eight top-layer routes need no crossings.
+    brd.cs_routes = {}
+    for slot in sorted(range(8), key=FLASH_OUTPUT_BITS.__getitem__):
+        output = shift.s("Q" + "ABCDEFGH"[FLASH_OUTPUT_BITS[slot]])
+        brd.cs_routes[slot] = brd.hex_route(
+            brd.pad_endpoint(output), brd.pad_endpoint(flashes[slot].s("CS")))
+    connect_host_controls(brd, shift, spi_header)
+    connect_shared_buses(brd, spi_header)
     brd.wire_routes()
     brd.fill()
     # Break body outlines at exposed pads, leaving a printable silk clearance.

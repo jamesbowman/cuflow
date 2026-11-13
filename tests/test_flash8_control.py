@@ -40,7 +40,10 @@ class Flash8ControlTests(unittest.TestCase):
                 fixture.program(slot)
                 self.assertEqual(model.rising_edges - before, 9)
                 self.assertTrue(model.disabled)
-                self.assertEqual(model.latch, 0xFF ^ (1 << slot))
+                # Printed labels 0..7 correspond directly to QA..QH.
+                self.assertEqual(model.latch,
+                                 (0xFE, 0xFD, 0xFB, 0xF7,
+                                  0xEF, 0xDF, 0xBF, 0x7F)[slot])
 
     def test_transaction_deselects_after_exception(self):
         model = ShiftRegisterModel(0)

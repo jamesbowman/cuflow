@@ -11,6 +11,11 @@ import operator
 import time
 
 
+# Footprints U2..U9 -> shift-register bits QA=0 through QH=7.
+# Public slot numbers and silkscreen labels are the bit numbers themselves.
+FLASH_OUTPUT_BITS = (0, 2, 5, 7, 1, 3, 4, 6)
+
+
 class Flash8:
     def __init__(self, driver):
         self.driver = driver
@@ -19,7 +24,7 @@ class Flash8:
         self.program(None)
 
     def program(self, slot):
-        """Load one active-low output, or all ones for no selected device."""
+        """Select printed label 0..7 (QA..QH), or None to deselect all."""
         if self.active:
             raise RuntimeError("Cannot change slots during a transaction")
         if slot is not None:
@@ -80,7 +85,8 @@ def main():
         for slot in range(8):
             identity = fixture.jedec_id(slot)
             note = " (empty or unresponsive)" if identity in (b"\xff" * 3, b"\0" * 3) else ""
-            print(f"F{slot} / U{slot + 2}: {identity.hex(' ')}{note}")
+            ref = FLASH_OUTPUT_BITS.index(slot) + 2
+            print(f"{slot} / U{ref}: {identity.hex(' ')}{note}")
     finally:
         driver.unsel()
         fixture.program(None)
