@@ -1,0 +1,374 @@
+"""Eight-device SPI/QSPI fixture with power, local CS/LED and column buses.
+
+U1 is SN74LVC595APWR. QA..QH select slots 0..7 (U2..U9).
+With SRCLK and RCLK tied together, send eight bits MSB first followed by
+one extra rising edge, always while the host CS/OE signal is high.
+"""
+
+from collections import defaultdict
+
+import cuflow as cu
+import dip
+import hex
+import shapely.geometry as sg
+from hexboard import HexBoard
+
+
+BOARD_SIZE = (49, 49)
+CORNER_RADIUS = 2
+
+# All dimensions are in mm. Vias must not occupy adjacent hex cells.
+TRACE_WIDTH = 0.100
+TRACE_SPACE = 0.100
+HEX_GRID_SIZE = 0.3750
+VIA_HOLE = 0.200
+VIA_DIAMETER = 0.450
+VIA_SPACE = 0.100
+SILK_WIDTH = 0.127
+
+# J2 and J3 on spiq_a share these vertical datum dimensions. Keeping the
+# mating rows 4 mm from the north/south edges makes both 49 mm-tall boards
+# line up without an additional Y offset.
+HEADER_PITCH = dip.T
+HEADER_X = HEADER_PITCH / 2 + 1.0
+HEADER_END_CLEARANCE = 4.0
+HEADER_LABEL_BAR_X = HEADER_X + 7.1
+HEADER_LABEL_X = HEADER_X + 7.5
+HEADER_LABEL_SCALE = 1.452
+POWER_HEADER_PINS = 6
+SPI_HEADER_PINS = 8
+
+
+class ShiftRegister(cu.Part):
+    family = "U"
+    footprint = "TSSOP-16_4.4x5mm_P0.65mm"
+    mfr = "SN74LVC595APWR"
+
+    def place(self, dc):
+        # TI PW0016A land pattern: 1.5 x 0.45 pads, 5.8 row centers.
+        self.chamfered(dc, 4.4, 5.0)
+        for _ in range(2):
+            dc.push().forward(2.275).left(90).forward(2.9).left(90)
+            self.train(dc, 8, lambda: self.rpad(dc, 0.45, 1.5), 0.65)
+            dc.pop().right(180)
+        for pad, name in zip(self.pads, (
+                "QB", "QC", "QD", "QE", "QF", "QG", "QH", "GND",
+                "QH_PRIME", "SRCLR", "SRCLK", "RCLK", "OE", "SER",
+                "QA", "VCC")):
+            pad.setname(name)
+
+
+class Flash(cu.SOIC8b):
+    A = 5.3
+    B = 5.3
+    val = "3.3V SPI NOR (user populated)"
+
+    def place(self, dc):
+        super().place(dc)
+        for pad, name in zip(self.pads, (
+                "CS", "MISO", "IO2", "GND", "MOSI", "SCK", "IO3", "VCC")):
+            pad.setname(name)
+
+
+class Resistor(cu.R0402):
+    def label(self, dc):
+        pass
+
+
+class Capacitor(cu.C0402):
+    def label(self, dc):
+        pass
+
+
+class Indicator(cu.C0402):
+    family = "D"
+    val = "Red LED"
+
+    def label(self, dc):
+        pass
+
+    def place(self, dc):
+        super().place(dc)
+        # Pad 1 is anode; pad 2 is cathode. Rotate the cathode bar
+        # with the footprint (cathode is right at zero degrees).
+        line = sg.LineString((dc.copy().goxy(1.35, -0.35).xy,
+                              dc.copy().goxy(1.35, 0.35).xy))
+        self.board.layers["GTO"].add(line.buffer(self.board.silk / 2))
+
+
+def bind(brd, name, *pads):
+    """Keep intended connectivity separate from routed copper."""
+    for pad in pads:
+        assert not hasattr(pad, "net_name"), (pad.part, pad.name)
+        pad.net_name = name
+        brd.fixture_nets[name].append(pad)
+
+
+def tag_copper(brd):
+    pads = [p for group in brd.parts.values() for part in group for p in part.pads]
+    for layer in ("GTL", "GBL"):
+        tagged = []
+        for _, geometry in brd.layers[layer].polys:
+            matches = [p for p in pads if geometry.covers(sg.Point(p.xy))]
+            assert len(matches) == 1, (layer, len(matches))
+            tagged.append((matches[0].net_name, geometry))
+        brd.layers[layer].polys = tagged
+        brd.layers[layer].p = None
+
+
+def connect_planes(brd):
+    parts = {part.id: part for group in brd.parts.values() for part in group}
+    for name, plane in (("GND", "GL2"), ("VCC", "GL3")):
+        for pad in brd.fixture_nets[name]:
+            if getattr(pad, "through_hole", False):
+                # Connect plated header pins with inner-layer thermal reliefs.
+                brd.layers[plane].add(pad.boundary, plane)
+                pad.copy().setname(plane).thermal(1.3).wire(
+                    layer=plane, width=brd.trace)
+                continue
+
+            trace = pad.copy().setname(name)
+            if parts[pad.part].family == "U":
+                trace.dir = 270 if pad.xy[0] < parts[pad.part].center.xy[0] else 90
+                trace.forward(1.5 if pad.part == "U1" else 1.6)
+            else:
+                trace.outside().forward(0.5)
+            trace.wire(width=brd.trace)
+            via = sg.Point(trace.xy).buffer(brd.via / 2)
+            for layer in ("GTL", "GL2", "GL3", "GBL"):
+                brd.layers[layer].add(via, plane if layer == plane else name)
+            brd.drill(trace.xy, brd.via_hole)
+
+
+def flash_bus_trunks(brd, flashes):
+    """Straight bottom trunks through alternate-row hex centers.
+
+    Top branches reach the nearest center on their trunk, with a via at
+    that center. Each column remains independent of the other and J2.
+    """
+    brd.bus_trunks = []
+    brd.bus_taps = []
+    y0, y1 = 4.5, 42.0
+    # Freeze existing bottom copper before adding the new signal vias.
+    obstacles = [geometry for _, geometry in brd.layers["GBL"].polys]
+    for column in range(2):
+        devices = flashes[column * 4:column * 4 + 4]
+        for side, names in ((-1, ("MISO", "IO2")),
+                            (1, ("SCK", "MOSI", "IO3"))):
+            # Preserve the established trunk positions when U1 or its
+            # power vias move. Indices identify even-row hex centers.
+            column_index = ((46, 73), (81, 108))[column][side > 0]
+            for name in names:
+                trunk_x = column_index * hex.height
+                line = sg.LineString(((trunk_x, y0), (trunk_x, y1)))
+                assert 0.4 < trunk_x < BOARD_SIZE[0] - 0.4
+                assert all(line.distance(g) >= brd.trace / 2 + brd.space
+                           for g in obstacles), (column, name)
+                brd.layers["GBL"].add(line.buffer(brd.trace / 2), name)
+                brd.bus_trunks.append((column, name, line))
+                for flash in devices:
+                    pad = flash.s(name)
+                    row = 2 * round(pad.xy[1] / (2 * hex.size))
+                    cell = hex.Hex(column_index - row // 2, row)
+                    via = brd.DC(cell.to_plane()).setname(name)
+                    via.boundary = sg.Point(via.xy).buffer(brd.via / 2)
+                    for layer in ("GTL", "GL2", "GL3", "GBL"):
+                        brd.layers[layer].add(via.boundary, name)
+                    brd.drill(via.xy, brd.via_hole)
+                    brd.bus_taps.append((pad, via))
+                column_index += side
+
+
+def header_center_y(pin_count, edge):
+    half_span = (pin_count - 1) * HEADER_PITCH / 2
+    if edge == "north":
+        return BOARD_SIZE[1] - HEADER_END_CLEARANCE - half_span
+    if edge == "south":
+        return HEADER_END_CLEARANCE + half_span
+    raise ValueError(f"Unknown edge: {edge}")
+
+
+def label_pins(brd, header, names):
+    for pad, name in zip(header.pads, names):
+        pad.setname(name)
+        brd.DC((HEADER_LABEL_X, pad.xy[1])).rtext(
+            name, scale=HEADER_LABEL_SCALE)
+
+
+def label_power_pairs(brd, header):
+    for pad, name in zip(
+            header.pads, ("GND", "GND", "VCC", "VCC", "5V", "5V")):
+        pad.setname(name)
+
+    pair_centers = []
+    for pair, label in zip(
+            (header.pads[0:2], header.pads[2:4], header.pads[4:6]),
+            ("GND", "3.3V", "5V")):
+        y = sum(pad.xy[1] for pad in pair) / 2
+        pair_centers.append(y)
+        brd.DC((HEADER_LABEL_X, y)).rtext(
+            label, scale=HEADER_LABEL_SCALE)
+
+    bar_ys = [pair_centers[0] + HEADER_PITCH]
+    bar_ys += [
+        (a + b) / 2 for a, b in zip(pair_centers, pair_centers[1:])]
+    bar_ys.append(pair_centers[-1] - HEADER_PITCH)
+    bar_width = 0.4
+    bar_length = 6.3
+    half_line = (bar_length - bar_width) / 2
+    for y in bar_ys:
+        line = sg.LineString((
+            (HEADER_LABEL_BAR_X - half_line, y),
+            (HEADER_LABEL_BAR_X + half_line, y),
+        ))
+        brd.layers["GTO"].add(line.buffer(bar_width / 2))
+
+
+def make_board():
+    hex.set_grid_size(HEX_GRID_SIZE)
+    brd = HexBoard(
+        BOARD_SIZE,
+        trace=TRACE_WIDTH,
+        space=TRACE_SPACE,
+        via_hole=VIA_HOLE,
+        via=VIA_DIAMETER,
+        via_space=VIA_SPACE,
+        silk=SILK_WIDTH,
+    )
+    brd.outline(corner_radius=CORNER_RADIUS)
+    brd.add_hex_grid()
+    brd.fixture_nets = defaultdict(list)
+    local_connections = []
+    flashes = []
+
+    # These rows mate with spiq_a J2 and J3 respectively. Their nominal
+    # 2.54 mm bodies sit 1 mm inboard from flash8's west edge. The default
+    # SIL direction preserves spiq_a's north-to-south pin numbering.
+    power_header = dip.SIL(
+        brd.DC((HEADER_X, header_center_y(POWER_HEADER_PINS, "north"))),
+        str(POWER_HEADER_PINS),
+    )
+    label_power_pairs(brd, power_header)
+
+    spi_header = dip.SIL(
+        brd.DC((HEADER_X, header_center_y(SPI_HEADER_PINS, "south"))),
+        str(SPI_HEADER_PINS),
+    )
+    label_pins(
+        brd, spi_header,
+        ("SCK", "MOSI", "MISO", "IO2", "IO3", "CS", "A", "B"))
+
+    for header in (power_header, spi_header):
+        header.inBOM = True
+        header.footprint = f"PinSocket_1x{len(header.pads):02d}_P2.54mm"
+        for pad in header.pads:
+            pad.through_hole = True
+            bind(brd, "OE" if pad.name == "CS" else pad.name, pad)
+
+    shift = ShiftRegister(brd.DC((8.8, 26)).right(180))
+    for name, pin in (("A", "SER"), ("B", "SRCLK"), ("B", "RCLK"),
+                      ("OE", "OE"), ("VCC", "SRCLR"), ("VCC", "VCC"),
+                      ("GND", "GND"), ("NC_QH_PRIME", "QH_PRIME")):
+        bind(brd, name, shift.s(pin))
+    for i, letter in enumerate("ABCDEFGH"):
+        bind(brd, f"CS{i}", shift.s("Q" + letter))
+
+    def decouple(xy, value="100nF", direction=0):
+        cap = Capacitor(brd.DC(xy).right(direction), value)
+        bind(brd, "VCC", cap.pads[0])
+        bind(brd, "GND", cap.pads[1])
+        return cap
+
+    # C1 follows U1's rotation, with its supply pad just south of VCC.
+    # C2 sits between the
+    # two 3.3 V header rows, with its 3.3 V pad facing the header.
+    vcc_pin = shift.s("VCC")
+    c1_xy = (vcc_pin.xy[0] - 0.65, vcc_pin.xy[1] - 1.1)
+    c2_xy = (5.0, sum(p.xy[1] for p in power_header.pads[2:4]) / 2)
+    decouple(c1_xy, direction=180)
+    decouple(c2_xy, "10uF 10V X5R")
+    brd.DC((c1_xy[0], c1_xy[1] - 1.1)).ctext("C1", scale=0.6)
+    brd.DC((c2_xy[0], c2_xy[1] + 0.9)).ctext("C2", scale=0.6)
+    # Defined, disabled startup state even when the host is disconnected.
+    for name, rail in (("OE", "VCC"), ("A", "VCC"), ("B", "GND"),
+                       ("IO2", "VCC"), ("IO3", "VCC")):
+        if name == "OE":
+            # R1's signal pad faces U1 OE; its supply via faces west.
+            oe_pin = shift.s("OE")
+            xy, direction = (oe_pin.xy[0] - 2.3, oe_pin.xy[1]), 0
+        else:
+            # R2-R5 sit beside their J2 pins, with signal pads facing west.
+            xy, direction = (5.0, spi_header.s(name).xy[1]), 180
+        resistor = Resistor(brd.DC(xy).right(direction), "10k")
+        bind(brd, rail, resistor.pads[0])
+        bind(brd, name, resistor.pads[1])
+        label_xy = (xy[0], xy[1] + (1.1 if name == "OE" else 0.9))
+        brd.DC(label_xy).ctext(resistor.id, scale=0.6)
+
+    for i in range(8):
+        x, y = (26 + 15 * (i // 4), 7 + 11 * (i % 4))
+        flash = Flash(brd.DC((x, y)))
+        flashes.append(flash)
+        for pad in flash.pads:
+            bind(brd, f"CS{i}" if pad.name == "CS" else pad.name, pad)
+        cap = decouple((x + 3, y + 4.3))
+        pullup = Resistor(brd.DC((x - 3, y + 4.3)), "470")
+        bind(brd, "VCC", pullup.pads[0])
+        bind(brd, f"CS{i}", pullup.pads[1])
+        # Rotate the pair as a group: cathode west near the CS pull-up,
+        # series resistor east, still north of the pull-up/capacitor row.
+        led_y = y + 6.5
+        led_r = Resistor(brd.DC((x + 2, led_y)).right(180), "1.5k")
+        led = Indicator(brd.DC((x - 2, led_y)).right(180))
+        bind(brd, "VCC", led_r.pads[0])
+        bind(brd, f"LED{i}_A", led_r.pads[1], led.pads[0])
+        bind(brd, f"CS{i}", led.pads[1])
+        local_connections.extend((
+            (flash.s("CS"), pullup.pads[1], led.pads[1]),
+            (led_r.pads[1], led.pads[0]),
+        ))
+        brd.DC((x, y)).ctext(f"F{i}", scale=1.4)
+        brd.DC((x - 2, led_y + 1.1)).ctext(f"F{i} D{i + 1}", scale=0.6)
+        brd.DC((x + 2, led_y + 1.1)).ctext(led_r.id, scale=0.6)
+        brd.DC((x - 3, y + 5.3)).ctext(pullup.id, scale=0.6)
+        brd.DC((x + 3, y + 5.3)).ctext(cap.id, scale=0.6)
+        brd.layers["GTO"].add(sg.Point((x - 4.9, y + 2.7)).buffer(0.18))
+
+    brd.DC((33, 48)).ctext("FLASH8  3.3V", scale=0.8)
+    # Route local branches and flash bus taps. U1 outputs, J2 and the
+    # column-to-column joins remain unrouted. Use pad-area endpoints.
+    tag_copper(brd)
+    connect_planes(brd)
+    flash_bus_trunks(brd, flashes)
+    brd.hex_clearance = TRACE_SPACE
+    brd.hex_edge_clearance = 0.4
+    brd.hex_setup()
+    for pads in local_connections:
+        brd.hex_route_net(
+            [brd.pad_endpoint(pad) for pad in pads], width=TRACE_WIDTH)
+    for pad, via in brd.bus_taps:
+        brd.hex_route_net(
+            [brd.pad_endpoint(pad), brd.pad_endpoint(via)], width=TRACE_WIDTH)
+    brd.wire_routes()
+    brd.fill()
+    # Break body outlines at exposed pads, leaving a printable silk clearance.
+    mask = brd.layers["GTS"].preview().buffer(0.15)
+    brd.layers["GTO"].polys = [
+        (name, geometry.difference(mask))
+        for name, geometry in brd.layers["GTO"].polys]
+    brd.layers["GTO"].p = None
+    return brd
+
+
+def flash8():
+    brd = make_board()
+    brd.save("flash8")
+    brd.save_netlist("flash8", [
+        pads for pads in brd.fixture_nets.values() if len(pads) > 1])
+    brd.postscript("flash8.ps")
+    print("Saved")
+    return brd
+
+
+if __name__ == "__main__":
+    flash8()

@@ -1,0 +1,125 @@
+CURRENT STATUS: Power, local CS/LED branches and flash-column buses connected.
+All GND and 3.3 V pins
+connect to their respective inner planes, including the pull resistors and
+shift-register clear input. Each flash CS connects to its pull-up and LED
+cathode, and each LED anode connects to its series resistor. These local
+connections use the hex grid and pad-area endpoints. Each flash column has
+two north-south GBL trunks west (IO1, IO2, nearest first) and three east
+(SCK, IO0, IO3, nearest first). Trunks pass through alternate-row hex centers;
+each flash signal pin has a top-layer hex branch and one via at its nearest
+trunk center. The column-to-column joins, header connections, U1 output-to-CS
+connections and other control signals remain unrouted.
+
+FLASH8 — SPIDriver Quattro / EVE flash validation fixture
+
+DESIGN
+All resistors, capacitors and LEDs use imperial 0402 footprints.
+49 x 49 mm, four layers: top signals / GND / 3.3 V / bottom signals.
+Trace width and copper clearance: 0.100 mm. Hex grid row spacing: 0.3750 mm.
+Via drill: 0.200 mm; via copper pad: 0.450 mm. Vias may not occupy adjacent
+hex cells. The grid is exported as flash8.HEX.
+The original SPIDriver Quattro mating header locations are preserved.
+J1, north to south: GND, GND, 3.3 V, 3.3 V, 5 V, 5 V.
+J2, north to south: SCLK, MOSI/IO0, MISO/IO1, IO2, IO3, CS, A, B.
+The two 5 V header pins are not connected to the fixture electronics.
+Supply the fixture only with 3.3 V logic and 3.3 V-compatible flash devices.
+
+U1: SN74LVC595APWR, TSSOP-16 (TI PW0016A).
+  Center: (8.8, 26.0) mm, rotated 180 degrees with QB-QH facing east.
+  C1 follows VCC to the southwest; R1 sits west of OE with its signal
+  pad facing the IC. Their power connections follow the new placement.
+  14 SER   <- A
+  11 SRCLK <- B
+  12 RCLK  <- B (same net as SRCLK)
+  13 /OE   <- host /CS, with 10 kohm pull-up to 3.3 V
+  10 /SRCLR and 16 VCC -> 3.3 V
+   8 GND -> ground
+   9 QH' -> unconnected
+  A has a 10 kohm pull-up; B has a 10 kohm pull-down.
+  R1 sits adjacent to U1's OE pin, with its signal pad facing U1.
+  R2-R5 sit beside the J2 pins for A, B, IO2 and IO3 respectively.
+
+SLOT / FLASH / OUTPUT / U1 PIN
+  F0 / U2 / QA / 15
+  F1 / U3 / QB / 1
+  F2 / U4 / QC / 2
+  F3 / U5 / QD / 3
+  F4 / U6 / QE / 4
+  F5 / U7 / QF / 5
+  F6 / U8 / QG / 6
+  F7 / U9 / QH / 7
+Slots F0..F3 are the left column, bottom to top. F4..F7 are the right column.
+
+Eight soldered SOIC-8-208mil footprints, 5.3 mm wide body, 1.27 mm pitch.
+These are bare IC footprints, not ZIF socket footprints.
+Flash pinout: 1 /CS, 2 MISO/IO1, 3 /WP/IO2, 4 GND,
+              5 MOSI/IO0, 6 SCLK, 7 /HOLD or /RESET/IO3, 8 VCC.
+Confirm the selected flash is pin-compatible and 3.3 V before population.
+
+Each CS has a 470 ohm pull-up to 3.3 V. Each indicator branch is:
+  3.3 V -> 1.5 kohm -> red LED anode -> LED cathode -> CSn.
+D1..D8 correspond to F0..F7. The silk bar marks each LED cathode.
+Each LED and its series resistor sit north of that flash's CS pull-up and
+decoupling capacitor, grouping the chip-select connections locally.
+Each pair is rotated 180 degrees: LED west with its cathode toward the CS
+pull-up, and series resistor east with its supply pad facing east.
+The selected output sinks about 7 mA through its pull-up plus approximately
+0.9 mA through a red LED with 2 V forward voltage. Brightness depends on LED.
+The LED follows the active-low transaction interval, not flash busy time;
+very short transactions may not produce a visibly bright indication.
+
+C1: 100 nF adjacent to U1 VCC; C2: 10 uF bulk adjacent to J1's 3.3 V pins.
+C3..C10: 100 nF, one per flash. Use ceramic capacitors rated at least 6.3 V;
+C2 is specified as 10 V X5R. Inner layer 2 is GND; inner layer 3 is 3.3 V.
+IO2 and IO3 connect to every flash and J2, with one 10 kohm pull-up each.
+They remain available for QSPI; no hard ties to a supply are present.
+There are no dedicated test points. Bus and control signals are accessible
+at the mating header.
+
+SELECTION PROTOCOL
+1. Drive host CS high. All QA..QH outputs are high-impedance, all flash
+   chip selects rise through their 470 ohm pull-ups, and all LEDs are off.
+2. Drive B low. For slot n, form pattern 0xFF XOR (1 << n).
+3. Send bits 7..0 on A. For every bit, set A, then pulse B high and low.
+4. Send a ninth B pulse (A can be high). With SRCLK and RCLK tied together,
+   the latch is one clock behind the shift register; this pulse is required.
+5. Keep B low during transactions. Drive host CS low for a transaction,
+   transfer SPI/QSPI data, then drive host CS high to deselect.
+6. Before enabling outputs after startup, explicitly program a valid pattern.
+   Program 0xFF plus the ninth pulse to put the fixture into all-off state.
+Never clock A/B selection while CS is low: intermediate patterns can select
+multiple devices and cause contention on the shared bus.
+
+SOFTWARE
+flash8_control.py provides Flash8.program(slot), Flash8.transaction(slot),
+and Flash8.jedec_id(slot). It programs the nine-clock sequence with CS high,
+rejects nested transactions, and deselects on transfer exceptions.
+Run with the project Python:
+  /Users/jamesb/.pyenv/versions/3.13.0/envs/py13/bin/python flash8_control.py SERIAL_PORT
+The CLI reads JEDEC IDs only, uses SPI mode 0, and sets Quattro to 1 MHz.
+It does not erase, program, reset, or change protection/QE bits in the flash.
+Devices already in QPI, deep power-down, or another persistent mode may need
+part-specific recovery before the ID command works. QSPI command sequences,
+QE handling and EVE-specific compatibility checks remain device-specific.
+
+VALIDATION AND USE
+Generate: python flash8.py
+Check generated copper: python -m tools.check_flash8
+Control tests: python -m unittest discover -s tests -p test_flash8_control.py
+Use the Python interpreter specified in AGENTS.md for these commands.
+The check report is flash8-checks.json. It checks physical connectivity from
+Gerbers/drills, independent pin mappings, copper/edge clearance and drills.
+The control tests model the shared-clock latch independently of the helper.
+
+No physical prototype has been tested. Start slowly, then verify SCLK, data
+and CS edges at the farthest flash before increasing speed. Eight input loads,
+branches and probe leads limit usable speed; no maximum QSPI rate is claimed.
+Check the Quattro 3.3 V supply budget for the actual population and operating
+mode. Use one bus master at a time if attaching another host for EVE testing.
+Generic flash, passive and LED BOM entries require exact procurement choices.
+The board has not been released for manufacture: package/polarity, assembly,
+mask/paste and manual CAM review remain necessary before ordering.
+
+REFERENCE
+TI SN74LVC595A datasheet, pinout, shared-clock behavior and PW0016A land pattern:
+https://www.ti.com/lit/ds/symlink/sn74lvc595a.pdf
