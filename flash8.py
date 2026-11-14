@@ -14,6 +14,7 @@ from PIL import Image
 import cuflow as cu
 import dip
 import hex
+import svg_loader
 import shapely.geometry as sg
 import shapely.affinity as sa
 import shapely.ops as so
@@ -32,17 +33,17 @@ VIA_HOLE = 0.200
 VIA_DIAMETER = 0.450
 VIA_SPACE = 0.100
 SILK_WIDTH = 0.127
-BIT_LABEL_HEIGHT = 3.0
-BIT_LABEL_ASSETS = Path(__file__).resolve().parent / "assets" / "flash8-labels"
+LABEL_HEIGHT = 3.0
+LABEL_ASSETS = Path(__file__).resolve().parent / "assets" / "flash8-labels"
 
 
-@lru_cache(maxsize=8)
-def bit_label_bitmap(bit):
+@lru_cache(maxsize=9)
+def label_bitmap(label):
     """Convert the checked-in Plex Sans bitmap to fine-pitch silk geometry."""
-    with Image.open(BIT_LABEL_ASSETS / f"{bit}.png") as source:
+    with Image.open(LABEL_ASSETS / f"{label}.png") as source:
         im = source.convert("L")
     width, height = im.size
-    pixel = BIT_LABEL_HEIGHT / height
+    pixel = LABEL_HEIGHT / height
     runs = []
     pixels = im.tobytes()
     for row in range(height):
@@ -54,7 +55,22 @@ def bit_label_bitmap(bit):
                                    (x + length) * pixel, (height - row) * pixel))
             x += length
     return sa.translate(so.unary_union(runs),
-                        -width * pixel / 2, -BIT_LABEL_HEIGHT / 2)
+                        -width * pixel / 2, -LABEL_HEIGHT / 2)
+
+
+def board_branding(brd):
+    """Reuse SPIQ's Excamera wordmark and read FLASH8 from south to north."""
+    logo = svg_loader.load(
+        Path(__file__).resolve().parent / "assets" / "excamera-logo.svg",
+        fill="#000000", tolerance=0.002, ppi=25.4)
+    x0, y0, x1, y1 = logo.bounds
+    scale = 11.5 / (x1 - x0)
+    # SVG Y points down; board Y points north. Anchor at (0.9, 0.8) mm.
+    logo = sa.affine_transform(logo, (
+        scale, 0, 0, -scale, 0.9 - scale * x0, 0.8 + scale * y1))
+    brd.layers["GTO"].add(logo)
+    title = sa.rotate(label_bitmap("FLASH8"), 90, origin=(0, 0))
+    brd.layers["GTO"].add(sa.translate(title, 15.5, BOARD_SIZE[1] / 2))
 
 # J2 and J3 on spiq_a share these vertical datum dimensions. Keeping the
 # mating rows 4 mm from the north/south edges makes both 49 mm-tall boards
@@ -91,7 +107,19 @@ class ShiftRegister(cu.Part):
 class Flash(cu.SOIC8b):
     A = 5.3
     B = 5.3
+    footprint = "SOIC-8_Dual_3.9-5.3mm_P1.27mm"
     val = "3.3V SPI NOR (user populated)"
+
+    def rpad(self, dc, w, h):
+        # Union of the existing wide lands (2.405..4.655 mm from center)
+        # and the narrow SOIC reference lands (1.500..3.450 mm).
+        # Extend only inward: 3.155 x 0.630 mm copper/mask/paste pads.
+        # Keep the routing anchor at the original 3.530 mm row offset.
+        extension = 0.905
+        dc.right(90)
+        dc.push().forward(-extension / 2).rect(w, h + extension).pop()
+        self.pad(dc)
+        dc.left(90)
 
     def chamfered(self, dc, w, h):
         super().chamfered(dc, w, h, drawid=False)
@@ -442,7 +470,7 @@ def make_board():
         label = FLASH_OUTPUT_BITS[i]
         # Keep the lowered digits clear of the pull-up resistor pads.
         brd.layers["GTO"].add(sa.translate(
-            bit_label_bitmap(label), x - 5.45, led_y - 1.5))
+            label_bitmap(label), x - 5.45, led_y - 1.5))
         brd.DC((x - 2, led_y + 0.9)).ctext(led.id, scale=0.6)
         brd.DC((x + 2, led_y + 0.9)).ctext(led_r.id, scale=0.6)
         brd.DC((x - 3, y + 5.3)).ctext(pullup.id, scale=0.6)
@@ -453,8 +481,7 @@ def make_board():
         frame = sg.box(x - 7.0, y - 2.9, x + 5.2, y + 7.8)
         brd.layers["GTO"].add(frame.boundary.buffer(0.075, join_style=2))
 
-    # Keep the title above the large bit labels, clear of bit 7.
-    brd.DC((31, 48.5)).ctext("FLASH8  3.3V", scale=0.8)
+    board_branding(brd)
     # Preserve the established local, column and CS routing first; add
     # host controls and shared-bus joins afterward using pad-area endpoints.
     tag_copper(brd)

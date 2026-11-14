@@ -64,7 +64,7 @@
     "Confirm the single 49 x 49 mm rounded outline and 111 vias / 14 plated header holes against the manufacturing files.",
     "Compare U1 copper, paste, mask and 180-degree placement with TI PW0016A; confirm QA through QH bit labels and pin 1.",
     "Verify exact 0603 LED polarity and 0402 resistor/capacitor packages once manufacturer parts are selected.",
-    "Verify wide SOIC-8 flash compatibility and J1/J2 mating geometry against the selected parts; flashes are described as user-populated but currently remain in BOM/PNP.",
+    "Verify shared narrow/wide SOIC-8 flash lands and paste apertures against the selected parts, plus J1/J2 mating geometry; flashes are described as user-populated but currently remain in BOM/PNP.",
     "Inspect all copper, drill and plane clearances including exposed-pad-to-trace clearance, minimum annular rings, and corner clearances.",
     "Inspect soldermask webs, paste coverage, tented vias, silkscreen stroke widths and minimum readable text.",
     "Confirm BOM/PNP population intent, top-side rotations and exact selected supplier footprint orientation.",

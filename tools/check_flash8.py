@@ -80,10 +80,27 @@ def check():
         correct = (bom[f"R{6 + 2 * slot}"]["Comment"] == "470" and
                    bom[f"R{7 + 2 * slot}"]["Comment"] == "1.5k" and
                    bom[f"D{slot + 1}"]["Comment"] == "Red LED" and
-                   bom[f"U{slot + 2}"]["Footprint"] == "SOIC-8-208mil" and
+                   bom[f"U{slot + 2}"]["Footprint"] == "SOIC-8_Dual_3.9-5.3mm_P1.27mm" and
                    bom[f"C{slot + 3}"]["Comment"] == "100nF")
         audit.add(f"Slot {slot} component values", correct,
-                  "470 ohm pull-up, 1.5 kohm LED resistor, red LED, wide SOIC-8, 100 nF")
+                  "470 ohm pull-up, 1.5 kohm LED resistor, red LED, dual-width SOIC-8, 100 nF")
+        # Independent land envelopes: narrow KiCad SOIC reference and the
+        # original wide land pattern must both remain on the same pin net.
+        x, y = 26 + 15 * (slot // 4), 7 + 11 * (slot % 4)
+        supported = True
+        for side in (-1, 1):
+            for dy in (-1.905, -0.635, 0.635, 1.905):
+                net = topology.net_for_component(topology.component_at(
+                    "GTL", (x + side * 3.53, y + dy)))
+                copper = topology.geometry_for_net(net, "GTL").buffer(0.0001)
+                for center, length, width in ((2.475, 1.95, 0.60),
+                                               (3.53, 2.25, 0.63)):
+                    cx = x + side * center
+                    land = sg.box(cx - length / 2, y + dy - width / 2,
+                                  cx + length / 2, y + dy + width / 2)
+                    supported &= copper.covers(land)
+        audit.add(f"Slot {slot} dual-width lands", supported,
+                  "All eight pins cover both narrow and wide reference lands")
     audit.add("Shift register selection", bom["U1"]["Comment"] == "SN74LVC595APWR",
               bom["U1"]["Comment"])
     outline = sg.Polygon(parse_cuflow_paths_text(Path("flash8.GML").read_text())[0])

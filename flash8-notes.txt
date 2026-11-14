@@ -65,8 +65,17 @@ Bottom to top: left column 0, 2, 4, 6; right column 1, 3, 5, 7.
 Each group has a square-cornered silkscreen frame, 12.2 x 10.7 mm along
 its centerline, with a 0.150 mm stroke enclosing its bit number, LED,
 flash land pattern and local passives.
+The Excamera wordmark from SPIQ is at bottom left. FLASH8 uses the same
+3.000 mm IBM Plex Sans SemiBold artwork, reading south to north and centered
+at (15.5, 24.5) mm. The former top-edge FLASH8 / voltage title is removed.
 
-Eight soldered SOIC-8-208mil footprints, 5.3 mm wide body, 1.27 mm pitch.
+Eight shared SOIC-8 footprints accept narrow 3.9 mm and wide 5.3 mm bodies,
+both at 1.27 mm pitch. Each pad is 3.155 x 0.630 mm, extending from 1.500
+to 4.655 mm from the component center. The original outer edges and routing
+anchors are retained. The lands contain both the narrow SOIC reference
+pattern and the original wide pattern. Center either package on the footprint.
+For stencil assembly, review paste apertures for the selected package; the
+generated paste currently follows the full shared copper lands.
 These are bare IC footprints, not ZIF socket footprints.
 Flash pinout: 1 /CS, 2 MISO/IO1, 3 /WP/IO2, 4 GND,
               5 MOSI/IO0, 6 SCLK, 7 /HOLD or /RESET/IO3, 8 VCC.
@@ -140,5 +149,9 @@ The board has not been released for manufacture: package/polarity, assembly,
 mask/paste and manual CAM review remain necessary before ordering.
 
 REFERENCE
+Narrow SOIC reference lands (1.95 x 0.60 mm, row offsets +/-2.475 mm):
+https://raw.githubusercontent.com/KiCad/kicad-footprints/master/Package_SO.pretty/SOIC-8_3.9x4.9mm_P1.27mm.kicad_mod
+Winbond narrow and wide SOIC-8 package drawings, sections 9.1 and 9.2:
+https://www.winbond.com/upload/technical-support/f0f72951-b845-42ea-9010-faaeab26872f.pdf
 TI SN74LVC595A datasheet, pinout, shared-clock behavior and PW0016A land pattern:
 https://www.ti.com/lit/ds/symlink/sn74lvc595a.pdf
