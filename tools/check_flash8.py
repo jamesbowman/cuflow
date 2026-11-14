@@ -40,8 +40,8 @@ def check():
         "A": [("J2", 7), ("U1", 14)],
         "B": [("J2", 8), ("U1", 11), ("U1", 12)],
     }
-    expected["VCC"] += [("C1", 1), ("C2", 1), ("R1", 1), ("R2", 1), ("R4", 1), ("R5", 1)]
-    expected["GND"] += [("C1", 2), ("C2", 2), ("R3", 1)]
+    expected["VCC"] += [("C1", 1), ("R1", 1), ("R2", 1), ("R4", 1), ("R5", 1)]
+    expected["GND"] += [("C1", 2), ("R3", 1)]
     for name, ref in (("A", "R2"), ("B", "R3"), ("IO2", "R4"), ("IO3", "R5")):
         expected[name].append((ref, 2))
     for slot, qpin in enumerate((15, 2, 4, 6, 1, 3, 5, 7)):

@@ -6,11 +6,17 @@ one extra rising edge, always while the host CS/OE signal is high.
 """
 
 from collections import defaultdict
+from functools import lru_cache
+from itertools import groupby
+from pathlib import Path
 
+from PIL import Image
 import cuflow as cu
 import dip
 import hex
 import shapely.geometry as sg
+import shapely.affinity as sa
+import shapely.ops as so
 from hexboard import HexBoard
 from flash8_control import FLASH_OUTPUT_BITS
 
@@ -26,6 +32,29 @@ VIA_HOLE = 0.200
 VIA_DIAMETER = 0.450
 VIA_SPACE = 0.100
 SILK_WIDTH = 0.127
+BIT_LABEL_HEIGHT = 3.0
+BIT_LABEL_ASSETS = Path(__file__).resolve().parent / "assets" / "flash8-labels"
+
+
+@lru_cache(maxsize=8)
+def bit_label_bitmap(bit):
+    """Convert the checked-in Plex Sans bitmap to fine-pitch silk geometry."""
+    with Image.open(BIT_LABEL_ASSETS / f"{bit}.png") as source:
+        im = source.convert("L")
+    width, height = im.size
+    pixel = BIT_LABEL_HEIGHT / height
+    runs = []
+    pixels = im.tobytes()
+    for row in range(height):
+        x = 0
+        for value, run in groupby(pixels[row * width:(row + 1) * width]):
+            length = sum(1 for _ in run)
+            if value > 127:
+                runs.append(sg.box(x * pixel, (height - row - 1) * pixel,
+                                   (x + length) * pixel, (height - row) * pixel))
+            x += length
+    return sa.translate(so.unary_union(runs),
+                        -width * pixel / 2, -BIT_LABEL_HEIGHT / 2)
 
 # J2 and J3 on spiq_a share these vertical datum dimensions. Keeping the
 # mating rows 4 mm from the north/south edges makes both 49 mm-tall boards
@@ -64,6 +93,9 @@ class Flash(cu.SOIC8b):
     B = 5.3
     val = "3.3V SPI NOR (user populated)"
 
+    def chamfered(self, dc, w, h):
+        super().chamfered(dc, w, h, drawid=False)
+
     def place(self, dc):
         super().place(dc)
         for pad, name in zip(self.pads, (
@@ -81,7 +113,7 @@ class Capacitor(cu.C0402):
         pass
 
 
-class Indicator(cu.C0402):
+class Indicator(cu.D0603):
     family = "D"
     val = "Red LED"
 
@@ -92,9 +124,9 @@ class Indicator(cu.C0402):
         super().place(dc)
         # Pad 1 is anode; pad 2 is cathode. Rotate the cathode bar
         # with the footprint (cathode is right at zero degrees).
-        line = sg.LineString((dc.copy().goxy(1.35, -0.35).xy,
-                              dc.copy().goxy(1.35, 0.35).xy))
-        self.board.layers["GTO"].add(line.buffer(self.board.silk / 2))
+        line = sg.LineString((dc.copy().goxy(1.65, -0.5).xy,
+                              dc.copy().goxy(1.65, 0.5).xy))
+        self.board.layers["GTO"].add(line.buffer(0.15 / 2))
 
 
 def bind(brd, name, *pads):
@@ -354,22 +386,21 @@ def make_board():
     for i, bit in enumerate(FLASH_OUTPUT_BITS):
         bind(brd, f"CS{i}", shift.s("Q" + "ABCDEFGH"[bit]))
 
-    def decouple(xy, value="100nF", direction=0):
+    def decouple(xy, value="100nF", direction=0, reference=None):
         cap = Capacitor(brd.DC(xy).right(direction), value)
+        if reference is not None:
+            # Preserve C3-C10 identities after removing the former bulk C2.
+            cap.id = reference
+            for pad in cap.pads:
+                pad.part = reference
         bind(brd, "VCC", cap.pads[0])
         bind(brd, "GND", cap.pads[1])
         return cap
 
     # C1 follows U1's rotation, with its supply pad just south of VCC.
-    # C2 sits between the
-    # two 3.3 V header rows, with its 3.3 V pad facing the header.
     vcc_pin = shift.s("VCC")
     c1_xy = (vcc_pin.xy[0] - 0.65, vcc_pin.xy[1] - 1.1)
-    c2_xy = (5.0, sum(p.xy[1] for p in power_header.pads[2:4]) / 2)
     decouple(c1_xy, direction=180)
-    decouple(c2_xy, "10uF 10V X5R")
-    brd.DC((c1_xy[0], c1_xy[1] - 1.1)).ctext("C1", scale=0.6)
-    brd.DC((c2_xy[0], c2_xy[1] + 0.9)).ctext("C2", scale=0.6)
     # Defined, disabled startup state even when the host is disconnected.
     for name, rail in (("OE", "VCC"), ("A", "VCC"), ("B", "GND"),
                        ("IO2", "VCC"), ("IO3", "VCC")):
@@ -392,7 +423,7 @@ def make_board():
         flashes.append(flash)
         for pad in flash.pads:
             bind(brd, f"CS{i}" if pad.name == "CS" else pad.name, pad)
-        cap = decouple((x + 3, y + 4.3))
+        decouple((x + 3, y + 4.3), reference=f"C{i + 3}")
         pullup = Resistor(brd.DC((x - 3, y + 4.3)), "470")
         bind(brd, "VCC", pullup.pads[0])
         bind(brd, f"CS{i}", pullup.pads[1])
@@ -409,14 +440,21 @@ def make_board():
             (led_r.pads[1], led.pads[0]),
         ))
         label = FLASH_OUTPUT_BITS[i]
-        brd.DC((x, y)).ctext(str(label), scale=1.4)
-        brd.DC((x - 2, led_y + 1.1)).ctext(f"{label} D{i + 1}", scale=0.6)
-        brd.DC((x + 2, led_y + 1.1)).ctext(led_r.id, scale=0.6)
+        # Keep the lowered digits clear of the pull-up resistor pads.
+        brd.layers["GTO"].add(sa.translate(
+            bit_label_bitmap(label), x - 5.45, led_y - 1.5))
+        brd.DC((x - 2, led_y + 0.9)).ctext(led.id, scale=0.6)
+        brd.DC((x + 2, led_y + 0.9)).ctext(led_r.id, scale=0.6)
         brd.DC((x - 3, y + 5.3)).ctext(pullup.id, scale=0.6)
-        brd.DC((x + 3, y + 5.3)).ctext(cap.id, scale=0.6)
-        brd.layers["GTO"].add(sg.Point((x - 4.9, y + 2.7)).buffer(0.18))
+        # Pin-1 mark just above the pad, near the package's chamfer.
+        brd.layers["GTO"].add(sg.Point((x - 3.15, y + 2.65)).buffer(0.18))
+        # Square-cornered grouping frame includes the number, indicator,
+        # flash land pattern and local passives, within the 11 mm row pitch.
+        frame = sg.box(x - 7.0, y - 2.9, x + 5.2, y + 7.8)
+        brd.layers["GTO"].add(frame.boundary.buffer(0.075, join_style=2))
 
-    brd.DC((33, 48)).ctext("FLASH8  3.3V", scale=0.8)
+    # Keep the title above the large bit labels, clear of bit 7.
+    brd.DC((31, 48.5)).ctext("FLASH8  3.3V", scale=0.8)
     # Preserve the established local, column and CS routing first; add
     # host controls and shared-bus joins afterward using pad-area endpoints.
     tag_copper(brd)

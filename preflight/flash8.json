@@ -1,0 +1,73 @@
+{
+  "board": "flash8",
+  "source": "flash8.py",
+  "bom": "flash8-jlcpcb-bom.csv",
+  "pnp": "flash8-jlcpcb-pnp.csv",
+  "part_catalog": "preflight/flash8-jlcpcb-parts.csv",
+  "gerber_layers": {
+    "GTL": true,
+    "G2L": true,
+    "G3L": true,
+    "GBL": true,
+    "GTO": true,
+    "GBO": false,
+    "GTS": true,
+    "GBS": true,
+    "GTP": true,
+    "GBP": false,
+    "GML": true
+  },
+  "drill_file": "flash8.TXT",
+  "airwire_file": "flash8.AIR",
+  "netlist_file": "flash8.net.json",
+  "expected_drill_hits": 125,
+  "expected_drill_hits_reason": "111 vias plus 14 plated header holes; C2 and its two power vias removed; no mechanical mounting holes or slots",
+  "expected_gml_contours": 1,
+  "expected_gml_contours_reason": "one 49 x 49 mm perimeter with 2 mm corner radius; no routed slots",
+  "copper_edge_clearance_mm": {
+    "GTL": 0.4,
+    "GBL": 0.4,
+    "G2L": 0.2,
+    "G3L": 0.2
+  },
+  "topology": {
+    "copper_layers": [
+      "GTL",
+      "G2L",
+      "G3L",
+      "GBL"
+    ],
+    "net_clearance_mm": 0.1,
+    "plated_internal_gml_contours": 0,
+    "net_seeds": {
+      "GND": [
+        {
+          "layer": "G2L",
+          "selector": "largest"
+        }
+      ],
+      "VCC": [
+        {
+          "layer": "G3L",
+          "selector": "largest"
+        }
+      ]
+    },
+    "forbidden_connections": [
+      [
+        "GND",
+        "VCC"
+      ]
+    ]
+  },
+  "manual_checks": [
+    "Confirm the single 49 x 49 mm rounded outline and 111 vias / 14 plated header holes against the manufacturing files.",
+    "Compare U1 copper, paste, mask and 180-degree placement with TI PW0016A; confirm QA through QH bit labels and pin 1.",
+    "Verify exact 0603 LED polarity and 0402 resistor/capacitor packages once manufacturer parts are selected.",
+    "Verify wide SOIC-8 flash compatibility and J1/J2 mating geometry against the selected parts; flashes are described as user-populated but currently remain in BOM/PNP.",
+    "Inspect all copper, drill and plane clearances including exposed-pad-to-trace clearance, minimum annular rings, and corner clearances.",
+    "Inspect soldermask webs, paste coverage, tented vias, silkscreen stroke widths and minimum readable text.",
+    "Confirm BOM/PNP population intent, top-side rotations and exact selected supplier footprint orientation.",
+    "Resolve the declared common 5 V net versus the intentionally isolated unused header pins; do not connect 5 V to the fixture rails."
+  ]
+}
