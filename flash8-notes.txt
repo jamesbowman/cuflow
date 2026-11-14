@@ -8,8 +8,9 @@ connections use the hex grid and pad-area endpoints. Each flash column has
 two north-south GBL trunks west (IO1, IO2, nearest first) and three east
 (SCK, IO0, IO3, nearest first). Trunks pass through alternate-row hex centers;
 each flash signal pin has a top-layer hex branch and one via at its nearest
-trunk center. The eight U1 outputs are assigned in physical fanout order and
-connect to their flash CS groups on GTL, with no crossings or added vias.
+trunk center. The eight U1 outputs connect to their numbered flash CS groups
+on GTL, with no crossings or added vias. QE selects U4 (label 4) and QF
+selects U8 (label 5). QG selects U5 (label 6) and QH selects U9 (label 7).
 A, B and host CS connect from J2 on GBL to three vias near U1. Short top
 hex branches join SER, both clock pins, and OE/R1 respectively. R2 and R3
 connect to their plated header pads on top. All use pad-area endpoints.
@@ -52,12 +53,12 @@ LABEL / FLASH / OUTPUT / U1 PIN
   1 / U6 / QB / 1
   2 / U3 / QC / 2
   3 / U7 / QD / 3
-  4 / U8 / QE / 4
-  5 / U4 / QF / 5
-  6 / U9 / QG / 6
-  7 / U5 / QH / 7
+  4 / U4 / QE / 4
+  5 / U8 / QF / 5
+  6 / U5 / QG / 6
+  7 / U9 / QH / 7
 Labels are shift-register bit numbers, QA=0 through QH=7.
-Bottom to top: left column 0, 2, 5, 7; right column 1, 3, 4, 6.
+Bottom to top: left column 0, 2, 4, 6; right column 1, 3, 5, 7.
 
 Eight soldered SOIC-8-208mil footprints, 5.3 mm wide body, 1.27 mm pitch.
 These are bare IC footprints, not ZIF socket footprints.
@@ -67,7 +68,7 @@ Confirm the selected flash is pin-compatible and 3.3 V before population.
 
 Each CS has a 470 ohm pull-up to 3.3 V. Each indicator branch is:
   3.3 V -> 1.5 kohm -> red LED anode -> LED cathode -> CSn.
-D1..D8 correspond to labels 0, 2, 5, 7, 1, 3, 4, 6 respectively.
+D1..D8 correspond to labels 0, 2, 4, 6, 1, 3, 5, 7 respectively.
 The silk bar marks each LED cathode.
 Each LED and its series resistor sit north of that flash's CS pull-up and
 decoupling capacitor, grouping the chip-select connections locally.

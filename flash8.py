@@ -431,8 +431,8 @@ def make_board():
     for pad, via in brd.bus_taps:
         brd.hex_route_net(
             [brd.pad_endpoint(pad), brd.pad_endpoint(via)], width=TRACE_WIDTH)
-    # Fan out in physical output order. The slot assignment follows the
-    # destinations around U1 so the eight top-layer routes need no crossings.
+    # Route in output-bit order with pad-area endpoints. The printed rows
+    # read 0/1, 2/3, 4/5, 6/7 from south to north, west to east.
     brd.cs_routes = {}
     for slot in sorted(range(8), key=FLASH_OUTPUT_BITS.__getitem__):
         output = shift.s("Q" + "ABCDEFGH"[FLASH_OUTPUT_BITS[slot]])

@@ -13,7 +13,7 @@ import time
 
 # Footprints U2..U9 -> shift-register bits QA=0 through QH=7.
 # Public slot numbers and silkscreen labels are the bit numbers themselves.
-FLASH_OUTPUT_BITS = (0, 2, 5, 7, 1, 3, 4, 6)
+FLASH_OUTPUT_BITS = (0, 2, 4, 6, 1, 3, 5, 7)
 
 
 class Flash8:

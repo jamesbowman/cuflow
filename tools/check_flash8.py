@@ -44,7 +44,7 @@ def check():
     expected["GND"] += [("C1", 2), ("C2", 2), ("R3", 1)]
     for name, ref in (("A", "R2"), ("B", "R3"), ("IO2", "R4"), ("IO3", "R5")):
         expected[name].append((ref, 2))
-    for slot, qpin in enumerate((15, 2, 5, 7, 1, 3, 4, 6)):
+    for slot, qpin in enumerate((15, 2, 4, 6, 1, 3, 5, 7)):
         ref = f"U{slot + 2}"
         expected[f"CS{slot}"] = [
             ("U1", qpin), (ref, 1), (f"R{6 + 2 * slot}", 2),
