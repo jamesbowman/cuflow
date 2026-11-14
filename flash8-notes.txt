@@ -62,9 +62,11 @@ Each bit number is a 3.000 mm-high IBM Plex Sans SemiBold bitmap southwest
 of its LED, centered 1.500 mm below it. U2-U9 designators are omitted from
 silkscreen. The bitmaps use a 0.005 mm pixel pitch on the silkscreen.
 Bottom to top: left column 0, 2, 4, 6; right column 1, 3, 5, 7.
-Each group has a square-cornered silkscreen frame, 12.2 x 10.7 mm along
-its centerline, with a 0.150 mm stroke enclosing its bit number, LED,
-flash land pattern and local passives.
+Each group has a rounded silkscreen frame, 12.8 x 10.2 mm along its
+centerline, with 2.000 mm corner radii and a 0.150 mm stroke enclosing its
+bit number, LED, flash land pattern and local passives. Adjacent rows have
+0.650 mm clear gaps between frames. LED and resistor designators sit south
+of their parts.
 The Excamera wordmark from SPIQ is at bottom left. FLASH8 uses the same
 3.000 mm IBM Plex Sans SemiBold artwork, reading south to north and centered
 at (15.5, 24.5) mm. The former top-edge FLASH8 / voltage title is removed.

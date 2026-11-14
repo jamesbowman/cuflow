@@ -442,7 +442,7 @@ def make_board():
         resistor = Resistor(brd.DC(xy).right(direction), "10k")
         bind(brd, rail, resistor.pads[0])
         bind(brd, name, resistor.pads[1])
-        label_xy = (xy[0], xy[1] + (1.1 if name == "OE" else 0.9))
+        label_xy = (xy[0], xy[1] - 0.8)
         brd.DC(label_xy).ctext(resistor.id, scale=0.6)
 
     for i in range(8):
@@ -471,15 +471,18 @@ def make_board():
         # Keep the lowered digits clear of the pull-up resistor pads.
         brd.layers["GTO"].add(sa.translate(
             label_bitmap(label), x - 5.45, led_y - 1.5))
-        brd.DC((x - 2, led_y + 0.9)).ctext(led.id, scale=0.6)
-        brd.DC((x + 2, led_y + 0.9)).ctext(led_r.id, scale=0.6)
-        brd.DC((x - 3, y + 5.3)).ctext(pullup.id, scale=0.6)
+        brd.DC((x - 2, led_y - 0.95)).ctext(led.id, scale=0.6)
+        brd.DC((x + 2, led_y - 0.9)).ctext(led_r.id, scale=0.6)
+        brd.DC((x - 3, y + 3.4)).ctext(pullup.id, scale=0.6)
         # Pin-1 mark just above the pad, near the package's chamfer.
         brd.layers["GTO"].add(sg.Point((x - 3.15, y + 2.65)).buffer(0.18))
-        # Square-cornered grouping frame includes the number, indicator,
-        # flash land pattern and local passives, within the 11 mm row pitch.
-        frame = sg.box(x - 7.0, y - 2.9, x + 5.2, y + 7.8)
-        brd.layers["GTO"].add(frame.boundary.buffer(0.075, join_style=2))
+        # Lowered labels allow a shorter frame and 0.65 mm clear row gaps.
+        # Widen slightly so the 2 mm corner arcs clear all flash pads.
+        x0, y0, x1, y1 = x - 7.3, y - 2.9, x + 5.5, y + 7.3
+        radius = 2.0
+        frame = sg.box(x0 + radius, y0 + radius,
+                       x1 - radius, y1 - radius).buffer(radius, resolution=64)
+        brd.layers["GTO"].add(frame.boundary.buffer(0.075))
 
     board_branding(brd)
     # Preserve the established local, column and CS routing first; add
